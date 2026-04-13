@@ -1,0 +1,224 @@
+@Tutorial(time: 20) {
+    @Intro(title: "Sharing State Between Views") {
+        Authentication state is the classic cross-cutting concern: the home
+        tab, the profile screen, and a UIKit sign-in controller all need to
+        react when the user signs in or out. Traditional approaches — singletons
+        with delegates, `NotificationCenter`, or a global `@EnvironmentObject`
+        — require manual wiring. A ``MutableStateFlow`` turns the session into
+        a reactive stream every layer of your app can observe independently.
+    }
+
+    @Section(title: "Define SessionState") {
+        @ContentAndMedia {
+            Model authentication as a single enum. Each case carries exactly
+            the data that case needs — no optional `user` or `errorMessage`
+            fields that are only populated sometimes.
+        }
+
+        @Steps {
+            @Step {
+                Define `User` and `SessionState`. The four cases cover every
+                meaningful auth moment: `.signedOut` (initial), `.signingIn`
+                (in-progress), `.signedIn(User)` (success), and
+                `.error(String)` (recoverable failure). Both types conform to
+                `Sendable` and `Equatable` so they work with FlowKit's
+                operators and ``CollectedState``.
+
+                @Code(name: "SessionState.swift", file: 11-session-state.swift)
+            }
+        }
+    }
+
+    @Section(title: "Build SessionManager") {
+        @ContentAndMedia {
+            `SessionManager` owns the ``MutableStateFlow`` and exposes
+            asynchronous `signIn` / `signOut` methods. Every caller drives
+            state through the same object, so observers always see a
+            consistent picture.
+        }
+
+        @Steps {
+            @Step {
+                Create `SessionManager` with a private ``MutableStateFlow``
+                and a public read-only `state` property of type
+                `any StateFlow<SessionState>`. Using the protocol type hides
+                the mutable flow from callers, enforcing unidirectional data
+                flow.
+
+                @Code(name: "SessionManager.swift", file: 12-session-manager.swift)
+            }
+
+            @Step {
+                Add `signIn(email:password:)` and `signOut()`. Each method
+                updates the flow with intermediate states — `.signingIn`
+                before the async call, then `.signedIn` or `.error`
+                afterwards. Every subscriber receives each state change in
+                order.
+
+                @Code(name: "SessionManager.swift", file: 13-session-manager-methods.swift)
+            }
+        }
+    }
+
+    @Section(title: "Observe in SwiftUI") {
+        @ContentAndMedia {
+            ``CollectedState`` subscribes to a ``StateFlow`` and drives
+            SwiftUI's rendering engine. Multiple views can observe the same
+            flow independently — each gets its own subscription, and each
+            re-renders only when the state changes.
+        }
+
+        @Steps {
+            @Step {
+                Add `@CollectedState(SessionManager.shared.state)` to
+                `HomeView`. The property wrapper provides the current
+                `SessionState` as a plain value; SwiftUI re-renders the view
+                whenever the state transitions. No `onAppear` setup, no
+                `onDisappear` cleanup.
+
+                @Code(name: "HomeView.swift", file: 14-swiftui-home-view.swift)
+            }
+
+            @Step {
+                Add an independent `@CollectedState` observation to
+                `ProfileView`. Both views share the same underlying
+                ``MutableStateFlow`` but have separate subscriptions. Signing
+                out in `HomeView` immediately updates `ProfileView` too —
+                automatically, without any additional plumbing.
+
+                @Code(name: "ProfileView.swift", file: 15-swiftui-profile-view.swift)
+            }
+        }
+    }
+
+    @Section(title: "Observe in UIKit") {
+        @ContentAndMedia {
+            FlowUIKitBridge adds `collect(_:action:)` to `UIViewController`.
+            The helper launches collection on the controller's `flowScope`,
+            which is cancelled automatically when the controller is
+            deallocated — no `deinit` cleanup, no dangling tasks.
+        }
+
+        @Steps {
+            @Step {
+                In `SignInViewController.viewDidLoad()`, call
+                `collect(SessionManager.shared.state)` with a closure that
+                updates the UI on the main actor. The `[weak self]` capture
+                is the only memory management you need. The `flowScope`
+                handles task lifecycle.
+
+                @Code(name: "SignInViewController.swift", file: 16-uikit-signin-vc.swift)
+            }
+        }
+    }
+
+    @Section(title: "Test state transitions") {
+        @ContentAndMedia {
+            Testing state machines with ``FlowTester`` is straightforward:
+            collect the flow in a `test` block, drive state changes with
+            `send`, and assert each emission in order with `expectValue`.
+            There's no mocking of `SessionManager` — the flow itself is the
+            observable contract.
+        }
+
+        @Steps {
+            @Step {
+                Write a test that drives a `MutableStateFlow<SessionState>`
+                through the sign-in sequence. `expectValue` consumes one
+                emission at a time and fails immediately if the wrong value
+                arrives, making the assertion output readable.
+
+                @Code(name: "SessionTests.swift", file: 17-session-test-transitions.swift)
+            }
+
+            @Step {
+                Add a second test that exercises the error-and-recovery path:
+                `.signingIn` → `.error(…)` → `.signedOut`. Verify that no
+                extra emissions arrive after the final state using
+                `expectNoValue`. This guards against accidental extra
+                `send` calls in the implementation.
+
+                @Code(name: "SessionTests.swift", file: 18-session-test-error.swift)
+            }
+        }
+    }
+
+    @Assessments {
+        @MultipleChoice {
+            Why does `SessionManager` expose `state` as
+            `any StateFlow<SessionState>` rather than as
+            `MutableStateFlow<SessionState>`?
+
+            @Choice(isCorrect: false) {
+                "To improve performance by hiding the actor behind a protocol."
+
+                @Justification(reaction: "Not the main reason.") {
+                    Protocols don't affect runtime performance here. The
+                    reason is API design: callers should observe state, not
+                    mutate it.
+                }
+            }
+
+            @Choice(isCorrect: true) {
+                "To prevent callers from calling `send(_:)` directly, enforcing
+                unidirectional data flow."
+
+                @Justification(reaction: "Exactly!") {
+                    Exposing `any StateFlow` hides the `send` method. All
+                    mutations must go through `signIn` and `signOut`, which
+                    own the state transition logic and enforce the correct
+                    ordering of intermediate states.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                "To allow multiple `SessionManager` instances to share the
+                same underlying flow."
+
+                @Justification(reaction: "Incorrect.") {
+                    `SessionManager` is a singleton. The protocol boundary
+                    is about write access, not shared identity.
+                }
+            }
+        }
+
+        @MultipleChoice {
+            What happens to the `collect` task started by
+            `UIViewController.collect(_:action:)` when the controller
+            is deallocated?
+
+            @Choice(isCorrect: false) {
+                "It continues running until the app is backgrounded."
+
+                @Justification(reaction: "Not correct.") {
+                    That would be a task leak. The `flowScope` is retained
+                    by the view controller as an associated object, so it
+                    is cancelled and released when the controller deallocates.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                "The developer must call `flowScope.cancel()` in `deinit`."
+
+                @Justification(reaction: "Not required.") {
+                    That's exactly the boilerplate FlowUIKitBridge eliminates.
+                    The scope is an associated object on the controller; when
+                    the controller's reference count drops to zero, the
+                    associated object is released, which cancels all tasks.
+                }
+            }
+
+            @Choice(isCorrect: true) {
+                "It is cancelled automatically when the view controller's
+                `flowScope` is released."
+
+                @Justification(reaction: "Correct!") {
+                    `flowScope` is stored as an associated object on the
+                    controller. When the controller deallocates, the runtime
+                    releases the associated object, which deinits the
+                    `FlowScope` and cancels every task it owns.
+                }
+            }
+        }
+    }
+}

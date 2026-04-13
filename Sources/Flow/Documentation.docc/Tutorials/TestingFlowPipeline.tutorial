@@ -1,0 +1,185 @@
+@Tutorial(time: 30) {
+    @Intro(title: "Testing a Flow Pipeline") {
+        Real sleeps make tests slow and flaky. FlowKit ships a `TestClock` — a manually-advanced
+        virtual clock — and a suite of `FlowTester` helpers that let you assert on stream values
+        without waiting for wall time.
+
+        In this tutorial you will test the debounced search pipeline from *Building a Debounced
+        Search* and the session state transitions from *Sharing State Between Views*. By the end
+        you will know how to write deterministic tests for cold flows, time-dependent operators,
+        error paths, multiple concurrent flows, and hot `MutableStateFlow` streams.
+    }
+
+    @Section(title: "Write a basic test") {
+        @ContentAndMedia {
+            The simplest way to test a `Flow` is the `.test(_:)` extension method. It starts
+            collecting the flow in a background task, hands you a `FlowTester`, and cancels
+            collection when the closure returns. `expectValue` asserts the next emitted value
+            matches an expected value; `expectCompletion` asserts the stream ends.
+        }
+
+        @Steps {
+            @Step {
+                Import `FlowTesting` in a test file and write a basic test for a `Flow(of:)`
+                source. This establishes the shape of every flow test: collect, assert, done.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-01-basic-test.swift)
+            }
+
+            @Step {
+                Test that the pipeline completes after the source finishes. Chain
+                `expectCompletion` after the last `expectValue` call to confirm the stream ends
+                rather than hanging indefinitely.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-02-completion.swift)
+            }
+
+            @Step {
+                Add a test for `SearchViewModel`. Construct the view model with a fake
+                `ProductRepository`, emit a query into the `MutableSharedFlow`, and assert the
+                results flow emits the expected products.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-03-viewmodel.swift)
+            }
+        }
+    }
+
+    @Section(title: "Test time-dependent operators") {
+        @ContentAndMedia {
+            Operators like `debounce` and `throttle` sleep on a `Clock`. Passing a `TestClock`
+            instead of `ContinuousClock` gives the test full control over time. `clock.advance(by:)`
+            moves virtual time forward and wakes any sleepers whose deadline has passed — no real
+            wall-time elapsed.
+        }
+
+        @Steps {
+            @Step {
+                Create a `TestClock` and pass it to `debounce`. Use `TestScope.run` so the flow
+                runs concurrently with the test's advance calls.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-04-testclock-setup.swift)
+            }
+
+            @Step {
+                Emit several rapid keystrokes and advance the clock by less than the debounce
+                window. Assert that no value has been emitted yet — the debounce timer is still
+                running.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-05-no-value-yet.swift)
+            }
+
+            @Step {
+                Advance the clock past the 300 ms debounce window. Assert that exactly one value
+                — the final keystroke — is emitted. This confirms the debounce collapses all
+                intermediate values.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-06-advance-and-expect.swift)
+            }
+
+            @Step {
+                Add a test for the full `SearchViewModel` pipeline end-to-end with `TestClock`.
+                Verify that typing quickly produces a single results emission after the debounce
+                window expires.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-07-full-pipeline.swift)
+            }
+        }
+    }
+
+    @Section(title: "Test error paths") {
+        @ContentAndMedia {
+            `ThrowingFlow` can fail. `ThrowingFlowTester` adds `expectError` to the tester API.
+            Use the typed overload when your error type is `Equatable`; use the predicate overload
+            when you need to inspect fields on a non-equatable error.
+        }
+
+        @Steps {
+            @Step {
+                Create a `FakeProductRepository` that throws a controlled `SearchError` and wire
+                it into the pipeline.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-08-error-setup.swift)
+            }
+
+            @Step {
+                Use the `.test` extension on `ThrowingFlow` to get a `ThrowingFlowTester`. Call
+                `expectError(_:)` with the typed overload to assert the exact error value.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-09-expect-error.swift)
+            }
+
+            @Step {
+                Use the predicate overload for richer assertions — for example, checking the
+                error's `localizedDescription` or an associated value.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-10-predicate-error.swift)
+            }
+        }
+    }
+
+    @Section(title: "Test multiple flows") {
+        @ContentAndMedia {
+            `TestScope.run` runs a block inside a `FlowScope` where multiple flows can be
+            collected concurrently. Each call to `scope.test(_:)` returns its own independent
+            `FlowTester`. Assertions on different testers can be interleaved freely because all
+            flows are collected in parallel background tasks.
+        }
+
+        @Steps {
+            @Step {
+                Use `TestScope.run` to collect both the raw query flow and the debounced results
+                flow at the same time.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-11-test-scope.swift)
+            }
+
+            @Step {
+                Assert that the raw query tester sees every keystroke while the debounced tester
+                sees only the final value after the window expires. This verifies the two flows
+                are independent.
+
+                @Code(name: "SearchPipelineTests.swift", file: 04-12-interleaved-assertions.swift)
+            }
+        }
+    }
+
+    @Section(title: "Test hot streams") {
+        @ContentAndMedia {
+            `MutableStateFlow` is a hot stream — it holds state and multicasts to all collectors.
+            Testing it requires collecting in a background task before sending updates, because
+            the stream only replays the current value at subscription time. `TestScope.run`
+            handles this naturally.
+        }
+
+        @Steps {
+            @Step {
+                Set up a `SessionManager` with a `MutableStateFlow<SessionState>` and start
+                collecting its `stateFlow` inside `TestScope.run`.
+
+                @Code(name: "SessionManagerTests.swift", file: 04-13-hot-setup.swift)
+            }
+
+            @Step {
+                Assert the initial `.loggedOut` value is emitted immediately on subscription,
+                then call `signIn` and assert the `.loggedIn` transition.
+
+                @Code(name: "SessionManagerTests.swift", file: 04-14-state-transitions.swift)
+            }
+
+            @Step {
+                Drive the full sign-in → sign-out lifecycle and assert each transition in order.
+                Because `MutableStateFlow` drops duplicate values, sending the same state twice
+                should produce only one emission — verify that with `expectNoValue`.
+
+                @Code(name: "SessionManagerTests.swift", file: 04-15-full-lifecycle.swift)
+            }
+
+            @Step {
+                Test that `SessionManager.signIn` throws on bad credentials by collecting the
+                throwing variant of the flow through a `ThrowingFlowTester`.
+
+                @Code(name: "SessionManagerTests.swift", file: 04-16-error-path.swift)
+            }
+        }
+    }
+}

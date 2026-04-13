@@ -1,0 +1,232 @@
+@Tutorial(time: 25) {
+    @Intro(title: "Building a Debounced Search") {
+        Search-as-you-type is a great user experience, but firing a network
+        request on every keystroke wastes bandwidth and hammers your server.
+        A debounced pipeline collapses rapid keystrokes into a single request
+        that fires only after the user pauses. FlowKit makes this a four-operator
+        chain: ``MutableStateFlow`` → `debounce` → `removeDuplicates` →
+        `flatMapLatest` → `catch`.
+    }
+
+    @Section(title: "Define the repository") {
+        @ContentAndMedia {
+            The repository is the boundary between the pipeline and the
+            network. Defining a clean protocol lets you swap in a stub during
+            tests without changing any pipeline code.
+        }
+
+        @Steps {
+            @Step {
+                Create a `Product` model — `Identifiable`, `Sendable`, and
+                `Equatable` so it can flow through FlowKit operators without
+                a type annotation.
+
+                @Code(name: "Product.swift", file: 01-product-model.swift)
+            }
+
+            @Step {
+                Add a `ProductRepository` protocol with a single `search`
+                method that returns a `ThrowingFlow<[Product]>`. The
+                `ThrowingFlow` type signals that network calls can fail.
+
+                @Code(name: "ProductRepository.swift", file: 02-product-repository.swift)
+            }
+
+            @Step {
+                Introduce `SearchState` — an enum with three cases: `.idle`
+                before the user types, `.loaded([Product])` when results
+                arrive, and `.error(String)` when the network fails. The
+                pipeline maps everything into this one type so views never
+                deal with raw arrays or raw errors.
+
+                @Code(name: "SearchState.swift", file: 03-search-state.swift)
+            }
+        }
+    }
+
+    @Section(title: "Build the pipeline") {
+        @ContentAndMedia {
+            The pipeline lives in a `SearchViewModel`. A
+            ``MutableStateFlow`` accepts query strings; each operator in
+            the chain shapes the stream before it reaches SwiftUI.
+        }
+
+        @Steps {
+            @Step {
+                Create `SearchViewModel` with a `MutableStateFlow<String>`
+                and an `update(query:)` method. The flow starts empty — the
+                `.idle` initial state matches this.
+
+                @Code(name: "SearchViewModel.swift", file: 04-search-pipeline.swift)
+            }
+
+            @Step {
+                Add the operator chain inside a `buildPipeline()` helper.
+                `debounce(for: .milliseconds(300))` waits for 300 ms of
+                silence before emitting. `removeDuplicates()` skips
+                repeated queries. `flatMapLatest` cancels any in-flight
+                search when a new query arrives and starts a fresh one.
+                `catch` converts network errors into `.error` state so the
+                flow never terminates.
+
+                @Code(name: "SearchViewModel.swift", file: 05-pipeline-operators.swift)
+            }
+        }
+    }
+
+    @Section(title: "Expose as StateFlow") {
+        @ContentAndMedia {
+            A cold `Flow` reruns its body for every subscriber. Convert it
+            to a hot ``StateFlow`` so the active search is shared across
+            all observers — SwiftUI views, analytics, and tests — without
+            re-executing the pipeline.
+        }
+
+        @Steps {
+            @Step {
+                Replace `buildPipeline()` with a `results` property of type
+                `any StateFlow<SearchState>`. Call `asStateFlow(initialValue:
+                strategy:)` at the end of the chain. The
+                `.whileSubscribed(stopTimeout: .seconds(5))` strategy keeps
+                the upstream alive for five seconds after the last subscriber
+                leaves, surviving SwiftUI view rebuilds without restarting
+                the network connection.
+
+                @Code(name: "SearchViewModel.swift", file: 06-stateful-viewmodel.swift)
+            }
+        }
+    }
+
+    @Section(title: "Wire to SwiftUI") {
+        @ContentAndMedia {
+            ``CollectedState`` is a property wrapper that observes a
+            ``StateFlow`` and triggers a SwiftUI re-render whenever the
+            state changes. Pair it with `.searchable` to get a complete
+            search experience in under 30 lines of view code.
+        }
+
+        @Steps {
+            @Step {
+                Create `SearchView`. The `@CollectedState(viewModel.results)`
+                wrapper subscribes to the hot ``StateFlow`` and feeds the
+                current `SearchState` into the view's `body`. An
+                `.onChange(of: query)` handler forwards each keystroke into
+                the view model.
+
+                @Code(name: "SearchView.swift", file: 07-search-view.swift)
+            }
+        }
+    }
+
+    @Section(title: "Test the pipeline") {
+        @ContentAndMedia {
+            ``TestClock`` lets tests advance virtual time instead of sleeping.
+            Combined with the `test { tester in }` helper, you can assert
+            exact debounce behaviour — no `Task.sleep`, no timeouts, no
+            flaky CI.
+        }
+
+        @Steps {
+            @Step {
+                Create a `StubProductRepository` that returns a fixed list of
+                products. This decouples tests from the network and makes
+                every assertion deterministic.
+
+                @Code(name: "SearchTests.swift", file: 08-search-test-setup.swift)
+            }
+
+            @Step {
+                Write a test that sends three rapid keystrokes within the
+                300 ms window, then asserts no value has arrived yet. After
+                `clock.advance(by: .milliseconds(400))` moves past the
+                debounce window, `expectValue` confirms exactly one result
+                set arrived — the last query only.
+
+                @Code(name: "SearchTests.swift", file: 09-search-test-debounce.swift)
+            }
+
+            @Step {
+                Add a second test using `FailingProductRepository` to verify
+                that the `catch` operator converts thrown errors into
+                `.error("Search failed. Please try again.")` state. The
+                pipeline must never terminate on a network error.
+
+                @Code(name: "SearchTests.swift", file: 10-search-test-error.swift)
+            }
+        }
+    }
+
+    @Assessments {
+        @MultipleChoice {
+            Why does `flatMapLatest` cancel the previous inner flow when a
+            new upstream query arrives?
+
+            @Choice(isCorrect: false) {
+                "To avoid emitting duplicate results."
+
+                @Justification(reaction: "Not quite.") {
+                    `removeDuplicates()` handles duplicate suppression.
+                    `flatMapLatest` cancels the previous inner flow to avoid
+                    delivering stale search results from a superseded query.
+                }
+            }
+
+            @Choice(isCorrect: true) {
+                "To avoid delivering stale results from a superseded query."
+
+                @Justification(reaction: "Correct!") {
+                    When the user types a new character, the previous network
+                    request is no longer relevant. `flatMapLatest` cancels
+                    it immediately so only the most recent query's results
+                    can reach the UI.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                "To reduce memory usage by removing old flows from the heap."
+
+                @Justification(reaction: "Not the primary reason.") {
+                    Memory is reclaimed as a side effect, but the primary
+                    reason is correctness: an old request might resolve after
+                    a newer one, showing the user stale results.
+                }
+            }
+        }
+
+        @MultipleChoice {
+            What does `.whileSubscribed(stopTimeout: .seconds(5))` do when
+            the last SwiftUI subscriber navigates away?
+
+            @Choice(isCorrect: false) {
+                "It immediately cancels the upstream network request."
+
+                @Justification(reaction: "Not quite.") {
+                    Immediate cancellation is `.whileSubscribed(stopTimeout: .zero)`.
+                    A five-second stop timeout keeps the upstream alive
+                    briefly to survive navigation transitions.
+                }
+            }
+
+            @Choice(isCorrect: true) {
+                "It waits five seconds before stopping the upstream, so a
+                new subscriber arriving quickly gets the live stream."
+
+                @Justification(reaction: "Exactly right!") {
+                    A five-second grace period covers SwiftUI view rebuilds
+                    and short navigation round-trips without tearing down and
+                    re-establishing the network connection.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                "It replays the last five seconds of emitted values."
+
+                @Justification(reaction: "Incorrect.") {
+                    `stopTimeout` controls when the upstream stops, not
+                    how long values are replayed. Use `asSharedFlow(replay:)`
+                    if you need value replay.
+                }
+            }
+        }
+    }
+}
