@@ -37,8 +37,8 @@ struct HomeView: View {
 }
 
 // ProfileView independently observes the same StateFlow.
-// Both HomeView and ProfileView stay in sync automatically — no
-// environment objects, no NotificationCenter, no delegates.
+// Both HomeView and ProfileView stay in sync automatically, with no
+// environment objects, no NotificationCenter, and no delegates.
 struct ProfileView: View {
     @CollectedState(SessionManager.shared.state) var session: SessionState = .signedOut
 

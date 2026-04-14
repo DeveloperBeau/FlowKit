@@ -12,7 +12,7 @@ struct RemoveDuplicatesTests {
             try await tester.expectValue(1)
             try await tester.expectValue(2)
             try await tester.expectValue(3)
-            try await tester.expectValue(1) // 1 again after 3 — not consecutive duplicate
+            try await tester.expectValue(1) // 1 again after 3, not a consecutive duplicate
             try await tester.expectCompletion()
         }
     }

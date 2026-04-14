@@ -17,7 +17,7 @@ internal import Glibc
 /// ## Why a class, not a struct
 ///
 /// `Mutex` is a reference type because the underlying lock must have a stable
-/// memory address — `os_unfair_lock` must not be moved, and `pthread_mutex_t`
+/// memory address. `os_unfair_lock` must not be moved, and `pthread_mutex_t`
 /// is initialized in place. Wrapping in a class gives us this stability.
 public final class Mutex<Value>: @unchecked Sendable {
     #if canImport(Darwin)

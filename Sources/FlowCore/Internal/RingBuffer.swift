@@ -1,13 +1,13 @@
 /// A fixed-capacity ring buffer used as the replay cache for `MutableSharedFlow`.
 /// When the buffer is full, appending a new element overwrites the oldest one.
 ///
-/// Internal to FlowKit — not part of the public API. We roll our own rather
+/// Internal to FlowKit. Not part of the public API. We roll our own rather
 /// than depending on `swift-collections.Deque` to keep the dependency graph
 /// minimal.
 ///
 /// ## Thread safety
 ///
-/// `RingBuffer` is a `struct` with `mutating` methods — thread safety is the
+/// `RingBuffer` is a `struct` with `mutating` methods, so thread safety is the
 /// caller's responsibility. In practice it lives inside an actor
 /// (`MutableSharedFlow`), which provides the isolation.
 internal struct RingBuffer<Element: Sendable>: Sendable {

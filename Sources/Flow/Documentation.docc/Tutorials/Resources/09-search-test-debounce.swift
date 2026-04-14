@@ -23,7 +23,7 @@ final class StubProductRepository: ProductRepository, @unchecked Sendable {
     }
 }
 
-// Use TestClock to advance virtual time — no real sleeps, no flaky CI.
+// Use TestClock to advance virtual time. No real sleeps, no flaky CI.
 @Test("debounce suppresses keystrokes within 300 ms")
 func debounceSupressesRapidKeystrokes() async throws {
     let clock = TestClock()
@@ -41,14 +41,14 @@ func debounceSupressesRapidKeystrokes() async throws {
             return repository.search(query: query)
         }
         .test { tester in
-            // Rapid keystrokes — each within the debounce window
+            // Rapid keystrokes, each within the debounce window
             await queries.send("s")
             await clock.advance(by: .milliseconds(100))
             await queries.send("sw")
             await clock.advance(by: .milliseconds(100))
             await queries.send("swi")
 
-            // No results yet — the debounce window hasn't closed
+            // No results yet because the debounce window hasn't closed
             await tester.expectNoValue(within: .milliseconds(50))
 
             // Advance past the 300 ms debounce window

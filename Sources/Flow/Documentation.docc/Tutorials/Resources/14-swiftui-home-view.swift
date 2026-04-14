@@ -15,8 +15,8 @@ enum SessionState: Sendable, Equatable {
 }
 
 // HomeView uses @CollectedState to observe SessionManager.shared.state.
-// When the state changes anywhere in the app — after sign-in, sign-out,
-// or an auth error — SwiftUI automatically re-renders this view.
+// When the state changes anywhere in the app (after sign-in, sign-out,
+// or an auth error), SwiftUI automatically re-renders this view.
 struct HomeView: View {
     @CollectedState(SessionManager.shared.state) var session: SessionState = .signedOut
 

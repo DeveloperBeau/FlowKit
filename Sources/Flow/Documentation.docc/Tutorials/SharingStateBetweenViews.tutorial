@@ -2,16 +2,16 @@
     @Intro(title: "Sharing State Between Views") {
         Authentication state is the classic cross-cutting concern: the home
         tab, the profile screen, and a UIKit sign-in controller all need to
-        react when the user signs in or out. Traditional approaches — singletons
+        react when the user signs in or out. Traditional approaches like singletons
         with delegates, `NotificationCenter`, or a global `@EnvironmentObject`
-        — require manual wiring. A ``MutableStateFlow`` turns the session into
+        require manual wiring. A ``MutableStateFlow`` turns the session into
         a reactive stream every layer of your app can observe independently.
     }
 
     @Section(title: "Define SessionState") {
         @ContentAndMedia {
             Model authentication as a single enum. Each case carries exactly
-            the data that case needs — no optional `user` or `errorMessage`
+            the data that case needs, with no optional `user` or `errorMessage`
             fields that are only populated sometimes.
         }
 
@@ -50,7 +50,7 @@
 
             @Step {
                 Add `signIn(email:password:)` and `signOut()`. Each method
-                updates the flow with intermediate states — `.signingIn`
+                updates the flow with intermediate states: `.signingIn`
                 before the async call, then `.signedIn` or `.error`
                 afterwards. Every subscriber receives each state change in
                 order.
@@ -64,7 +64,7 @@
         @ContentAndMedia {
             ``CollectedState`` subscribes to a ``StateFlow`` and drives
             SwiftUI's rendering engine. Multiple views can observe the same
-            flow independently — each gets its own subscription, and each
+            flow independently. Each gets its own subscription, and each
             re-renders only when the state changes.
         }
 
@@ -83,7 +83,7 @@
                 Add an independent `@CollectedState` observation to
                 `ProfileView`. Both views share the same underlying
                 ``MutableStateFlow`` but have separate subscriptions. Signing
-                out in `HomeView` immediately updates `ProfileView` too —
+                out in `HomeView` immediately updates `ProfileView` too,
                 automatically, without any additional plumbing.
 
                 @Code(name: "ProfileView.swift", file: 15-swiftui-profile-view.swift)
@@ -96,7 +96,7 @@
             FlowUIKitBridge adds `collect(_:action:)` to `UIViewController`.
             The helper launches collection on the controller's `flowScope`,
             which is cancelled automatically when the controller is
-            deallocated — no `deinit` cleanup, no dangling tasks.
+            deallocated, with no `deinit` cleanup and no dangling tasks.
         }
 
         @Steps {
@@ -117,7 +117,7 @@
             Testing state machines with ``FlowTester`` is straightforward:
             collect the flow in a `test` block, drive state changes with
             `send`, and assert each emission in order with `expectValue`.
-            There's no mocking of `SessionManager` — the flow itself is the
+            There's no mocking of `SessionManager`. The flow itself is the
             observable contract.
         }
 

@@ -28,7 +28,7 @@ struct LocationTrackerTests {
         let tracker = LocationTracker(managerFactory: { mock })
 
         try await tracker.locationFlow.test { tester in
-            // Don't emit any values — just let the .test closure return,
+            // Don't emit any values. Just let the .test closure return,
             // which cancels the collection task.
             await tester.cancelAndIgnoreRemaining()
         }

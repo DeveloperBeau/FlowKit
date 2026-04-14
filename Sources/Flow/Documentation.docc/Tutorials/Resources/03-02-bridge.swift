@@ -19,7 +19,7 @@ actor LocationTracker {
 
 /// Forwards `CLLocationManagerDelegate` callbacks into a `Collector<CLLocation>`.
 /// Instances of this class are created inside the flow body and are not
-/// shared — each collection gets its own independent bridge.
+/// shared. Each collection gets its own independent bridge.
 private final class DelegateBridge: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
     private let collector: Collector<CLLocation>
 

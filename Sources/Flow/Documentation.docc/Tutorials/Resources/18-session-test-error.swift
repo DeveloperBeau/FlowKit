@@ -45,7 +45,7 @@ func authErrorAndRecovery() async throws {
         await state.send(.error("Invalid credentials. Please try again."))
         try await tester.expectValue(.error("Invalid credentials. Please try again."))
 
-        // User can retry — state resets to .signedOut first
+        // User can retry. State resets to .signedOut first
         await state.send(.signedOut)
         try await tester.expectValue(.signedOut)
 

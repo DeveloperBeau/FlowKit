@@ -98,7 +98,7 @@ struct TestClockAdvanceTests {
     func sleepPastDeadline() async throws {
         let clock = TestClock()
         await clock.advance(by: .seconds(10))
-        // Deadline is in the past — should return immediately
+        // Deadline is in the past. Should return immediately.
         try await clock.sleep(until: TestClock.Instant(offset: .seconds(5)), tolerance: nil)
         // If we reach here without hanging, the test passes.
     }

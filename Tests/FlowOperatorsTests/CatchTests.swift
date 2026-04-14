@@ -44,7 +44,7 @@ struct CatchTests {
             throw Boom()
         }
         try await flow.catch { _, _ in
-            // Emit nothing — just swallow the error
+            // Emit nothing. Just swallow the error.
         }.test { tester in
             try await tester.expectValue(1)
             try await tester.expectCompletion()

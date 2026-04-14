@@ -1,5 +1,5 @@
-/// A cold asynchronous stream of values that may fail with an error. Cold by
-/// construction — the body closure runs each time a collector is attached.
+/// A cold asynchronous stream of values that may fail with an error. The body
+/// closure runs each time a collector is attached.
 ///
 /// ## When to use `ThrowingFlow` vs `Flow`
 ///
@@ -8,7 +8,7 @@
 /// `Flow` for streams derived from pure state or guaranteed-non-failing sources
 /// (UI state observation, timer ticks, sensor readings).
 ///
-/// ## Example — offline-first article list
+/// ## Example: offline-first article list
 ///
 /// ```swift
 /// let articles: ThrowingFlow<[Article]> = ThrowingFlow { collector in

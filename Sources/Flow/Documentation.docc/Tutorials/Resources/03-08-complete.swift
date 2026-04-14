@@ -21,7 +21,7 @@ actor LocationTracker {
             let bridge = DelegateBridge(collector: collector)
             manager.delegate = bridge
 
-            // Request permission — the system shows the prompt once; subsequent
+            // Request permission. The system shows the prompt once; subsequent
             // calls are no-ops if permission was already granted or denied.
             manager.requestWhenInUseAuthorization()
             manager.startUpdatingLocation()

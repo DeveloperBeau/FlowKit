@@ -13,7 +13,7 @@ struct SessionManagerErrorTests {
         // We collect stateFlow as a ThrowingFlow by mapping through mapThrowing
         // so that the thrown error surfaces via ThrowingFlowTester.
         let throwingFlow = manager.stateFlow.asFlow().mapThrowing { state in
-            state   // passthrough — errors come from signIn, tested separately
+            state   // passthrough; errors come from signIn, tested separately
         }
 
         // Test the signIn throw directly without collecting stateFlow.

@@ -73,7 +73,7 @@ struct ObservedStateFlowTests {
         try? await Task.sleep(nanoseconds: 50_000_000)
         #expect(observed.value == 5)
 
-        await source.send(5) // equal — no update
+        await source.send(5) // equal, no update
         try? await Task.sleep(nanoseconds: 20_000_000)
         #expect(observed.value == 5)
         observed.stop()
@@ -167,10 +167,10 @@ struct ObservedStateFlowDeinitTests {
             let observed = ObservedStateFlow(source, initialValue: 0)
             observed.start()
             try? await Task.sleep(nanoseconds: 20_000_000)
-            // observed goes out of scope here — isolated deinit fires
+            // observed goes out of scope here, so isolated deinit fires
         }
         try? await Task.sleep(nanoseconds: 50_000_000)
-        // No assertion — just verify deinit path runs without crash
+        // No assertion. Just verify deinit path runs without crash.
     }
 }
 #endif

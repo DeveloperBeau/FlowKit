@@ -92,7 +92,7 @@ extension Flow {
     /// time a new value arrives. Only the action for the most recent value
     /// runs to completion.
     ///
-    /// ## Example — processing only the latest search result
+    /// ## Example: processing only the latest search result
     ///
     /// ```swift
     /// searchResults.collectLatest { results in

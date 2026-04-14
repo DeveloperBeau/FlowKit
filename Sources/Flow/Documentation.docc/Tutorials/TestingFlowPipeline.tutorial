@@ -1,7 +1,7 @@
 @Tutorial(time: 30) {
     @Intro(title: "Testing a Flow Pipeline") {
-        Real sleeps make tests slow and flaky. FlowKit ships a `TestClock` — a manually-advanced
-        virtual clock — and a suite of `FlowTester` helpers that let you assert on stream values
+        Real sleeps make tests slow and flaky. FlowKit ships a `TestClock`, a manually-advanced
+        virtual clock, and a suite of `FlowTester` helpers that let you assert on stream values
         without waiting for wall time.
 
         In this tutorial you will test the debounced search pipeline from *Building a Debounced
@@ -48,7 +48,7 @@
         @ContentAndMedia {
             Operators like `debounce` and `throttle` sleep on a `Clock`. Passing a `TestClock`
             instead of `ContinuousClock` gives the test full control over time. `clock.advance(by:)`
-            moves virtual time forward and wakes any sleepers whose deadline has passed — no real
+            moves virtual time forward and wakes any sleepers whose deadline has passed, with no real
             wall-time elapsed.
         }
 
@@ -62,15 +62,15 @@
 
             @Step {
                 Emit several rapid keystrokes and advance the clock by less than the debounce
-                window. Assert that no value has been emitted yet — the debounce timer is still
+                window. Assert that no value has been emitted yet because the debounce timer is still
                 running.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-05-no-value-yet.swift)
             }
 
             @Step {
-                Advance the clock past the 300 ms debounce window. Assert that exactly one value
-                — the final keystroke — is emitted. This confirms the debounce collapses all
+                Advance the clock past the 300 ms debounce window. Assert that exactly one value,
+                the final keystroke, is emitted. This confirms the debounce collapses all
                 intermediate values.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-06-advance-and-expect.swift)
@@ -109,7 +109,7 @@
             }
 
             @Step {
-                Use the predicate overload for richer assertions — for example, checking the
+                Use the predicate overload for richer assertions, for example checking the
                 error's `localizedDescription` or an associated value.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-10-predicate-error.swift)
@@ -145,7 +145,7 @@
 
     @Section(title: "Test hot streams") {
         @ContentAndMedia {
-            `MutableStateFlow` is a hot stream — it holds state and multicasts to all collectors.
+            `MutableStateFlow` is a hot stream that holds state and multicasts to all collectors.
             Testing it requires collecting in a background task before sending updates, because
             the stream only replays the current value at subscription time. `TestScope.run`
             handles this naturally.
@@ -169,7 +169,7 @@
             @Step {
                 Drive the full sign-in → sign-out lifecycle and assert each transition in order.
                 Because `MutableStateFlow` drops duplicate values, sending the same state twice
-                should produce only one emission — verify that with `expectNoValue`.
+                should produce only one emission. Verify that with `expectNoValue`.
 
                 @Code(name: "SessionManagerTests.swift", file: 04-15-full-lifecycle.swift)
             }

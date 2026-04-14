@@ -26,7 +26,7 @@ struct DebounceOperatorTests {
             await clock.advance(by: .milliseconds(100))
 
             // 300 ms total elapsed, but the last keystroke reset the timer
-            // 100 ms ago — so we are only 100 ms into the 300 ms window.
+            // 100 ms ago, so we are only 100 ms into the 300 ms window.
             // Nothing should have been emitted yet.
             await tester.expectNoValue(within: .milliseconds(50))
         }

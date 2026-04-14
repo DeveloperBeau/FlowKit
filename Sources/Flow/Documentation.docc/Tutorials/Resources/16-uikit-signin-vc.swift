@@ -16,7 +16,7 @@ enum SessionState: Sendable, Equatable {
 
 // UIKit view controllers use `self.collect(_:action:)` from FlowUIKitBridge.
 // The helper ties collection to `flowScope`, which is cancelled automatically
-// when the view controller is deallocated — no manual cleanup needed.
+// when the view controller is deallocated, so no manual cleanup is needed.
 final class SignInViewController: UIViewController {
     private let emailField = UITextField()
     private let passwordField = UITextField()

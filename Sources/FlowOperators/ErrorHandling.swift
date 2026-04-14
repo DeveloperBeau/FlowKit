@@ -5,9 +5,9 @@ public import FlowCore
 extension ThrowingFlow {
     /// Handles errors from the upstream flow by invoking `handler`, which
     /// can emit zero or more recovery values. The result is a non-throwing
-    /// `Flow` — the error is consumed.
+    /// `Flow`, since the error is consumed.
     ///
-    /// ## Example — falling back to cached data
+    /// ## Example: falling back to cached data
     ///
     /// ```swift
     /// let articles: Flow<[Article]> = articleAPI.fetchLatest()
@@ -40,7 +40,7 @@ extension ThrowingFlow {
     /// occurs. If `shouldRetry` is provided, only retries when it returns
     /// `true` for the thrown error.
     ///
-    /// ## Example — retry network fetch up to 3 times
+    /// ## Example: retry network fetch up to 3 times
     ///
     /// ```swift
     /// let articles = articleAPI.fetchLatest()
@@ -80,7 +80,7 @@ extension ThrowingFlow {
     /// The predicate receives the thrown error and the current attempt number
     /// (starting at 1). Enables exponential backoff and conditional retry.
     ///
-    /// ## Example — exponential backoff
+    /// ## Example: exponential backoff
     ///
     /// ```swift
     /// articleAPI.fetchLatest()

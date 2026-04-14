@@ -14,10 +14,10 @@ The cold/hot distinction is the most important mental model in FlowKit. Get it w
 // This flow body runs independently for every collect() call.
 let searchResults: ThrowingFlow<[Product]> = productRepository.search("boots")
 
-// First collector — triggers one network request.
+// First collector. Triggers one network request.
 try await searchResults.collect { products in displayResults(products) }
 
-// Second collector — triggers a second, completely independent network request.
+// Second collector. Triggers a second, completely independent network request.
 try await searchResults.collect { products in logResults(products) }
 ```
 
@@ -50,7 +50,7 @@ The upstream (`locationUpdates`) runs exactly once, regardless of how many views
 
 ## StateFlow: current-value semantics
 
-``FlowHotStreams/StateFlow`` always holds the most recent value. A new subscriber receives the current value immediately upon attaching — it never misses the "current state."
+``FlowHotStreams/StateFlow`` always holds the most recent value. A new subscriber receives the current value immediately upon attaching and never misses the "current state."
 
 Use `StateFlow` for **current things**: auth session, network connectivity, form validation state, the currently-playing track.
 
@@ -77,7 +77,7 @@ actor SessionManager {
 }
 ```
 
-Any view that collects `sessionState` immediately receives the current auth state — there's no window where it's "waiting for the first event."
+Any view that collects `sessionState` immediately receives the current auth state. There is no window where it's "waiting for the first event."
 
 ## SharedFlow: event semantics
 
@@ -155,6 +155,6 @@ let sharedLocation: any StateFlow<CLLocation> = locationFlow
 
 ## Related concepts
 
-- <doc:FlowVsThrowingFlow> — choosing between the two cold stream types
-- <doc:LifecycleAwareCollection> — binding hot stream collection to view lifetimes
-- <doc:CancellationSemantics> — how cancellation propagates through hot streams
+- <doc:FlowVsThrowingFlow>: choosing between the two cold stream types
+- <doc:LifecycleAwareCollection>: binding hot stream collection to view lifetimes
+- <doc:CancellationSemantics>: how cancellation propagates through hot streams

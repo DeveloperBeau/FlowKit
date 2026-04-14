@@ -6,15 +6,15 @@ import Foundation
 ///
 /// ## Choosing a strategy
 ///
-/// - **`.eager`** — the upstream starts immediately when the hot flow is created,
+/// - **`.eager`**: the upstream starts immediately when the hot flow is created,
 ///   regardless of subscribers. Use when you want to pre-warm the stream (e.g.,
 ///   the current user's profile that every screen will eventually read).
 ///
-/// - **`.lazy`** — the upstream starts when the first subscriber arrives and
+/// - **`.lazy`**: the upstream starts when the first subscriber arrives and
 ///   stays active until the owning scope ends. Use when the stream has no-op
 ///   value without subscribers, but once started should remain available.
 ///
-/// - **`.whileSubscribed(stopTimeout:replayExpiration:)`** — the upstream starts
+/// - **`.whileSubscribed(stopTimeout:replayExpiration:)`**: the upstream starts
 ///   on first subscriber and stops `stopTimeout` after the last subscriber leaves.
 ///   The recommended default for UI state on Android-equivalent lifecycles,
 ///   typically with `stopTimeout: .seconds(5)` to handle configuration changes

@@ -55,15 +55,15 @@ struct FlatMapLatestTests {
             // Give tester time to subscribe
             try? await Task.sleep(nanoseconds: 50_000_000)
 
-            // Emit 1 — starts inner flow for 1
+            // Emit 1. Starts inner flow for 1.
             await upstream.emit(1)
             try? await Task.sleep(nanoseconds: 50_000_000)
 
-            // Emit 2 — should cancel inner flow for 1, start inner flow for 2
+            // Emit 2. Should cancel inner flow for 1, start inner flow for 2.
             await upstream.emit(2)
             try? await Task.sleep(nanoseconds: 50_000_000)
 
-            // Emit 3 — should cancel inner flow for 2, start inner flow for 3
+            // Emit 3. Should cancel inner flow for 2, start inner flow for 3.
             await upstream.emit(3)
             try? await Task.sleep(nanoseconds: 50_000_000)
 

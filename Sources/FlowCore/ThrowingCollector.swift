@@ -10,7 +10,7 @@
 ///
 /// ## Usage
 ///
-/// You don't construct a `ThrowingCollector` directly — it's given to you
+/// You don't construct a `ThrowingCollector` directly. It's given to you
 /// inside a `ThrowingFlow` body closure:
 ///
 /// ```swift

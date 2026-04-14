@@ -12,7 +12,7 @@ struct ViewExtensionsTests {
     func returnsView() {
         let flow = Flow(of: 1, 2, 3)
         let view = Text("hi").collecting(flow) { _ in }
-        // Compile check — the modifier applies
+        // Compile check. The modifier applies.
         _ = view
     }
 

@@ -44,11 +44,11 @@ struct ThrottleTests {
 
             try? await Task.sleep(nanoseconds: 20_000_000)
 
-            await upstream.emit(1)   // first value — emitted
+            await upstream.emit(1)   // first value, emitted
             try await tester.expectValue(1)
 
-            await upstream.emit(2)   // within window — stored
-            await upstream.emit(3)   // within window — replaces 2
+            await upstream.emit(2)   // within window, stored
+            await upstream.emit(3)   // within window, replaces 2
             // Allow collect task to process buffered values before window expires
             try? await Task.sleep(nanoseconds: 5_000_000)
             await clock.advance(by: .seconds(1))

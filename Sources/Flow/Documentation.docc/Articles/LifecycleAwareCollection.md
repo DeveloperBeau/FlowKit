@@ -1,6 +1,6 @@
 # Lifecycle-Aware Collection
 
-Bind flow lifetimes to UI objects so collection starts when a view appears and stops — automatically — when it disappears.
+Bind flow lifetimes to UI objects so collection starts when a view appears and stops automatically when it disappears.
 
 ## Overview
 
@@ -12,7 +12,7 @@ A flow that outlives its view wastes CPU, battery, and memory. A flow that stops
 
 ```swift
 // The flow starts collecting when SessionBanner appears in the view hierarchy.
-// It cancels automatically when the view disappears — no manual cleanup.
+// It cancels automatically when the view disappears. No manual cleanup.
 struct SessionBanner: View {
     @CollectedState(SessionManager.shared.sessionState)
     var session: SessionState = .signedOut
@@ -82,7 +82,7 @@ struct MapView: View {
 
 ## UIKit: flowScope
 
-`UIViewController.flowScope` returns a ``FlowCore/FlowScope`` stored as an associated object. Because `OBJC_ASSOCIATION_RETAIN_NONATOMIC` ties the scope's lifetime to the view controller's, the scope deallocates — cancelling all tasks — when the view controller is released.
+`UIViewController.flowScope` returns a ``FlowCore/FlowScope`` stored as an associated object. Because `OBJC_ASSOCIATION_RETAIN_NONATOMIC` ties the scope's lifetime to the view controller's, the scope deallocates and cancels all tasks when the view controller is released.
 
 ```swift
 final class ChatViewController: UIViewController {
@@ -166,7 +166,7 @@ final class SidebarViewController: NSViewController {
 
 ## Manual: flow.launch(in: scope) for custom lifetimes
 
-`launch(in:)` works with any ``FlowCore/FlowScope`` you own. This is the escape hatch for objects that don't fit the standard UIKit/AppKit patterns — custom coordinators, service objects with explicit start/stop semantics, long-running background processors:
+`launch(in:)` works with any ``FlowCore/FlowScope`` you own. This is the escape hatch for objects that don't fit the standard UIKit/AppKit patterns, such as custom coordinators, service objects with explicit start/stop semantics, and long-running background processors:
 
 ```swift
 // A paginated feed that stops when the user navigates away from the section,
@@ -204,7 +204,7 @@ class AnalyticsService {
     private let scope = FlowScope()
 
     init() {
-        // This flow runs forever — fine for truly app-lifetime work.
+        // This flow runs forever. Fine for truly app-lifetime work.
         // But if you add more flows here over time without auditing,
         // you accumulate tasks that never stop.
         userBehaviorFlow
@@ -241,5 +241,5 @@ class AnalyticsService {
 
 ## Related concepts
 
-- <doc:CancellationSemantics> — how cancellation propagates from scope through task to flow body
-- <doc:HotVsColdStreams> — why `whileSubscribed` strategy pairs well with lifecycle-aware collection
+- <doc:CancellationSemantics>: how cancellation propagates from scope through task to flow body
+- <doc:HotVsColdStreams>: why `whileSubscribed` strategy pairs well with lifecycle-aware collection

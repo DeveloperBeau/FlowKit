@@ -8,7 +8,7 @@ extension Flow {
     /// Waits for `duration` of silence (no new upstream emissions) before
     /// emitting the most recent value. Resets the timer on each new value.
     ///
-    /// ## Example — debounced search
+    /// ## Example: debounced search
     ///
     /// ```swift
     /// let debouncedQuery: Flow<String> = searchTextField
@@ -201,7 +201,7 @@ extension Flow {
     /// `true`, emits the most recent value at each interval boundary.
     /// When `false`, emits the first value received in each interval.
     ///
-    /// ## Example — throttled scroll position
+    /// ## Example: throttled scroll position
     ///
     /// ```swift
     /// let throttledScroll: Flow<CGFloat> = scrollOffset
@@ -289,7 +289,7 @@ private actor ThrottleState<Element: Sendable> {
 
     func receive(_ value: Element) {
         if windowOpen {
-            // First value in the window — emit via stream and start timer
+            // First value in the window. Emit via stream and start timer.
             windowOpen = false
             firstValue = nil
             latestValue = nil
@@ -329,7 +329,7 @@ extension Flow where Element: Equatable {
     /// Drops consecutive duplicate values. Only emits when the value
     /// changes compared to the previous emission.
     ///
-    /// ## Example — suppress duplicate search queries
+    /// ## Example: suppress duplicate search queries
     ///
     /// ```swift
     /// let uniqueQueries: Flow<String> = searchTextField
@@ -399,7 +399,7 @@ extension Flow {
     /// Emits the most recent upstream value at fixed time intervals. If no
     /// value arrived since the last sample, the interval is skipped.
     ///
-    /// ## Example — periodic position updates
+    /// ## Example: periodic position updates
     ///
     /// ```swift
     /// let sampledLocation: Flow<CLLocation> = locationUpdates

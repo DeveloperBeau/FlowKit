@@ -1,14 +1,14 @@
 # Cancellation Semantics
 
-How cancellation flows from ``FlowCore/FlowScope`` through Swift Tasks into flow bodies — and what goes wrong when you bypass the chain.
+How cancellation flows from ``FlowCore/FlowScope`` through Swift Tasks into flow bodies, and what goes wrong when you bypass the chain.
 
 ## Overview
 
-FlowKit cancellation is built on Swift structured concurrency. Understanding the chain — scope → task → flow body — lets you reason confidently about cleanup, prevents resource leaks, and avoids the most common pitfall: an orphaned `Task` inside a collector that keeps running after the owning scope is cancelled.
+FlowKit cancellation is built on Swift structured concurrency. Understanding the chain (scope → task → flow body) lets you reason confidently about cleanup, prevents resource leaks, and avoids the most common pitfall: an orphaned `Task` inside a collector that keeps running after the owning scope is cancelled.
 
 ## Structured concurrency in one paragraph
 
-Swift structured concurrency guarantees that child tasks cannot outlive their parent. When a parent task is cancelled, cancellation propagates to every child in its tree. `async`/`await` suspension points check for cancellation cooperatively: `Task.isCancelled` returns `true` and functions marked `throws` raise `CancellationError`. This makes cancellation observable rather than forceful — a flow body cleans up before it stops.
+Swift structured concurrency guarantees that child tasks cannot outlive their parent. When a parent task is cancelled, cancellation propagates to every child in its tree. `async`/`await` suspension points check for cancellation cooperatively: `Task.isCancelled` returns `true` and functions marked `throws` raise `CancellationError`. This makes cancellation observable rather than forceful, so a flow body cleans up before it stops.
 
 ## FlowScope
 
@@ -30,11 +30,11 @@ chatRepository.messages(for: roomID)
 scope.cancel()
 ```
 
-After `cancel()`, any subsequent `launch` calls immediately produce cancelled tasks — the scope never runs new work once marked cancelled.
+After `cancel()`, any subsequent `launch` calls immediately produce cancelled tasks. The scope never runs new work once marked cancelled.
 
 ## How flow bodies observe cancellation
 
-A ``FlowCore/Flow`` body is an `async` closure. When its owning task is cancelled, the next suspension point inside the body sees `Task.isCancelled == true`. Operators that use `Task` internally — `flatMapLatest`, `debounce`, `buffer(.suspend)` — all check cancellation and exit cleanly at their natural suspension points.
+A ``FlowCore/Flow`` body is an `async` closure. When its owning task is cancelled, the next suspension point inside the body sees `Task.isCancelled == true`. Operators that use `Task` internally, such as `flatMapLatest`, `debounce`, and `buffer(.suspend)`, all check cancellation and exit cleanly at their natural suspension points.
 
 For flows that wrap external resources (e.g., a WebSocket connection), use `withTaskCancellationHandler` to schedule synchronous cleanup before the cooperative check can run:
 
@@ -66,7 +66,7 @@ final class ChatViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Collection is tied to the VC's lifetime — no manual cancel needed.
+        // Collection is tied to the VC's lifetime. No manual cancel needed.
         collect(viewModel.messages) { [weak self] messages in
             self?.renderMessages(messages)
         }
@@ -85,7 +85,7 @@ No `deinit` override, no manual `cancel()` call. The scope handles it.
 
 ## SwiftUI: @CollectedState cancels on view disappear
 
-``FlowSwiftUI/CollectedState`` is a `DynamicProperty` that starts collection in `update()` — which SwiftUI calls when the view appears — and cancels when the view is removed from the hierarchy. You get automatic flow lifetime tied to view lifetime with no manual plumbing:
+``FlowSwiftUI/CollectedState`` is a `DynamicProperty` that starts collection in `update()`, which SwiftUI calls when the view appears, and cancels when the view is removed from the hierarchy. You get automatic flow lifetime tied to view lifetime with no manual plumbing:
 
 ```swift
 struct SessionBanner: View {
@@ -104,7 +104,7 @@ struct SessionBanner: View {
 }
 ```
 
-If the view is pushed off-screen and the `StateFlow` uses `.whileSubscribed(stopTimeout: .seconds(5))`, the upstream stops after the timeout — saving CPU, network, and battery for flows that aren't being observed.
+If the view is pushed off-screen and the `StateFlow` uses `.whileSubscribed(stopTimeout: .seconds(5))`, the upstream stops after the timeout, saving CPU, network, and battery for flows that aren't being observed.
 
 ## The orphaned Task pitfall
 
@@ -122,7 +122,7 @@ viewModel.feedItems
     .launch(in: viewScope)
 ```
 
-When `viewScope` is cancelled, the `onEach` task stops — but the inner `Task` keeps running. The prefetch continues, `updateThumbnailGrid` is called on a deallocated view controller, and nothing cleans up the image cache work.
+When `viewScope` is cancelled, the `onEach` task stops but the inner `Task` keeps running. The prefetch continues, `updateThumbnailGrid` is called on a deallocated view controller, and nothing cleans up the image cache work.
 
 The fix is to keep work inside the structured chain:
 
@@ -143,5 +143,5 @@ Now when `viewScope` is cancelled, `flatMap`'s inner `Flow` body is also cancell
 
 ## Related concepts
 
-- <doc:LifecycleAwareCollection> — binding scopes to UIKit, AppKit, and SwiftUI lifetimes
-- <doc:HotVsColdStreams> — why hot streams need explicit scope management
+- <doc:LifecycleAwareCollection>: binding scopes to UIKit, AppKit, and SwiftUI lifetimes
+- <doc:HotVsColdStreams>: why hot streams need explicit scope management

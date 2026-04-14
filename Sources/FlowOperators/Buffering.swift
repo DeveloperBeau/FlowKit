@@ -6,10 +6,10 @@ public import FlowSharedModels
 extension Flow {
     /// Buffers upstream values with the given size and overflow policy.
     /// When the buffer is full:
-    /// - `.suspend` — suspends the emitter using `CheckedContinuation` until
+    /// - `.suspend`: suspends the emitter using `CheckedContinuation` until
     ///   space is available (true backpressure via `SuspendingBuffer` actor).
-    /// - `.dropOldest` — discards the oldest buffered value.
-    /// - `.dropLatest` — discards the incoming value.
+    /// - `.dropOldest`: discards the oldest buffered value.
+    /// - `.dropLatest`: discards the incoming value.
     public func buffer(size: Int, policy: BufferOverflow) -> Flow<Element> {
         Flow<Element> { downstream in
             switch policy {
@@ -139,7 +139,7 @@ extension Flow {
     /// Drops intermediate values when the collector can't keep up, keeping
     /// only the most recent value. Equivalent to `buffer(size: 1, policy: .dropOldest)`.
     ///
-    /// ## Example — fast sensor data with slow UI updates
+    /// ## Example: fast sensor data with slow UI updates
     ///
     /// ```swift
     /// let latestReading: Flow<SensorReading> = rawSensorData

@@ -47,7 +47,7 @@ struct SampleTests {
 
             try? await Task.sleep(nanoseconds: 20_000_000)
 
-            // No values emitted — advance two intervals
+            // No values emitted. Advance two intervals.
             await clock.advance(by: .seconds(2))
             await tester.expectNoValue(within: .milliseconds(50))
 

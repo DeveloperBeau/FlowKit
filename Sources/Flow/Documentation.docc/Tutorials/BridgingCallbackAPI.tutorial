@@ -1,6 +1,6 @@
 @Tutorial(time: 25) {
     @Intro(title: "Bridging a Callback API") {
-        Legacy APIs — `CLLocationManager`, `AVAudioSession`, `URLSessionDownloadTask` — deliver
+        Legacy APIs such as `CLLocationManager`, `AVAudioSession`, and `URLSessionDownloadTask` deliver
         values through delegate methods or completion handlers rather than `async/await`. In this
         tutorial you will wrap `CLLocationManager`'s delegate callbacks in a `Flow<CLLocation>` so
         the rest of your app can work with a clean, cancellable stream.
@@ -18,7 +18,7 @@
 
             The standard pattern is a small *delegate bridge class* that holds a reference to the
             collector and calls `emit` from every delegate callback. The bridge class lives entirely
-            inside the flow body closure — it has no life beyond a single collection.
+            inside the flow body closure. It has no life beyond a single collection.
         }
 
         @Steps {
@@ -52,7 +52,7 @@
         @ContentAndMedia {
             A `Flow` body closure runs inside a Swift `Task`. When the task is cancelled the closure
             needs to stop the hardware and release the delegate. `withTaskCancellationHandler`
-            provides a synchronous hook that fires exactly when cancellation is requested — ideal
+            provides a synchronous hook that fires exactly when cancellation is requested, ideal
             for stopping the location manager.
         }
 
@@ -67,8 +67,8 @@
             }
 
             @Step {
-                Add a `locationManager(_:didFailWithError:)` delegate method so that errors —
-                permission denial, hardware failures — also resume the continuation and let the flow
+                Add a `locationManager(_:didFailWithError:)` delegate method so that errors such as
+                permission denial or hardware failures also resume the continuation and let the flow
                 finish gracefully instead of leaking a suspended closure.
 
                 @Code(name: "LocationTracker.swift", file: 03-05-error.swift)
@@ -79,7 +79,7 @@
     @Section(title: "Filter by authorization status") {
         @ContentAndMedia {
             `CLLocationManager` may call `didUpdateLocations` even if the user has not yet
-            responded to the permission dialog — the values simply arrive with degraded accuracy.
+            responded to the permission dialog, so the values simply arrive with degraded accuracy.
             A cleaner API only emits locations once the app is `authorizedWhenInUse` or
             `authorizedAlways`, and ignores updates that arrive while authorization is pending or
             denied.
@@ -98,7 +98,7 @@
                 Call `manager.requestWhenInUseAuthorization()` before starting updates so that the
                 system prompts the user at collection time. Add
                 `locationManagerDidChangeAuthorization` to the bridge so it re-checks status after
-                the user responds — if the status is `.denied` or `.restricted`, resume the
+                the user responds. If the status is `.denied` or `.restricted`, resume the
                 continuation to end the flow.
 
                 @Code(name: "LocationTracker.swift", file: 03-07-request-permission.swift)
@@ -106,7 +106,7 @@
 
             @Step {
                 Verify the finished `locationFlow` property. The bridge is now a complete delegate
-                that handles authorization changes, location updates, and errors — all wired into a
+                that handles authorization changes, location updates, and errors, all wired into a
                 single `Collector`.
 
                 @Code(name: "LocationTracker.swift", file: 03-08-complete.swift)
@@ -182,7 +182,7 @@
 
             @Step {
                 Add a cleanup test. After the `.test` closure exits the collection task is
-                cancelled. Assert that the mock's `stopCalled` flag is `true` — confirming that
+                cancelled. Assert that the mock's `stopCalled` flag is `true`, confirming that
                 the `withTaskCancellationHandler` fires and the hardware shuts down.
 
                 @Code(name: "LocationTrackerTests.swift", file: 03-15-cleanup-test.swift)

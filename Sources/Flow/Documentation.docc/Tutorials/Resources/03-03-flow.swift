@@ -21,7 +21,7 @@ actor LocationTracker {
             // the caller cancels the surrounding task.
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 // Cancellation wiring added in the next step.
-                _ = continuation   // placeholder — suspension never resumes here yet
+                _ = continuation   // placeholder. Suspension never resumes here yet.
             }
 
             manager.stopUpdatingLocation()

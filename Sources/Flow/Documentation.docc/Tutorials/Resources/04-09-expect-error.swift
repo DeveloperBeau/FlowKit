@@ -15,7 +15,7 @@ struct SearchViewModelErrorTests {
         try await viewModel.resultsFlow.test { tester in
             await viewModel.updateQuery("anything")
 
-            // Typed overload — works when the error type is Equatable.
+            // Typed overload that works when the error type is Equatable.
             try await tester.expectError(SearchError.networkUnavailable)
         }
     }

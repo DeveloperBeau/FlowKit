@@ -43,7 +43,7 @@ extension Flow {
     /// `maxConcurrent` inner flows in parallel. When the limit is reached,
     /// new inner flows wait for an active one to complete.
     ///
-    /// ## Example — parallel image downloads (limited to 3)
+    /// ## Example: parallel image downloads (limited to 3)
     ///
     /// ```swift
     /// let images: Flow<UIImage> = imageURLs
@@ -138,7 +138,7 @@ extension Flow {
     /// previously-active inner flow each time a new upstream value arrives.
     /// Only the most recent inner flow's emissions reach downstream.
     ///
-    /// ## Example — search-as-you-type
+    /// ## Example: search-as-you-type
     ///
     /// ```swift
     /// let searchResults: ThrowingFlow<[Product]> = searchQuery

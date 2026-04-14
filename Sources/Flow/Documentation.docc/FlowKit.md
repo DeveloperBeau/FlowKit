@@ -62,7 +62,7 @@ struct SearchView: View {
 }
 ```
 
-Every piece — cold ``FlowCore/Flow`` composition, debouncing, error handling, hot ``FlowHotStreams/StateFlow`` sharing, SwiftUI binding — is 0.1.0-through-0.4.0 API.
+Every piece, from cold ``FlowCore/Flow`` composition, debouncing, and error handling to hot ``FlowHotStreams/StateFlow`` sharing and SwiftUI binding, is 0.1.0-through-0.4.0 API.
 
 ## Topics
 

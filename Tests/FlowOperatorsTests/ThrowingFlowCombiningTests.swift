@@ -83,7 +83,7 @@ struct ThrowingFlowCombiningTests {
             throw MergeError()
         }
         let flow2 = ThrowingFlow<Int> { _ in
-            // Never emits — just waits so merge stays alive until error fires
+            // Never emits. Just waits so merge stays alive until error fires.
         }
         try await ThrowingFlow.merge(flow1, flow2).test { tester in
             _ = try await tester.awaitValue()  // the 1 from flow1

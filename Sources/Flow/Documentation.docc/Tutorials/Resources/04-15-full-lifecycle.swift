@@ -19,7 +19,7 @@ struct SessionManagerTests {
             try await manager.signIn(username: "alice", password: "secret")
             try await tester.expectValue(.loggedIn(User(username: "alice")))
 
-            // Sending the same state again must NOT produce a new emission —
+            // Sending the same state again must NOT produce a new emission.
             // MutableStateFlow deduplicates consecutive equal values.
             await manager.stateFlow.send(.loggedIn(User(username: "alice")))
             await tester.expectNoValue(within: .milliseconds(100))

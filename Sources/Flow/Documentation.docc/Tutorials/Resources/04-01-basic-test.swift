@@ -7,7 +7,7 @@ struct FlowBasicsTests {
 
     @Test("Flow(of:) emits values in order")
     func emitsValuesInOrder() async throws {
-        // Flow(of:) is a simple cold source — it emits every argument
+        // Flow(of:) is a simple cold source. It emits every argument
         // and then completes. Great for testing downstream operators in isolation.
         try await Flow(of: "apple", "banana", "cherry").test { tester in
             try await tester.expectValue("apple")

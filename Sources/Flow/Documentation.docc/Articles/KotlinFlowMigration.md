@@ -101,7 +101,7 @@ FlowKit is designed so Kotlin Flow knowledge transfers directly. The mental mode
 |--------|---------|-------|
 | `MutableStateFlow(initial)` | `MutableStateFlow(initial)` | Identical name and semantics |
 | `MutableSharedFlow(replay = n)` | `MutableSharedFlow(replay: n)` | Identical |
-| `stateIn(scope, started, initial)` | `.asStateFlow(initialValue:strategy:)` | No explicit scope — uses `FlowScope` separately |
+| `stateIn(scope, started, initial)` | `.asStateFlow(initialValue:strategy:)` | No explicit scope; uses `FlowScope` separately |
 | `shareIn(scope, started, replay)` | `.asSharedFlow(replay:strategy:)` | Same |
 | `SharingStarted.Eagerly` | `.eager` | Starts immediately |
 | `SharingStarted.Lazily` | `.lazy` | Starts on first subscriber, runs until scope ends |
@@ -251,7 +251,7 @@ Key difference: FlowKit's `combineLatest` is binary (pairs two flows); chain mul
 
 **No `CoroutineScope` parameter on operators.** In Kotlin, `stateIn` and `shareIn` take an explicit `CoroutineScope` to anchor the upstream collection. In FlowKit, `asStateFlow` and `asSharedFlow` use an internal `Task` and rely on the `SharingStrategy` to control upstream lifetime. Pass a `FlowScope` to `launch(in:)` when you need explicit scope control over the collection site.
 
-**`flow { }` body receives a `Collector`, not `this`.** In Kotlin, `emit` is called directly in the `flow { }` block because the block is a `FlowCollector` receiver. In FlowKit, the body closure receives an explicit `Collector<Element>` parameter. Use `await collector.emit(value)` — or the trailing-closure shorthand `$0` — instead.
+**`flow { }` body receives a `Collector`, not `this`.** In Kotlin, `emit` is called directly in the `flow { }` block because the block is a `FlowCollector` receiver. In FlowKit, the body closure receives an explicit `Collector<Element>` parameter. Use `await collector.emit(value)` or the trailing-closure shorthand `$0`.
 
 **Errors require `ThrowingFlow`.** Kotlin `Flow` can carry errors (the flow itself is always non-throwing; errors surface via `catch`). FlowKit uses separate `Flow` and `ThrowingFlow` types. The compiler enforces which is which at every call site.
 
@@ -259,6 +259,6 @@ Key difference: FlowKit's `combineLatest` is binary (pairs two flows); chain mul
 
 ## Related concepts
 
-- <doc:HotVsColdStreams> — cold/hot distinction and sharing strategies
-- <doc:FlowVsThrowingFlow> — when to use each stream type
-- <doc:CancellationSemantics> — Swift structured concurrency vs Kotlin coroutine cancellation
+- <doc:HotVsColdStreams>: cold/hot distinction and sharing strategies
+- <doc:FlowVsThrowingFlow>: when to use each stream type
+- <doc:CancellationSemantics>: Swift structured concurrency vs Kotlin coroutine cancellation

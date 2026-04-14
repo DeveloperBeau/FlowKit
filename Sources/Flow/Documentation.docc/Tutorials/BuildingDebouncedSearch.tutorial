@@ -17,7 +17,7 @@
 
         @Steps {
             @Step {
-                Create a `Product` model — `Identifiable`, `Sendable`, and
+                Create a `Product` model that is `Identifiable`, `Sendable`, and
                 `Equatable` so it can flow through FlowKit operators without
                 a type annotation.
 
@@ -33,7 +33,7 @@
             }
 
             @Step {
-                Introduce `SearchState` — an enum with three cases: `.idle`
+                Introduce `SearchState`, an enum with three cases: `.idle`
                 before the user types, `.loaded([Product])` when results
                 arrive, and `.error(String)` when the network fails. The
                 pipeline maps everything into this one type so views never
@@ -54,7 +54,7 @@
         @Steps {
             @Step {
                 Create `SearchViewModel` with a `MutableStateFlow<String>`
-                and an `update(query:)` method. The flow starts empty — the
+                and an `update(query:)` method. The flow starts empty, so the
                 `.idle` initial state matches this.
 
                 @Code(name: "SearchViewModel.swift", file: 04-search-pipeline.swift)
@@ -78,7 +78,7 @@
         @ContentAndMedia {
             A cold `Flow` reruns its body for every subscriber. Convert it
             to a hot ``StateFlow`` so the active search is shared across
-            all observers — SwiftUI views, analytics, and tests — without
+            all observers, including SwiftUI views, analytics, and tests, without
             re-executing the pipeline.
         }
 
@@ -122,7 +122,7 @@
         @ContentAndMedia {
             ``TestClock`` lets tests advance virtual time instead of sleeping.
             Combined with the `test { tester in }` helper, you can assert
-            exact debounce behaviour — no `Task.sleep`, no timeouts, no
+            exact debounce behaviour, with no `Task.sleep`, no timeouts, and no
             flaky CI.
         }
 
@@ -140,7 +140,7 @@
                 300 ms window, then asserts no value has arrived yet. After
                 `clock.advance(by: .milliseconds(400))` moves past the
                 debounce window, `expectValue` confirms exactly one result
-                set arrived — the last query only.
+                set arrived: the last query only.
 
                 @Code(name: "SearchTests.swift", file: 09-search-test-debounce.swift)
             }

@@ -3,7 +3,7 @@ import Foundation
 /// A `Clock` whose time is advanced manually by tests. Used to make
 /// time-dependent operators (`debounce`, `throttle`, `sample`, retry
 /// with backoff, `SharingStrategy.whileSubscribed`) deterministic in
-/// tests — no real-time sleeps, no CI flakiness.
+/// tests with no real-time sleeps and no CI flakiness.
 ///
 /// ## Usage
 ///

@@ -6,9 +6,9 @@ internal import AsyncAlgorithms
 extension Flow {
     /// Pairs each element from this flow with the corresponding element from
     /// `other`, emitting tuples. Completes when either flow completes.
-    /// Matches `Sequence.zip` semantics — positional pairing, not combinatorial.
+    /// Matches `Sequence.zip` semantics: positional pairing, not combinatorial.
     ///
-    /// ## Example — pairing questions with answers
+    /// ## Example: pairing questions with answers
     ///
     /// ```swift
     /// let qa: Flow<(Question, Answer)> = questions.zip(answers)
@@ -70,7 +70,7 @@ extension Flow {
     /// whenever either flow emits. No values are emitted until both flows have
     /// emitted at least once. Completes when both flows complete.
     ///
-    /// ## Example — form validation
+    /// ## Example: form validation
     ///
     /// ```swift
     /// let isValid: Flow<Bool> = username.combineLatest(password) { user, pass in
@@ -133,7 +133,7 @@ extension Flow {
     /// interleave based on emission timing. Completes when all input flows
     /// complete.
     ///
-    /// ## Example — combining multiple event sources
+    /// ## Example: combining multiple event sources
     ///
     /// ```swift
     /// let allEvents: Flow<AppEvent> = Flow.merge(

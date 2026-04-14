@@ -12,7 +12,7 @@ struct UIKitBridgeTests {
         let vc = UIViewController()
         let scope1 = vc.flowScope
         let scope2 = vc.flowScope
-        // Pointer equality — same FlowScope instance each time
+        // Pointer equality. Same FlowScope instance each time.
         #expect(scope1 === scope2)
     }
 
@@ -24,7 +24,7 @@ struct UIKitBridgeTests {
             let vc = UIViewController()
             weakScope = vc.flowScope
             vc.collect(stateFlow) { _ in }
-            // vc goes out of scope here — flowScope should be released
+            // vc goes out of scope here, so flowScope should be released
         }
         // Allow dealloc to propagate
         try? await Task.sleep(nanoseconds: 50_000_000)

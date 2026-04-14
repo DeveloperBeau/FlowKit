@@ -2,8 +2,8 @@ import CoreLocation
 import Flow
 
 actor LocationTracker {
-    /// Injected factory — returns `CLLocationManager()` in production,
-    /// a `MockLocationManager` in tests.
+    /// Injected factory. Returns `CLLocationManager()` in production,
+    /// or a `MockLocationManager` in tests.
     private let managerFactory: @Sendable () -> any LocationManaging
 
     /// Production initializer: uses the real hardware.

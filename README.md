@@ -166,42 +166,35 @@ func articleFeedEmitsCachedThenFresh() async throws {
 }
 ```
 
-## What's in 0.4.0
+## What's inside
 
-- **FlowUI umbrella** — `import FlowUI` gets SwiftUI, UIKit/AppKit bridges, and Flow.
-- **SwiftUI** — `@CollectedState` property wrapper, `ObservedStateFlow` with `isolated deinit`, `View.collecting` extension, `Flow(observing:_:)` for `@Observable` types.
-- **UIKit bridge** — `UIViewController.flowScope` (iOS/tvOS/Catalyst) with `collect` helpers.
-- **AppKit bridge** — `NSViewController.flowScope` + `NSWindowController.flowScope` (macOS).
+### Cold streams
 
-## What's in 0.3.0
+`Flow<T>` and `ThrowingFlow<T>` are cold async stream types. Each collector gets its own execution of the body closure. Builders include `of:`, sequence init, `empty`, `never`, and `asFlow()`. `FlowScope` handles lifetime, and `launch(in:)` ties collection to it.
 
-- **Rate-limiting operators** — `debounce`, `throttle`, `removeDuplicates`, `sample`.
-- **Buffering operators** — `buffer`, `keepingLatest`.
-- **Terminal operators** — `collectLatest`, `first`, `exactlyOne`, `toArray`, `reduce`.
+### Hot streams
 
-## What's in 0.2.0
+`StateFlow` / `MutableStateFlow` give you a current value with built-in deduplication. `SharedFlow` / `MutableSharedFlow` broadcast to multiple subscribers with concurrent delivery and a configurable replay buffer. Convert cold to hot with `asStateFlow(initialValue:strategy:)` or `asSharedFlow(replay:strategy:)` using `.eager`, `.lazy`, or `.whileSubscribed`.
 
-- **Flattening operators** — `flatMap`, `flatMap(maxConcurrent:)`, `flatMapLatest`.
-- **Combining operators** — `zip`, `combineLatest`, `merge`.
-- **Error handling operators** — `catch`, `retry`, `retryWhen`.
+### Operators
 
-## What's in 0.1.0
+- **Transform**: `map`, `compactMap`, `filter`, `transform`, `prefix`, `dropFirst`, `scan`.
+- **Lifecycle**: `onStart`, `onEach`, `onCompletion`.
+- **Flattening**: `flatMap`, `flatMap(maxConcurrent:)`, `flatMapLatest`.
+- **Combining**: `zip`, `combineLatest`, `merge`.
+- **Error handling**: `catch`, `retry`, `retryWhen`.
+- **Rate-limiting**: `debounce`, `throttle`, `removeDuplicates`, `sample`.
+- **Buffering**: `buffer`, `keepingLatest`.
+- **Terminal**: `collectLatest`, `first`, `exactlyOne`, `toArray`, `reduce`.
 
-- **`Flow<T>` and `ThrowingFlow<T>`** — cold async stream types with `collect`, builders (`of:`, sequence, `empty`, `never`, `asFlow`), `FlowScope`-based lifetime management, and `launch(in:)`.
-- **Transform operators** — `map`, `compactMap`, `filter`, `transform`, `prefix`, `dropFirst`, `scan`.
-- **Lifecycle operators** — `onStart`, `onEach`, `onCompletion`.
-- **Hot streams** — `StateFlow` / `MutableStateFlow` with built-in deduplication; `SharedFlow` / `MutableSharedFlow` with concurrent delivery and configurable replay buffer.
-- **Sharing strategies** — `asStateFlow(initialValue:strategy:)` and `asSharedFlow(replay:strategy:)` with `.eager`, `.lazy`, and `.whileSubscribed(stopTimeout:replayExpiration:)`.
-- **Testing infrastructure** — `FlowTester`, `ThrowingFlowTester`, `TestScope`, `TestClock` for deterministic virtual-time tests, `Flow.test(timeout:_:)` extension.
+### UI integration
 
-## Coming soon
+`import FlowUI` gets you the SwiftUI `@CollectedState` property wrapper, `ObservedStateFlow` with `isolated deinit`, the `View.collecting` extension, and `Flow(observing:_:)` for `@Observable` types. On UIKit/AppKit, `UIViewController.flowScope`, `NSViewController.flowScope`, and `NSWindowController.flowScope` tie collection to view controller lifetimes.
 
-- **0.2.0** — Flattening (`flatMap`, `flatMapLatest`), combining (`zip`, `combineLatest`, `merge`), error handling (`catch`, `retry`, `retryWhen`).
-- **0.3.0** — Rate-limiting (`debounce`, `throttle`, `removeDuplicates`), buffering (`buffer`, `keepingLatest`), terminal operators (`collectLatest`, `first`, `exactlyOne`, `toArray`, `reduce`).
-- **0.4.0** — `FlowUI` target with SwiftUI `@CollectedState`, UIKit/AppKit bridges, and `@Observable` interop.
-- **0.5.0** — API freeze, complete DocC catalog, tutorials.
-- **1.0.0** — Stable release.
+### Testing
+
+`FlowTester`, `ThrowingFlowTester`, and `TestScope` drive assertions against flows. `TestClock` gives deterministic virtual time for rate-limiting and sharing operators. Everything plugs in through the `Flow.test(timeout:_:)` extension.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

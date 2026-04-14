@@ -23,7 +23,7 @@ struct DebounceOperatorTests {
             await clock.advance(by: .milliseconds(100))
             await queries.emit("swi")
 
-            // Nothing yet — still inside the 300 ms silence window.
+            // Nothing yet. Still inside the 300 ms silence window.
             await tester.expectNoValue(within: .milliseconds(50))
 
             // Advance past the debounce window. The clock wakes the sleeping
@@ -31,7 +31,7 @@ struct DebounceOperatorTests {
             await clock.advance(by: .milliseconds(300))
             try await tester.expectValue("swi")
 
-            // No further values — intermediate "s" and "sw" were suppressed.
+            // No further values. Intermediate "s" and "sw" were suppressed.
         }
     }
 }

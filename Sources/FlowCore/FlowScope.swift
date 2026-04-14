@@ -14,7 +14,7 @@ import FlowSharedModels
 /// any single function call but still propagates cancellation cleanly.
 /// `FlowScope` is that container.
 ///
-/// ## Usage — UIKit integration
+/// ## Usage: UIKit integration
 ///
 /// ```swift
 /// final class NewsViewController: UIViewController {
@@ -41,7 +41,7 @@ import FlowSharedModels
 /// automatically removed from the scope) or the scope is cancelled /
 /// deinitialized. Long-lived scopes (e.g., on a singleton coordinator) will
 /// keep flows alive until explicit cancellation. Pair scopes with clear
-/// lifetime boundaries — typically a view controller, a view model, or an
+/// lifetime boundaries, typically a view controller, a view model, or an
 /// explicit user session.
 public final class FlowScope: @unchecked Sendable {
     internal let state: Mutex<State>

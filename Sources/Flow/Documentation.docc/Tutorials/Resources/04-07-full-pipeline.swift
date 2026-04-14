@@ -19,17 +19,17 @@ struct SearchViewModelClockTests {
             let resultsTester = try await scope.test(viewModel.resultsFlow)
             try? await Task.sleep(nanoseconds: 10_000_000)
 
-            // Rapid typing — each keystroke resets the debounce timer.
+            // Rapid typing, each keystroke resets the debounce timer.
             await viewModel.updateQuery("S")
             await clock.advance(by: .milliseconds(100))
             await viewModel.updateQuery("Sw")
             await clock.advance(by: .milliseconds(100))
             await viewModel.updateQuery("Swift")
 
-            // Still inside the window — no results yet.
+            // Still inside the window, so no results yet.
             await resultsTester.expectNoValue(within: .milliseconds(50))
 
-            // Expire the window — the pipeline fires a single search.
+            // Expire the window. The pipeline fires a single search.
             await clock.advance(by: .milliseconds(300))
             let results = try await resultsTester.awaitValue()
             #expect(results.count == 1)

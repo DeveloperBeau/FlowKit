@@ -22,7 +22,7 @@ final class SessionManager {
     static let shared = SessionManager()
 
     // MutableStateFlow holds the current state and broadcasts every change
-    // to all active subscribers — SwiftUI views, UIKit controllers, and tests.
+    // to all active subscribers: SwiftUI views, UIKit controllers, and tests.
     private let _state = MutableStateFlow<SessionState>(.signedOut)
 
     // Expose a read-only StateFlow so callers cannot mutate state directly.

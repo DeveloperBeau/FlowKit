@@ -4,7 +4,7 @@ extension Flow {
     /// cancels the collection. Returns the launched task handle, which can
     /// be ignored for fire-and-forget launches.
     ///
-    /// The flow is collected with a no-op sink — any side effects should be
+    /// The flow is collected with a no-op sink. Any side effects should be
     /// attached upstream using `onEach`:
     ///
     /// ```swift
@@ -22,7 +22,7 @@ extension Flow {
 
 extension ThrowingFlow {
     /// Launches collection of this throwing flow in the given scope. Errors
-    /// thrown by the flow are silently swallowed — if you care about errors,
+    /// thrown by the flow are silently swallowed. If you care about errors,
     /// handle them upstream with `.catch { }` before calling `launch(in:)`.
     @discardableResult
     public func launch(in scope: FlowScope) -> Task<Void, Never> {

@@ -17,7 +17,7 @@ actor LocationTracker {
             manager.startUpdatingLocation()
 
             // withTaskCancellationHandler fires synchronously when the surrounding
-            // task is cancelled — the onCancel closure stops hardware and resumes
+            // task is cancelled. The onCancel closure stops hardware and resumes
             // the continuation so the flow body can return cleanly.
             await withTaskCancellationHandler {
                 await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -46,7 +46,7 @@ private final class DelegateBridge: NSObject, CLLocationManagerDelegate, @unchec
         lock.withLock { self.continuation = continuation }
     }
 
-    /// Called from the `onCancel` closure — stops the manager and resumes the
+    /// Called from the `onCancel` closure. Stops the manager and resumes the
     /// suspended continuation so the flow body can exit.
     func stop(manager: any LocationManaging) {
         manager.stopUpdatingLocation()

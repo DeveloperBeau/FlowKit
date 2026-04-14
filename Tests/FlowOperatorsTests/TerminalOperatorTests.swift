@@ -99,7 +99,7 @@ struct TerminalOperatorTests {
         let processed = Mutex<[Int]>([])
         let flow = Flow(of: 1, 2, 3)
         await flow.collectLatest { value in
-            // Simulate work — only the last value should complete
+            // Simulate work. Only the last value should complete.
             try? await Task.sleep(nanoseconds: 10_000_000)
             processed.withLock { $0.append(value) }
         }

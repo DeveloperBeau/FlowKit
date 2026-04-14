@@ -14,7 +14,7 @@ struct MultipleFlowsTests {
         let debouncedFlow = queries.asFlow().debounce(for: .milliseconds(300), clock: clock)
 
         try await TestScope.run { scope in
-            // Both flows are collected concurrently — each gets its own background task.
+            // Both flows are collected concurrently, each in its own background task.
             let rawTester      = try await scope.test(rawFlow)
             let debouncedTester = try await scope.test(debouncedFlow)
 

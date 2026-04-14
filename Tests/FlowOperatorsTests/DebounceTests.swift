@@ -26,7 +26,7 @@ struct DebounceTests {
             await clock.advance(by: .milliseconds(100))
             await upstream.emit("hel")
 
-            // Not enough silence yet — no value emitted
+            // Not enough silence yet. No value emitted.
             await tester.expectNoValue(within: .milliseconds(50))
 
             // Advance past the debounce window

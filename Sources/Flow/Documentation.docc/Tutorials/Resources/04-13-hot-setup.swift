@@ -9,8 +9,8 @@ struct SessionManagerTests {
     func initialStateIsLoggedOut() async throws {
         let manager = SessionManager()
 
-        // MutableStateFlow replays its current value to each new collector —
-        // the first expectValue call sees the initial state immediately.
+        // MutableStateFlow replays its current value to each new collector,
+        // so the first expectValue call sees the initial state immediately.
         try await TestScope.run { scope in
             let tester = try await scope.test(manager.stateFlow.asFlow())
 

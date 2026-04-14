@@ -67,7 +67,7 @@ struct FlowObservingTests {
         let flow: Flow<Int> = Flow(observing: obj, \.count)
         try await flow.test(timeout: .seconds(2)) { tester in
             try await tester.expectValue(0)
-            obj.count = 0 // equal — no emission
+            obj.count = 0 // equal, no emission
             await tester.expectNoValue(within: .milliseconds(100))
             obj.count = 1
             try await tester.expectValue(1)
