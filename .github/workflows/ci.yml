@@ -18,7 +18,7 @@ jobs:
       matrix:
         include:
           - runner: macos-latest
-          - runner: ubuntu-24.04
+          - runner: ubuntu-latest
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
         if: matrix.runner == 'macos-latest'
       - name: Build (Linux non-UI targets)
         run: swift build --target Flow --target FlowTesting
-        if: matrix.runner == 'ubuntu-24.04'
+        if: matrix.runner == 'ubuntu-latest'
       - name: Test (macOS, full suite, with coverage)
         if: matrix.runner == 'macos-latest'
         run: swift test --enable-code-coverage
@@ -47,7 +47,7 @@ jobs:
               -ignore-filename-regex='Tests/|.build/' || true
           fi
       - name: Test (Linux, non-UI targets)
-        if: matrix.runner == 'ubuntu-24.04'
+        if: matrix.runner == 'ubuntu-latest'
         run: |
           swift test \
             --filter FlowSharedModelsTests \
