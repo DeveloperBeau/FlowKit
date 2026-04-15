@@ -23,12 +23,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode
-        run: |
-          XCODE=$(ls /Applications | grep "^Xcode" | grep -v "beta" | sort -V | tail -1)
-          if [ -n "$XCODE" ]; then
-            sudo xcode-select -s "/Applications/$XCODE"
-          fi
+      - uses: DeveloperBeau/setup-swift@v1
+        with:
+          swift-version: '6.3'
       - name: Build documentation
         run: |
           swift package --allow-writing-to-directory ./docs-site \
