@@ -1,0 +1,21 @@
+@Tutorials(name: "FlowKit") {
+    @Intro(title: "Meet FlowKit") {
+        Learn FlowKit by building real features. These tutorials walk through
+        the patterns that come up most often: search-as-you-type, shared state
+        across screens, wrapping callback APIs, and writing deterministic tests.
+    }
+
+    @Chapter(name: "Reactive UI") {
+        Build user-facing flows with debouncing, cancellation, and shared state.
+
+        @TutorialReference(tutorial: "doc:BuildingDebouncedSearch")
+        @TutorialReference(tutorial: "doc:SharingStateBetweenViews")
+    }
+
+    @Chapter(name: "Integration") {
+        Bridge legacy callback APIs into FlowKit and verify your pipelines.
+
+        @TutorialReference(tutorial: "doc:BridgingCallbackAPI")
+        @TutorialReference(tutorial: "doc:TestingFlowPipeline")
+    }
+}

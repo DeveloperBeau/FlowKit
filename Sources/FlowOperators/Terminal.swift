@@ -1,5 +1,5 @@
 public import FlowCore
-public import FlowSharedModels
+import FlowSharedModels
 
 // MARK: - first
 
