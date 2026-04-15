@@ -1,4 +1,4 @@
-public import FlowCore
+internal import FlowCore
 
 extension Flow {
     /// Bridges this cold flow into an `AsyncStream`. Used internally by

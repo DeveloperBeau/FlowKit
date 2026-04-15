@@ -1,5 +1,5 @@
 public import FlowCore
-public import FlowSharedModels
+internal import FlowSharedModels
 import Foundation
 
 // MARK: - debounce
@@ -224,7 +224,7 @@ extension Flow {
                     await state.flush()
                 }
                 group.addTask {
-                    for await value in await state.stream {
+                    for await value in state.stream {
                         await downstream.emit(value)
                     }
                 }
@@ -259,7 +259,7 @@ extension ThrowingFlow {
                     await state.flush()
                 }
                 group.addTask {
-                    for await value in await state.stream {
+                    for await value in state.stream {
                         try await downstream.emit(value)
                     }
                 }
@@ -298,7 +298,7 @@ private actor ThrottleState<Element: Sendable> {
             let cap = continuation
             timerTask = Task { [duration, clock] in
                 try? await clock.sleep(for: duration, tolerance: nil)
-                await self.windowExpired(into: cap)
+                self.windowExpired(into: cap)
             }
         } else {
             if firstValue == nil { firstValue = value }
