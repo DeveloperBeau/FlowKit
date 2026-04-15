@@ -21,7 +21,10 @@ final class MapViewController: UIViewController {
     }
 
     private func startObservingLocation() {
-        let flow = tracker.locationFlow.keepingLatest()
+        // tracker.locations is multicast: all subscribers across the app share
+        // a single CLLocationManager. The hardware starts on first subscriber
+        // and stops on last, so opening this view never spawns a duplicate.
+        let flow = tracker.locations.asFlow().keepingLatest()
 
         // launch(_:) starts a Task tied to this scope's lifetime.
         scope.launch {

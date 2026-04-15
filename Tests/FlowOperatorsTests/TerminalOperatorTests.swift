@@ -100,7 +100,7 @@ struct TerminalOperatorTests {
         let flow = Flow(of: 1, 2, 3)
         await flow.collectLatest { value in
             // Simulate work. Only the last value should complete.
-            try? await Task.sleep(nanoseconds: 10_000_000)
+            try? await Task.sleep(for: .seconds(0.01))
             processed.withLock { $0.append(value) }
         }
         // At minimum, the last value (3) should be processed

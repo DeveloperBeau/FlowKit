@@ -9,7 +9,7 @@ struct AsSharedFlowTests {
     @Test("asSharedFlow broadcasts upstream values to subscribers")
     func broadcasts() async throws {
         let upstream = Flow<String> { collector in
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            try? await Task.sleep(for: .seconds(0.02))
             await collector.emit("first")
             await collector.emit("second")
         }

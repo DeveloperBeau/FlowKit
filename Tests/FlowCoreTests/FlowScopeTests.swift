@@ -32,7 +32,7 @@ struct FlowScopeTests {
         }
 
         // Give the task a moment to start
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(for: .seconds(0.005))
 
         scope.cancel()
         await task.value
@@ -53,7 +53,7 @@ struct FlowScopeTests {
         // Give the executor time to run the removal closures.
         for _ in 0..<10 {
             if scope.activeTaskCount == 0 { break }
-            try? await Task.sleep(nanoseconds: 5_000_000)
+            try? await Task.sleep(for: .seconds(0.005))
         }
         #expect(scope.activeTaskCount == 0)
     }
@@ -84,11 +84,11 @@ struct FlowScopeTests {
                     wasCancelled.withLock { $0 = true }
                 }
             }
-            try? await Task.sleep(nanoseconds: 5_000_000)
+            try? await Task.sleep(for: .seconds(0.005))
         }
 
         // Give time for deinit to propagate cancellation
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         #expect(wasCancelled.withLock { $0 })
     }
 }

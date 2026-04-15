@@ -198,6 +198,22 @@ func articleFeedEmitsCachedThenFresh() async throws {
 
 `FlowTester`, `ThrowingFlowTester`, and `TestScope` drive assertions against flows. `TestClock` gives deterministic virtual time for rate-limiting and sharing operators. Everything plugs in through the `Flow.test(timeout:_:)` extension.
 
+## Contributing
+
+If your change touches anything in `Sources/Flow/Documentation.docc/`, regenerate the static site before opening a PR:
+
+```bash
+rm -rf docs
+swift package --allow-writing-to-directory ./docs \
+    generate-documentation --target Flow \
+    --disable-indexing \
+    --transform-for-static-hosting \
+    --hosting-base-path FlowKit \
+    --output-path ./docs
+```
+
+Commit both the source change and the regenerated `docs/` directory in the same PR.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

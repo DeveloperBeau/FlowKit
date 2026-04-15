@@ -28,7 +28,7 @@ struct TestClockAdvanceTests {
             wokeUp.withLock { _wokeUp = true }
         }
 
-        try? await Task.sleep(nanoseconds: 10_000_000)
+        try? await Task.sleep(for: .seconds(0.01))
         let beforeAdvance = wokeUp.withLock { _wokeUp }
         #expect(!beforeAdvance)
 
@@ -61,7 +61,7 @@ struct TestClockAdvanceTests {
         }
 
         // Give all sleepers time to register
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
 
         // Advance incrementally so each sleeper wakes and appends before
         // the next one is resumed.
@@ -82,7 +82,7 @@ struct TestClockAdvanceTests {
         let task = Task {
             try await clock.sleep(until: TestClock.Instant(offset: .seconds(10)), tolerance: nil)
         }
-        try? await Task.sleep(nanoseconds: 10_000_000)
+        try? await Task.sleep(for: .seconds(0.01))
         task.cancel()
         do {
             try await task.value

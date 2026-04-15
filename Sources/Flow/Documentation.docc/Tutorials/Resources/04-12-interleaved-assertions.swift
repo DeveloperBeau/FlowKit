@@ -16,7 +16,7 @@ struct MultipleFlowsTests {
             let debouncedTester = try await scope.test(
                 queries.asFlow().debounce(for: .milliseconds(300), clock: clock)
             )
-            try? await Task.sleep(nanoseconds: 10_000_000)
+            try? await Task.sleep(for: .seconds(0.01))
 
             await queries.emit("h")
             await clock.advance(by: .milliseconds(100))

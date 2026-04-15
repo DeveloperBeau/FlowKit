@@ -27,7 +27,7 @@ struct UIKitBridgeTests {
             // vc goes out of scope here, so flowScope should be released
         }
         // Allow dealloc to propagate
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         #expect(weakScope == nil, "FlowScope should be released with the view controller")
     }
 }

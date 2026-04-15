@@ -19,11 +19,11 @@ struct MemoryLeakTests {
                     await Task.yield()
                 }
             }
-            try? await Task.sleep(nanoseconds: 10_000_000)
+            try? await Task.sleep(for: .seconds(0.01))
             scope.cancel()
             await task.value
         }
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         #expect(weakHolder == nil)
     }
 
@@ -42,9 +42,9 @@ struct MemoryLeakTests {
                 }
                 ranToCompletion.withLock { $0 = true }
             }
-            try? await Task.sleep(nanoseconds: 10_000_000)
+            try? await Task.sleep(for: .seconds(0.01))
         }
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         #expect(ranToCompletion.withLock { $0 })
     }
 
@@ -55,7 +55,7 @@ struct MemoryLeakTests {
             // Completes immediately
         }
         await task.value
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(scope.activeTaskCount == 0)
     }
 
@@ -71,7 +71,7 @@ struct MemoryLeakTests {
             scope1.cancel()
             scope2.cancel()
         }
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         #expect(weakScope1 == nil)
         #expect(weakScope2 == nil)
     }

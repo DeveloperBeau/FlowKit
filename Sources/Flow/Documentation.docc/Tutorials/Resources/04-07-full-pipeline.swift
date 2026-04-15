@@ -17,7 +17,7 @@ struct SearchViewModelClockTests {
 
         try await TestScope.run { scope in
             let resultsTester = try await scope.test(viewModel.resultsFlow)
-            try? await Task.sleep(nanoseconds: 10_000_000)
+            try? await Task.sleep(for: .seconds(0.01))
 
             // Rapid typing, each keystroke resets the debounce timer.
             await viewModel.updateQuery("S")

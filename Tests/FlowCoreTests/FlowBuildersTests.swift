@@ -42,7 +42,7 @@ struct FlowBuildersTests {
                 Issue.record("never should not emit")
             }
         }
-        try? await Task.sleep(nanoseconds: 10_000_000)
+        try? await Task.sleep(for: .seconds(0.01))
         task.cancel()
         await task.value
     }

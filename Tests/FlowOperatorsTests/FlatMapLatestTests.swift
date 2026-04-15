@@ -53,19 +53,19 @@ struct FlatMapLatestTests {
             _ = try await scope.test(resultFlow)
 
             // Give tester time to subscribe
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            try? await Task.sleep(for: .seconds(0.2))
 
             // Emit 1. Starts inner flow for 1.
             await upstream.emit(1)
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            try? await Task.sleep(for: .seconds(0.2))
 
             // Emit 2. Should cancel inner flow for 1, start inner flow for 2.
             await upstream.emit(2)
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            try? await Task.sleep(for: .seconds(0.2))
 
             // Emit 3. Should cancel inner flow for 2, start inner flow for 3.
             await upstream.emit(3)
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            try? await Task.sleep(for: .seconds(0.2))
 
             #expect(cancelled.withLock { $0 }.contains(1))
             #expect(cancelled.withLock { $0 }.contains(2))

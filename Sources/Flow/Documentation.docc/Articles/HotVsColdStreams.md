@@ -121,6 +121,62 @@ let recentMessages: any SharedFlow<ChatMessage> = messageStream
     .asSharedFlow(replay: 50, strategy: .whileSubscribed(stopTimeout: .seconds(30)))
 ```
 
+## Cold + asSharedFlow vs MutableSharedFlow
+
+Both produce a multicast stream, but they belong to different problems. Pick wrong and you end up either reinventing `SharingCoordinator` by hand or paying for it when you don't need it.
+
+### Cold + `asSharedFlow` for stateful resources
+
+When the source is a stateful resource (`CLLocationManager`, `WebSocket`, `NSFileCoordinator`, an audio session, a Bluetooth scanner), the start and stop are paired with subscriber lifecycle. Wrap a cold body inside `Flow { collector in ... }` that opens the resource on entry and tears it down via `withTaskCancellationHandler`, then expose it through `.asSharedFlow(replay:strategy:)`.
+
+```swift
+actor LocationTracker {
+    nonisolated let locations: any SharedFlow<CLLocation>
+
+    init() {
+        self.locations = Self.coldLocationFlow
+            .asSharedFlow(replay: 1, strategy: .whileSubscribed(stopTimeout: .zero))
+    }
+
+    private static var coldLocationFlow: Flow<CLLocation> {
+        Flow { collector in
+            let manager = CLLocationManager()
+            // ...wire delegate, start updates, await cancellation...
+        }
+    }
+}
+```
+
+The first subscriber starts the hardware. Additional subscribers share that one manager. Last unsubscribe stops it. A new subscriber later restarts it. `SharingCoordinator` does the ref counting for free.
+
+### MutableSharedFlow for events you produce yourself
+
+When there is no underlying resource to start or stop, just an event you generate from app code, use `MutableSharedFlow` directly. Navigation commands, toast triggers, button taps, "user signed out" broadcasts.
+
+```swift
+actor NavigationCoordinator {
+    private let _events = MutableSharedFlow<NavigationEvent>(replay: 0)
+    var events: any SharedFlow<NavigationEvent> { _events }
+
+    func push(_ destination: Destination) async {
+        await _events.emit(.push(destination))
+    }
+}
+```
+
+Nothing needs to start or stop based on subscriber count, so the lifecycle machinery would be wasted overhead.
+
+### Decision shortcut
+
+| Source of values | Pattern |
+|------------------|---------|
+| Stateful resource with start/stop semantics | Cold body + `.asSharedFlow(replay:strategy:)` |
+| Events you `emit` from app code | `MutableSharedFlow` directly |
+| Single current value with start/stop | Cold body + `.asStateFlow(initialValue:strategy:)` |
+| Single current value you set from app code | `MutableStateFlow` directly |
+
+If you find yourself observing `subscriptionCount` on a `MutableSharedFlow` to start or stop something, you want cold + `asSharedFlow` instead.
+
 ## Sharing strategies
 
 When you convert a cold flow to a hot stream, the `SharingStrategy` controls when upstream collection starts and stops:

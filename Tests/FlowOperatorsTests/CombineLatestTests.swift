@@ -16,7 +16,7 @@ struct CombineLatestTests {
                 flow1.asFlow().combineLatest(flow2.asFlow())
             )
 
-            try? await Task.sleep(nanoseconds: 30_000_000)
+            try? await Task.sleep(for: .seconds(0.03))
 
             // First pair emitted only after both flows have emitted
             await flow1.emit(1)

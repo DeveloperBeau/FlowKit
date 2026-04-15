@@ -18,7 +18,7 @@ struct SharingCoordinatorTests {
         )
 
         await coordinator.activate()
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(upstreamStarted.withLock { $0 })
         await coordinator.deactivate()
     }
@@ -34,11 +34,11 @@ struct SharingCoordinatorTests {
         )
 
         await coordinator.activate()
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(!upstreamStarted.withLock { $0 })
 
         await coordinator.subscriberDidAppear()
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(upstreamStarted.withLock { $0 })
         await coordinator.deactivate()
     }
@@ -58,11 +58,11 @@ struct SharingCoordinatorTests {
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidDisappear()
 
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(!upstreamStopped.withLock { $0 })
 
         await clock.advance(by: .seconds(5))
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(upstreamStopped.withLock { $0 })
         await coordinator.deactivate()
     }
@@ -86,7 +86,7 @@ struct SharingCoordinatorTests {
         await coordinator.subscriberDidAppear()
 
         await clock.advance(by: .seconds(10))
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
 
         #expect(!upstreamStopped.withLock { $0 })
         await coordinator.deactivate()
@@ -113,11 +113,11 @@ struct SharingCoordinatorTests {
         await coordinator.subscriberDidDisappear()
 
         await clock.advance(by: .seconds(4))
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(!upstreamStopped.withLock { $0 })
 
         await clock.advance(by: .seconds(2))
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(upstreamStopped.withLock { $0 })
         await coordinator.deactivate()
     }
@@ -134,11 +134,11 @@ struct SharingCoordinatorTests {
             stop: { upstreamStopped.withLock { $0 = true } }
         )
         await coordinator.activate()
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(upstreamStarted.withLock { $0 })
 
         await coordinator.deactivate()
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(upstreamStopped.withLock { $0 })
     }
 
@@ -155,7 +155,7 @@ struct SharingCoordinatorTests {
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidDisappear()
 
-        try? await Task.sleep(nanoseconds: 10_000_000)
+        try? await Task.sleep(for: .seconds(0.01))
         #expect(upstreamStopped.withLock { $0 })
         await coordinator.deactivate()
     }
@@ -177,7 +177,7 @@ struct SharingCoordinatorTests {
         await coordinator.subscriberDidDisappear()  // still one left
 
         await clock.advance(by: .seconds(10))
-        try? await Task.sleep(nanoseconds: 10_000_000)
+        try? await Task.sleep(for: .seconds(0.01))
         #expect(!upstreamStopped.withLock { $0 })
         await coordinator.deactivate()
     }
