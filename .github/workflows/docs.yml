@@ -4,9 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'Sources/**'
-      - 'Package.swift'
-      - 'Package.resolved'
+      - 'Sources/Flow/Documentation.docc/**'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
