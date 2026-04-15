@@ -4,8 +4,11 @@
 [![Xcode 26.4](https://img.shields.io/badge/Xcode-26.4+-blue.svg)](https://developer.apple.com/xcode/)
 [![Platforms](https://img.shields.io/badge/Platforms-iOS%2016%2B%20%7C%20macOS%2013%2B%20%7C%20tvOS%2016%2B%20%7C%20watchOS%209%2B%20%7C%20visionOS%201%2B-brightgreen.svg)](https://swift.org/platform-support/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/Docs-DocC-blue.svg)](https://developerbeau.github.io/FlowKit/documentation/flow/)
 
 **Kotlin Flow semantics in Swift, with Swift-idiomatic API.**
+
+Full API documentation: <https://developerbeau.github.io/FlowKit/documentation/flow/>
 
 FlowKit brings the Kotlin Flow mental model to Swift: cold asynchronous streams (`Flow`, `ThrowingFlow`), hot multicast primitives (`StateFlow`, `SharedFlow`), a rich operator library, and built-in testing infrastructure with virtual time.
 
