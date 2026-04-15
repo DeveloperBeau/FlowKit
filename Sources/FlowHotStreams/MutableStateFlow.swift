@@ -1,4 +1,4 @@
-internal import Foundation
+import Foundation
 public import FlowCore
 
 public actor MutableStateFlow<Element: Sendable & Equatable>: StateFlow {
