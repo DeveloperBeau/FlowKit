@@ -22,9 +22,9 @@ jobs:
       - name: Show Swift version
         run: swift --version
       - name: Build
-        run: swift build
+        run: swift build -j 2
       - name: Test with coverage
-        run: swift test --enable-code-coverage
+        run: swift test -j 2 --enable-code-coverage
       - name: Coverage report
         run: |
           BIN=$(find .build -name "FlowKitPackageTests.xctest" -type d | head -1)
@@ -46,10 +46,10 @@ jobs:
       - name: Show Swift version
         run: swift --version
       - name: Build non-UI targets (release config)
-        run: swift build -c release --target Flow --target FlowTesting
+        run: swift build -j 2 -c release --target Flow --target FlowTesting
       - name: Test non-UI targets (release config)
         run: |
-          swift test -c release \
+          swift test -j 2 -c release \
             --filter FlowSharedModelsTests \
             --filter FlowCoreTests \
             --filter FlowOperatorsTests \
