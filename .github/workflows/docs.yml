@@ -16,6 +16,7 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   publish:
@@ -28,18 +29,29 @@ jobs:
           swift-version: '6.3'
       - name: Build documentation
         run: |
-          swift package --allow-writing-to-directory ./docs-site \
+          rm -rf docs
+          swift package --allow-writing-to-directory ./docs \
             generate-documentation --target Flow \
             --disable-indexing \
             --transform-for-static-hosting \
             --hosting-base-path FlowKit \
-            --output-path ./docs-site
-      - name: Deploy to gh-pages
+            --output-path ./docs
+      - name: Open PR with regenerated docs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd docs-site
-          git init -b gh-pages
+          if [ -z "$(git status --porcelain docs)" ]; then
+            echo "No documentation changes."
+            exit 0
+          fi
+          BRANCH="auto-docs/${{ github.sha }}"
           git config user.name "DeveloperBeau"
           git config user.email "DeveloperBeau@users.noreply.github.com"
-          git add .
-          git commit -m "Publish docs from ${{ github.sha }}"
-          git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
+          git checkout -b "$BRANCH"
+          git add docs
+          git commit -m "Regenerate documentation from ${{ github.sha }}"
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --title "Regenerate documentation" \
+            --body "Auto-generated from commit ${{ github.sha }}." \
+            --base main --head "$BRANCH"
