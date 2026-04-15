@@ -115,7 +115,7 @@ struct FlowReachabilityTests {
         let flow = Flow(of: 1, 2, 3)
         let _ = await flow.first()
         let _ = await flow.toArray()
-        let _ = await flow.reduce(0, +)
+        let _ = await flow.reduce(0) { $0 + $1 }
         _ = try? await flow.exactlyOne()
     }
 }

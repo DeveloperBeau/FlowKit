@@ -91,7 +91,7 @@ struct ThrowingFlowOperatorTests {
     @Test("ThrowingFlow.scan accumulates")
     func scan() async throws {
         let flow = ThrowingFlow(of: 1, 2, 3)
-        try await flow.scan(0, +).test { tester in
+        try await flow.scan(0) { $0 + $1 }.test { tester in
             try await tester.expectValue(1)
             try await tester.expectValue(3)
             try await tester.expectValue(6)

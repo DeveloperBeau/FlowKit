@@ -8,7 +8,7 @@ struct ScanTests {
     @Test("scan emits running accumulations")
     func runningSum() async throws {
         let flow = Flow(of: 1, 2, 3, 4)
-        try await flow.scan(0, +).test { tester in
+        try await flow.scan(0) { $0 + $1 }.test { tester in
             try await tester.expectValue(1)
             try await tester.expectValue(3)
             try await tester.expectValue(6)
@@ -20,7 +20,7 @@ struct ScanTests {
     @Test("scan on empty flow emits nothing")
     func scanEmpty() async throws {
         let flow = Flow<Int>.empty
-        try await flow.scan(0, +).test { tester in
+        try await flow.scan(0) { $0 + $1 }.test { tester in
             try await tester.expectCompletion()
         }
     }

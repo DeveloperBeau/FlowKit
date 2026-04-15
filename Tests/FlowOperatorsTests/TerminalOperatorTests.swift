@@ -50,14 +50,14 @@ struct TerminalOperatorTests {
     @Test("reduce accumulates all values into a single result")
     func reduce() async {
         let flow = Flow(of: 1, 2, 3, 4)
-        let result = await flow.reduce(0, +)
+        let result = await flow.reduce(0) { $0 + $1 }
         #expect(result == 10)
     }
 
     @Test("reduce on empty flow returns initial value")
     func reduceEmpty() async {
         let flow = Flow<Int>.empty
-        let result = await flow.reduce(99, +)
+        let result = await flow.reduce(99) { $0 + $1 }
         #expect(result == 99)
     }
 
