@@ -11,15 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-latest
-          - runner: ubuntu-latest
-    runs-on: ${{ matrix.runner }}
+  macos:
+    name: macOS
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/setup-swift@v1
@@ -29,15 +23,9 @@ jobs:
         run: swift --version
       - name: Build
         run: swift build
-        if: matrix.runner == 'macos-latest'
-      - name: Build (Linux non-UI targets, release config)
-        run: swift build -c release --target Flow --target FlowTesting
-        if: matrix.runner == 'ubuntu-latest'
-      - name: Test (macOS, full suite, with coverage)
-        if: matrix.runner == 'macos-latest'
+      - name: Test with coverage
         run: swift test --enable-code-coverage
-      - name: Coverage report (macOS)
-        if: matrix.runner == 'macos-latest'
+      - name: Coverage report
         run: |
           BIN=$(find .build -name "FlowKitPackageTests.xctest" -type d | head -1)
           PROF=$(find .build -name "default.profdata" | head -1)
@@ -46,8 +34,20 @@ jobs:
               -instr-profile="$PROF" \
               -ignore-filename-regex='Tests/|.build/' || true
           fi
-      - name: Test (Linux, non-UI targets, release config)
-        if: matrix.runner == 'ubuntu-latest'
+
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeveloperBeau/setup-swift@v1
+        with:
+          swift-version: '6.3'
+      - name: Show Swift version
+        run: swift --version
+      - name: Build non-UI targets (release config)
+        run: swift build -c release --target Flow --target FlowTesting
+      - name: Test non-UI targets (release config)
         run: |
           swift test -c release \
             --filter FlowSharedModelsTests \
