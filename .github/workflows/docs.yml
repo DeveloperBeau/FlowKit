@@ -1,0 +1,48 @@
+name: Publish DocC
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Sources/**'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Build and publish docs
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls /Applications | grep "^Xcode" | grep -v "beta" | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then
+            sudo xcode-select -s "/Applications/$XCODE"
+          fi
+      - name: Build documentation
+        run: |
+          swift package --allow-writing-to-directory ./docs-site \
+            generate-documentation --target Flow \
+            --disable-indexing \
+            --transform-for-static-hosting \
+            --hosting-base-path FlowKit \
+            --output-path ./docs-site
+      - name: Deploy to gh-pages
+        run: |
+          cd docs-site
+          git init -b gh-pages
+          git config user.name "DeveloperBeau"
+          git config user.email "DeveloperBeau@users.noreply.github.com"
+          git add .
+          git commit -m "Publish docs from ${{ github.sha }}"
+          git push --force "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
