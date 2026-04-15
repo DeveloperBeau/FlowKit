@@ -12,7 +12,7 @@ struct LocationTrackerTests {
         let tracker = LocationTracker(managerFactory: { mock })
         let expected = CLLocation(latitude: 37.3318, longitude: -122.0312)
 
-        try await tracker.locationFlow.test { tester in
+        try await tracker.locations.asFlow().test { tester in
             // Simulate the hardware delivering a GPS fix.
             mock.simulateLocation(expected)
 

@@ -3,20 +3,29 @@ import Flow
 
 // MARK: - LocationTracker
 
+/// A multi-subscriber location source. The hardware spins up on the first
+/// subscriber and stops the moment the last one disappears, so views, view
+/// models, and analytics can all observe the same stream without spawning
+/// duplicate `CLLocationManager` instances or leaking them.
 actor LocationTracker {
-    private let managerFactory: @Sendable () -> any LocationManaging
+    /// Shared location stream. Use this from every consumer.
+    nonisolated let locations: any SharedFlow<CLLocation>
 
     init(managerFactory: @Sendable @escaping () -> any LocationManaging = { CLLocationManager() }) {
-        self.managerFactory = managerFactory
+        self.locations = Self.makeColdLocationFlow(managerFactory: managerFactory)
+            .asSharedFlow(
+                replay: 1,
+                strategy: .whileSubscribed(stopTimeout: .zero)
+            )
     }
 
-    /// A cold `Flow` of authorized GPS locations.
-    ///
-    /// - The flow starts the hardware on first collection.
-    /// - Locations emitted before authorization is granted are silently dropped.
-    /// - The hardware stops automatically when the collecting task is cancelled.
-    var locationFlow: Flow<CLLocation> {
-        Flow { [managerFactory] collector in
+    /// The underlying cold flow. One `CLLocationManager` is created per
+    /// upstream activation, which `whileSubscribed` keeps to exactly one
+    /// across all current subscribers.
+    private static func makeColdLocationFlow(
+        managerFactory: @Sendable @escaping () -> any LocationManaging
+    ) -> Flow<CLLocation> {
+        Flow { collector in
             let manager = managerFactory()
             let bridge = DelegateBridge(collector: collector)
             manager.delegate = bridge
@@ -34,8 +43,8 @@ actor LocationTracker {
                 bridge.stop(manager: manager)
             }
 
-            // Reached when the continuation is resumed (cancellation, error, or
-            // authorization denied). Cleanup is already done inside stop/resume.
+            // Reached when the continuation is resumed by cancellation, error,
+            // or authorization denial. The bridge has already cleaned up.
         }
     }
 }

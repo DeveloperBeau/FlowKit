@@ -105,16 +105,19 @@
             }
 
             @Step {
-                Verify the finished `locationFlow` property. The bridge is now a complete delegate
-                that handles authorization changes, location updates, and errors, all wired into a
-                single `Collector`.
+                Wrap the cold flow with `asSharedFlow` so every consumer subscribes to the same
+                `CLLocationManager`. With `.whileSubscribed(stopTimeout: .zero)`, the hardware
+                spins up on the first subscriber and stops the moment the last one disappears.
+                Subsequent subscribers reactivate it. `replay: 1` hands new subscribers the most
+                recent location immediately, so a freshly opened map view does not stare at a
+                blank screen waiting for the next GPS tick.
 
                 @Code(name: "LocationTracker.swift", file: 03-08-complete.swift)
             }
         }
     }
 
-    @Section(title: "Pair the bridge with keepingLatest") {
+    @Section(title: "Pair the shared flow with keepingLatest") {
         @ContentAndMedia {
             GPS receivers can emit many updates per second. If your UI only redraws at 30 fps, or
             you are writing to a database once per second, intermediate locations are wasted work.
@@ -124,8 +127,9 @@
 
         @Steps {
             @Step {
-                Create a `SearchViewController` that collects the flow. Call `locationFlow` and
-                chain `.keepingLatest()` before collecting.
+                Create a `MapViewController` that subscribes to the shared `tracker.locations`
+                and chains `.keepingLatest()` before collecting. Multiple view controllers can
+                subscribe at once with no risk of duplicate `CLLocationManager` instances.
 
                 @Code(name: "MapViewController.swift", file: 03-09-keepinglatest.swift)
             }
@@ -143,9 +147,10 @@
 
     @Section(title: "Test the bridge") {
         @ContentAndMedia {
-            Testing real hardware is flaky. Instead, extract a `LocationManaging` protocol, inject a
-            mock in tests, and drive the bridge by calling the protocol methods directly. Because
-            `Flow` is cold, each test gets its own independent execution.
+            Testing real hardware is flaky. Instead, extract a `LocationManaging` protocol, inject
+            a mock in tests, and drive the bridge by calling the protocol methods directly. Each
+            test instantiates its own `LocationTracker` with a fresh mock, so the shared flow's
+            single `CLLocationManager` is the mock for the duration of the test.
         }
 
         @Steps {

@@ -12,7 +12,7 @@ struct LocationTrackerTests {
         let tracker = LocationTracker(managerFactory: { mock })
         let expected = CLLocation(latitude: 37.3318, longitude: -122.0312)
 
-        try await tracker.locationFlow.test { tester in
+        try await tracker.locations.asFlow().test { tester in
             mock.simulateLocation(expected)
             let received = try await tester.awaitValue()
             #expect(received.coordinate.latitude == expected.coordinate.latitude)
@@ -27,7 +27,7 @@ struct LocationTrackerTests {
         let mock = MockLocationManager()
         let tracker = LocationTracker(managerFactory: { mock })
 
-        try await tracker.locationFlow.test { tester in
+        try await tracker.locations.asFlow().test { tester in
             // Don't emit any values. Just let the .test closure return,
             // which cancels the collection task.
             await tester.cancelAndIgnoreRemaining()
