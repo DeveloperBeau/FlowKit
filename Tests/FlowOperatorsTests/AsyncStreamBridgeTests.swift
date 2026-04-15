@@ -46,7 +46,7 @@ struct AsyncStreamBridgeTests {
             for await _ in stream { break }
         }
 
-        try? await Task.sleep(nanoseconds: 10_000_000)
+        try? await Task.sleep(for: .seconds(0.01))
         task.cancel()
         await task.value
 
@@ -106,7 +106,7 @@ struct AsyncStreamBridgeTests {
             } catch {}
         }
 
-        try? await Task.sleep(nanoseconds: 10_000_000)
+        try? await Task.sleep(for: .seconds(0.01))
         task.cancel()
         await task.value
 

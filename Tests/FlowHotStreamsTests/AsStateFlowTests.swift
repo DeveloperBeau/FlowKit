@@ -9,7 +9,7 @@ struct AsStateFlowTests {
     @Test("asStateFlow exposes initial value before upstream emits")
     func initialValueVisible() async throws {
         let upstream = Flow<Int> { collector in
-            try? await Task.sleep(nanoseconds: 100_000_000)
+            try? await Task.sleep(for: .seconds(0.1))
             await collector.emit(42)
         }
 
@@ -34,7 +34,7 @@ struct AsStateFlowTests {
             strategy: .eager
         )
 
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         #expect(await stateFlow.value == "eager-emit")
     }
 }

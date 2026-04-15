@@ -30,11 +30,11 @@ struct ObservedStateFlowTests {
         let source = MutableStateFlow(1)
         let observed = ObservedStateFlow(source, initialValue: 0)
         observed.start()
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         #expect(observed.value == 1)
 
         await source.send(99)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         #expect(observed.value == 99)
         observed.stop()
     }
@@ -46,7 +46,7 @@ struct ObservedStateFlowTests {
         let observed = ObservedStateFlow(source, initialValue: 0)
         observed.start()
         observed.start() // no-op second call
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         observed.stop()
     }
 
@@ -56,11 +56,11 @@ struct ObservedStateFlowTests {
         let source = MutableStateFlow(0)
         let observed = ObservedStateFlow(source, initialValue: 0)
         observed.start()
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         observed.stop()
         // After stop, new source emissions should not update value
         await source.send(777)
-        try? await Task.sleep(nanoseconds: 30_000_000)
+        try? await Task.sleep(for: .seconds(0.03))
         #expect(observed.value != 777)
     }
 
@@ -70,11 +70,11 @@ struct ObservedStateFlowTests {
         let source = MutableStateFlow(5)
         let observed = ObservedStateFlow(source, initialValue: 0)
         observed.start()
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         #expect(observed.value == 5)
 
         await source.send(5) // equal, no update
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(observed.value == 5)
         observed.stop()
     }
@@ -90,7 +90,7 @@ struct ObservedStateFlowTests {
         )
         observed.start()
         await source.send(10)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         #expect(observed.value == 10)
         observed.stop()
     }
@@ -106,7 +106,7 @@ struct ObservedStateFlowTests {
         )
         observed.start()
         await source.send(20)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         #expect(observed.value == 20)
         observed.stop()
     }
@@ -138,7 +138,7 @@ struct CollectedStateTests {
         let wrapper = CollectedState(wrappedValue: 0, source)
         wrapper.update() // simulates SwiftUI calling update during view update
         await source.send(42)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         // After update() + send, wrappedValue should reflect new value
         #expect(wrapper.wrappedValue == 42)
     }
@@ -151,7 +151,7 @@ struct CollectedStateTests {
         wrapper.update()
         wrapper.update()
         wrapper.update()
-        try? await Task.sleep(nanoseconds: 30_000_000)
+        try? await Task.sleep(for: .seconds(0.03))
         #expect(wrapper.wrappedValue == 5)
     }
 }
@@ -166,10 +166,10 @@ struct ObservedStateFlowDeinitTests {
         do {
             let observed = ObservedStateFlow(source, initialValue: 0)
             observed.start()
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            try? await Task.sleep(for: .seconds(0.02))
             // observed goes out of scope here, so isolated deinit fires
         }
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(for: .seconds(0.05))
         // No assertion. Just verify deinit path runs without crash.
     }
 }

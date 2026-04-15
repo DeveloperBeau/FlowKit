@@ -15,7 +15,7 @@ struct DebounceOperatorTests {
             let tester = try await scope.test(
                 queries.asFlow().debounce(for: .milliseconds(300), clock: clock)
             )
-            try? await Task.sleep(nanoseconds: 10_000_000)
+            try? await Task.sleep(for: .seconds(0.01))
 
             // Simulate three rapid keystrokes 100 ms apart.
             await queries.emit("s")

@@ -18,7 +18,7 @@ struct DebounceTests {
                 upstream.asFlow().debounce(for: .milliseconds(300), clock: clock)
             )
 
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            try? await Task.sleep(for: .seconds(0.02))
 
             await upstream.emit("h")
             await clock.advance(by: .milliseconds(100))
@@ -45,13 +45,13 @@ struct DebounceTests {
                 upstream.asFlow().debounce(for: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            try? await Task.sleep(for: .seconds(0.02))
 
             await upstream.emit(42)
             // Allow collect task to process the value and register the clock sleep
             // before we advance the clock. MutableSharedFlow.emit returns as soon
             // as the value is buffered, not after consumers process it.
-            try? await Task.sleep(nanoseconds: 5_000_000)
+            try? await Task.sleep(for: .seconds(0.005))
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }

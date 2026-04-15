@@ -21,7 +21,7 @@ struct DebounceOperatorTests {
             )
 
             // Small real-time yield lets the collection task attach before we emit.
-            try? await Task.sleep(nanoseconds: 10_000_000)
+            try? await Task.sleep(for: .seconds(0.01))
 
             // Assertions continue in the next steps...
             _ = tester

@@ -16,7 +16,7 @@ struct PerformanceTests {
                 testers.append(try await scope.test(shared.asFlow()))
             }
 
-            try? await Task.sleep(nanoseconds: 100_000_000)
+            try? await Task.sleep(for: .seconds(0.1))
 
             await shared.emit(42)
 
@@ -36,7 +36,7 @@ struct PerformanceTests {
                 testers.append(try await scope.test(shared.asFlow()))
             }
 
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            try? await Task.sleep(for: .seconds(0.05))
 
             for i in 0..<10 {
                 await shared.emit(i)

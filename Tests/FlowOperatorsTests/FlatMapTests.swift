@@ -68,7 +68,7 @@ struct FlatMapTests {
             Flow<Int> { collector in
                 activeConcurrent.withLock { $0 += 1 }
                 maxObserved.withLock { $0 = max($0, activeConcurrent.withLock { $0 }) }
-                try? await Task.sleep(nanoseconds: 10_000_000) // brief work
+                try? await Task.sleep(for: .seconds(0.01)) // brief work
                 await collector.emit(value * 10)
                 activeConcurrent.withLock { $0 -= 1 }
             }

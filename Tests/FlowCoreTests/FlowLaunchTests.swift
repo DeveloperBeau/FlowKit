@@ -37,7 +37,7 @@ struct FlowLaunchTests {
         _ = flow.launch(in: scope)
 
         // Give the launch a moment to register
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(for: .seconds(0.005))
 
         #expect(scope.activeTaskCount == 1)
         scope.cancel()
@@ -59,7 +59,7 @@ struct FlowLaunchTests {
         }
 
         let task = flow.launch(in: scope)
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(for: .seconds(0.005))
         scope.cancel()
         await task.value
 

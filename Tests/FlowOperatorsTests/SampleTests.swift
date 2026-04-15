@@ -18,13 +18,13 @@ struct SampleTests {
                 upstream.asFlow().sample(every: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            try? await Task.sleep(for: .seconds(0.02))
 
             await upstream.emit(1)
             await upstream.emit(2)
             await upstream.emit(3)
             // Allow collect task to drain all buffered values before sampling
-            try? await Task.sleep(nanoseconds: 5_000_000)
+            try? await Task.sleep(for: .seconds(0.005))
 
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(3) // most recent at sample point
@@ -45,7 +45,7 @@ struct SampleTests {
                 upstream.asFlow().sample(every: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            try? await Task.sleep(for: .seconds(0.02))
 
             // No values emitted. Advance two intervals.
             await clock.advance(by: .seconds(2))

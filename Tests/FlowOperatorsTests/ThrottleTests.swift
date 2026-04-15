@@ -18,7 +18,7 @@ struct ThrottleTests {
                 upstream.asFlow().throttle(for: .seconds(1), latest: true, clock: clock)
             )
 
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            try? await Task.sleep(for: .seconds(0.02))
 
             await upstream.emit(1)   // emitted immediately (first value)
             try await tester.expectValue(1)
@@ -26,7 +26,7 @@ struct ThrottleTests {
             await upstream.emit(2)
             await upstream.emit(3)
             // Allow collect task to process buffered values before window expires
-            try? await Task.sleep(nanoseconds: 5_000_000)
+            try? await Task.sleep(for: .seconds(0.005))
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(3) // latest at boundary
         }
@@ -42,7 +42,7 @@ struct ThrottleTests {
                 upstream.asFlow().throttle(for: .seconds(1), latest: false, clock: clock)
             )
 
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            try? await Task.sleep(for: .seconds(0.02))
 
             await upstream.emit(1)   // first value, emitted
             try await tester.expectValue(1)
@@ -50,7 +50,7 @@ struct ThrottleTests {
             await upstream.emit(2)   // within window, stored
             await upstream.emit(3)   // within window, replaces 2
             // Allow collect task to process buffered values before window expires
-            try? await Task.sleep(nanoseconds: 5_000_000)
+            try? await Task.sleep(for: .seconds(0.005))
             await clock.advance(by: .seconds(1))
             // With latest=false, the FIRST value after the window started (2) is emitted
             try await tester.expectValue(2)

@@ -25,7 +25,7 @@ struct TestClockRunTests {
             orderLock.withLock { _woke.append(3) }
         }()
 
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         await clock.run()
 
         _ = try await (t1, t2, t3)

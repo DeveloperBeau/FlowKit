@@ -29,7 +29,7 @@ struct AppKitBridgeTests {
         let vc = NSViewController()
         let state = MutableStateFlow(0)
         vc.collect(state) { _ in }
-        try? await Task.sleep(nanoseconds: 20_000_000)
+        try? await Task.sleep(for: .seconds(0.02))
         #expect(vc.flowScope.activeTaskCount >= 1)
         vc.flowScope.cancel()
     }
@@ -39,7 +39,7 @@ struct AppKitBridgeTests {
         let vc = NSViewController()
         let flow = Flow(of: 1, 2, 3)
         vc.collect(flow) { _ in }
-        try? await Task.sleep(nanoseconds: 30_000_000)
+        try? await Task.sleep(for: .seconds(0.03))
         vc.flowScope.cancel()
     }
 }

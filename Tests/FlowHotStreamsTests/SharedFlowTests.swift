@@ -14,7 +14,7 @@ struct MutableSharedFlowTests {
             let t1 = try await scope.test(shared.asFlow())
             let t2 = try await scope.test(shared.asFlow())
 
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            try? await Task.sleep(for: .seconds(0.02))
 
             await shared.emit("event1")
             try await t1.expectValue("event1")
@@ -48,7 +48,7 @@ struct MutableSharedFlowTests {
         try await TestScope.run { scope in
             _ = try await scope.test(shared.asFlow())
             _ = try await scope.test(shared.asFlow())
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            try? await Task.sleep(for: .seconds(0.02))
             #expect(await shared.subscriptionCount == 2)
         }
     }
