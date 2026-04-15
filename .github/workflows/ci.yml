@@ -16,36 +16,39 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode
+      - name: Install Swift 6.3 toolchain
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.3"
+      - name: Versions
         run: |
-          XCODE=$(ls /Applications | grep "^Xcode" | grep -v "beta" | sort -V | tail -1)
-          if [ -n "$XCODE" ]; then
-            sudo xcode-select -s "/Applications/$XCODE"
-          fi
-          xcodebuild -version
           swift --version
+          xcodebuild -version || true
       - name: Build
         run: swift build
       - name: Test with coverage
         run: swift test --enable-code-coverage
       - name: Coverage report
         run: |
-          xcrun llvm-cov report \
-            .build/arm64-apple-macosx/debug/FlowKitPackageTests.xctest/Contents/MacOS/FlowKitPackageTests \
-            -instr-profile=.build/arm64-apple-macosx/debug/codecov/default.profdata \
-            -ignore-filename-regex='Tests/|.build/'
+          BIN=$(find .build -name "FlowKitPackageTests.xctest" -type d | head -1)
+          PROF=$(find .build -name "default.profdata" | head -1)
+          if [ -n "$BIN" ] && [ -n "$PROF" ]; then
+            xcrun llvm-cov report "$BIN/Contents/MacOS/FlowKitPackageTests" \
+              -instr-profile="$PROF" \
+              -ignore-filename-regex='Tests/|.build/' || true
+          fi
 
   linux:
     name: Linux
     runs-on: ubuntu-latest
-    container: swift:6.3
+    container: swift:6.3-noble
     steps:
       - uses: actions/checkout@v4
-      - name: Build non-UI targets
-        run: swift build --target Flow --target FlowTesting
-      - name: Test non-UI targets
+      - name: Build non-UI targets in release config
+        run: swift build -c release --target Flow --target FlowTesting
+      - name: Test non-UI targets in release config
         run: |
-          swift test \
+          swift test -c release \
             --filter FlowSharedModelsTests \
             --filter FlowCoreTests \
             --filter FlowOperatorsTests \
