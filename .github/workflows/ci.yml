@@ -30,8 +30,8 @@ jobs:
       - name: Build
         run: swift build
         if: matrix.runner == 'macos-latest'
-      - name: Build (Linux non-UI targets)
-        run: swift build --target Flow --target FlowTesting
+      - name: Build (Linux non-UI targets, release config)
+        run: swift build -c release --target Flow --target FlowTesting
         if: matrix.runner == 'ubuntu-latest'
       - name: Test (macOS, full suite, with coverage)
         if: matrix.runner == 'macos-latest'
@@ -46,10 +46,10 @@ jobs:
               -instr-profile="$PROF" \
               -ignore-filename-regex='Tests/|.build/' || true
           fi
-      - name: Test (Linux, non-UI targets)
+      - name: Test (Linux, non-UI targets, release config)
         if: matrix.runner == 'ubuntu-latest'
         run: |
-          swift test \
+          swift test -c release \
             --filter FlowSharedModelsTests \
             --filter FlowCoreTests \
             --filter FlowOperatorsTests \
