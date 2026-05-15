@@ -18,7 +18,6 @@ FlowKit brings the Kotlin Flow mental model to Swift: cold asynchronous streams 
 |---|---|
 | Swift | **6.3+** |
 | Xcode | **26.4+** (Swift 6.3 ships with Xcode 26.4) |
-| Xcode 17–26.3 | Requires manually installed Swift 6.3 toolchain from [swift.org/install](https://www.swift.org/install/) |
 | iOS | 16.0+ |
 | macOS | 13.0+ |
 | tvOS | 16.0+ |
@@ -33,7 +32,7 @@ Add FlowKit to your `Package.swift` dependencies:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/YOUR_ORG/FlowKit", from: "0.1.0")
+    .package(url: "https://github.com/DeveloperBeau/FlowKit", from: "1.0.0")
 ]
 ```
 
