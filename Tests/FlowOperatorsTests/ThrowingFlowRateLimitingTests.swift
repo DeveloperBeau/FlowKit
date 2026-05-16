@@ -23,7 +23,10 @@ struct ThrowingFlowRateLimitingTests {
                 }.debounce(for: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(for: .seconds(0.02))
+            for _ in 0..<200 {
+                if await upstream.subscriptionCount >= 1 { break }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
             await upstream.emit(42)
             try? await Task.sleep(for: .seconds(0.005))
             await clock.advance(by: .seconds(1))
@@ -57,7 +60,10 @@ struct ThrowingFlowRateLimitingTests {
                 }.throttle(for: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(for: .seconds(0.02))
+            for _ in 0..<200 {
+                if await upstream.subscriptionCount >= 1 { break }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
             await upstream.emit(1)
             try await tester.expectValue(1)
         }
@@ -125,7 +131,10 @@ struct ThrowingFlowRateLimitingTests {
                 }.sample(every: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(for: .seconds(0.02))
+            for _ in 0..<200 {
+                if await upstream.subscriptionCount >= 1 { break }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
             await upstream.emit(1)
             await upstream.emit(2)
             try? await Task.sleep(for: .seconds(0.005))
