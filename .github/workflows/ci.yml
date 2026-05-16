@@ -56,3 +56,82 @@ jobs:
             --filter FlowTestingCoreTests \
             --filter FlowPublicAPITests \
             --filter FlowTestingPublicAPITests
+
+  # Apple platform jobs exercise the UIKit/AppKit bridge code paths that
+  # `swift test` on macOS does not compile. macOS only builds the AppKit
+  # branch of FlowUIKitBridge, so UIKit-conditional compile errors slip past
+  # the macOS job and Linux job (which excludes UI entirely). Each job below
+  # builds with xcodebuild to surface those failures.
+
+  ios:
+    name: iOS (Simulator)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Test iOS Simulator (with coverage)
+        run: |
+          xcodebuild test \
+            -scheme FlowKit-Package \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -enableCodeCoverage YES \
+            -derivedDataPath .build-ios \
+            -resultBundlePath .build-ios/Result.xcresult
+      - name: Coverage report
+        if: always()
+        run: |
+          PROF=$(find .build-ios -name "Coverage.profdata" | head -1)
+          if [ -n "$PROF" ]; then
+            ARGS=()
+            for x in .build-ios/Build/Products/Debug-iphonesimulator/*.xctest; do
+              name=$(basename "$x" .xctest)
+              bin="$x/$name"
+              [ -f "$bin" ] && ARGS+=(-object "$bin")
+            done
+            xcrun llvm-cov report "${ARGS[@]}" \
+              -instr-profile="$PROF" \
+              -ignore-filename-regex='/Tests/|.build|checkouts|DerivedSources' || true
+          fi
+
+  tvos:
+    name: tvOS (build)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Build tvOS Simulator
+        run: |
+          xcodebuild build \
+            -scheme FlowKit-Package \
+            -destination 'generic/platform=tvOS Simulator' \
+            -derivedDataPath .build-tvos
+
+  watchos:
+    name: watchOS (build)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Build watchOS Simulator
+        run: |
+          xcodebuild build \
+            -scheme FlowKit-Package \
+            -destination 'generic/platform=watchOS Simulator' \
+            -derivedDataPath .build-watchos
+
+  visionos:
+    name: visionOS (build)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Build visionOS Simulator
+        run: |
+          xcodebuild build \
+            -scheme FlowKit-Package \
+            -destination 'generic/platform=visionOS Simulator' \
+            -derivedDataPath .build-visionos
