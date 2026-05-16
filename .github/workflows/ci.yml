@@ -134,7 +134,7 @@ jobs:
             -derivedDataPath .build-tvos
 
   watchos:
-    name: watchOS (build)
+    name: watchOS (Simulator)
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -145,11 +145,11 @@ jobs:
         run: xcodebuild -version && swift --version
       - name: Install watchOS simulator runtime
         run: sudo xcodebuild -runFirstLaunch && xcodebuild -downloadPlatform watchOS
-      - name: Build watchOS Simulator
+      - name: Test watchOS Simulator
         run: |
-          xcodebuild build \
+          xcodebuild test \
             -scheme FlowKit-Package \
-            -destination 'generic/platform=watchOS Simulator' \
+            -destination 'platform=watchOS Simulator,name=Apple Watch Series 11 (46mm),OS=latest' \
             -derivedDataPath .build-watchos
 
   visionos:
