@@ -14,7 +14,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/setup-swift@v1
+      - uses: DeveloperBeau/resolve-swift@v1
         with:
           swift-version: '6.3'
       - name: Show Swift version
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/setup-swift@v1
+      - uses: DeveloperBeau/resolve-swift@v1
         with:
           swift-version: '6.3'
       - name: Show Swift version
@@ -69,12 +69,12 @@ jobs:
     env:
       # Swift 6.3 ships as an extra .xctoolchain. The `swift` alias
       # selects the latest installed extra toolchain, so xcodebuild
-      # picks up the one installed by setup-swift instead of the
+      # picks up the one installed by resolve-swift instead of the
       # bundled Xcode toolchain (Swift 6.2.1).
       TOOLCHAINS: swift
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/setup-swift@v1
+      - uses: DeveloperBeau/resolve-swift@v1
         with:
           swift-version: '6.3'
       - name: Show toolchain
@@ -112,7 +112,7 @@ jobs:
       TOOLCHAINS: swift
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/setup-swift@v1
+      - uses: DeveloperBeau/resolve-swift@v1
         with:
           swift-version: '6.3'
       - name: Show toolchain
@@ -131,7 +131,7 @@ jobs:
       TOOLCHAINS: swift
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/setup-swift@v1
+      - uses: DeveloperBeau/resolve-swift@v1
         with:
           swift-version: '6.3'
       - name: Show toolchain
@@ -150,7 +150,7 @@ jobs:
       TOOLCHAINS: swift
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/setup-swift@v1
+      - uses: DeveloperBeau/resolve-swift@v1
         with:
           swift-version: '6.3'
       - name: Show toolchain
