@@ -80,15 +80,21 @@ jobs:
           exit 1
       - name: Test iOS Simulator (with coverage)
         run: |
-          SIMULATOR=$(xcrun simctl list devices available --json \
-            | jq -r '.devices | to_entries[] | .value[] | select(.isAvailable) | .name' \
-            | grep -E '^iPhone [0-9]+[a-z]?$' \
-            | sort -uV | tail -1)
-          [ -n "$SIMULATOR" ] || { echo "No iPhone simulator found"; exit 1; }
-          echo "Using simulator: $SIMULATOR"
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '
+                [.devices | to_entries[] | select(.key | test("iOS-"))
+                  | {runtime: .key, devices: .value}]
+                | sort_by(.runtime) | reverse[] | .devices[]
+                | select(.isAvailable and (.name | test("^iPhone [0-9]+[a-z]?$")))
+                | .udid
+              ' | head -1)
+          [ -n "$UDID" ] || { echo "No iPhone simulator found"; exit 1; }
+          echo "Using simulator UDID: $UDID"
+          xcrun simctl list devices --json | jq -r --arg u "$UDID" '
+            .devices | to_entries[] | .value[] | select(.udid == $u) | "\(.name) on \(.deviceTypeIdentifier)"'
           xcodebuild test \
             -scheme FlowKit-Package \
-            -destination "platform=iOS Simulator,name=$SIMULATOR,OS=latest" \
+            -destination "platform=iOS Simulator,id=$UDID" \
             -enableCodeCoverage YES \
             -derivedDataPath .build-ios \
             -resultBundlePath .build-ios/Result.xcresult
@@ -129,15 +135,29 @@ jobs:
           exit 1
       - name: Test iPad Simulator
         run: |
-          NAMES=$(xcrun simctl list devices available --json \
-            | jq -r '.devices | to_entries[] | .value[] | select(.isAvailable) | .name')
-          SIMULATOR=$(echo "$NAMES" | grep -E '^iPad Pro [0-9]+-inch \(M[0-9]+\)$' | sort -uV | tail -1)
-          [ -n "$SIMULATOR" ] || SIMULATOR=$(echo "$NAMES" | grep -E '^iPad ' | sort -uV | tail -1)
-          [ -n "$SIMULATOR" ] || { echo "No iPad simulator found"; exit 1; }
-          echo "Using simulator: $SIMULATOR"
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '
+                [.devices | to_entries[] | select(.key | test("iOS-"))
+                  | {runtime: .key, devices: .value}]
+                | sort_by(.runtime) | reverse[] | .devices[]
+                | select(.isAvailable and (.name | test("^iPad Pro [0-9]+-inch \\(M[0-9]+\\)$")))
+                | .udid
+              ' | head -1)
+          if [ -z "$UDID" ]; then
+            UDID=$(xcrun simctl list devices available --json \
+              | jq -r '
+                  [.devices | to_entries[] | select(.key | test("iOS-"))
+                    | {runtime: .key, devices: .value}]
+                  | sort_by(.runtime) | reverse[] | .devices[]
+                  | select(.isAvailable and (.name | startswith("iPad ")))
+                  | .udid
+                ' | head -1)
+          fi
+          [ -n "$UDID" ] || { echo "No iPad simulator found"; exit 1; }
+          echo "Using simulator UDID: $UDID"
           xcodebuild test \
             -scheme FlowKit-Package \
-            -destination "platform=iOS Simulator,name=$SIMULATOR,OS=latest" \
+            -destination "platform=iOS Simulator,id=$UDID" \
             -derivedDataPath .build-ipados
 
   tvos:
@@ -161,15 +181,19 @@ jobs:
           exit 1
       - name: Test tvOS Simulator
         run: |
-          SIMULATOR=$(xcrun simctl list devices available --json \
-            | jq -r '.devices | to_entries[] | .value[] | select(.isAvailable) | .name' \
-            | grep -E '^Apple TV' \
-            | sort -uV | tail -1)
-          [ -n "$SIMULATOR" ] || { echo "No Apple TV simulator found"; exit 1; }
-          echo "Using simulator: $SIMULATOR"
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '
+                [.devices | to_entries[] | select(.key | test("tvOS-"))
+                  | {runtime: .key, devices: .value}]
+                | sort_by(.runtime) | reverse[] | .devices[]
+                | select(.isAvailable and (.name | startswith("Apple TV")))
+                | .udid
+              ' | head -1)
+          [ -n "$UDID" ] || { echo "No Apple TV simulator found"; exit 1; }
+          echo "Using simulator UDID: $UDID"
           xcodebuild test \
             -scheme FlowKit-Package \
-            -destination "platform=tvOS Simulator,name=$SIMULATOR,OS=latest" \
+            -destination "platform=tvOS Simulator,id=$UDID" \
             -derivedDataPath .build-tvos
 
   watchos:
@@ -193,15 +217,19 @@ jobs:
           exit 1
       - name: Test watchOS Simulator
         run: |
-          NAMES=$(xcrun simctl list devices available --json \
-            | jq -r '.devices | to_entries[] | .value[] | select(.isAvailable) | .name')
-          SIMULATOR=$(echo "$NAMES" | grep -E '^Apple Watch Series [0-9]+ \([0-9]+mm\)$' | sort -uV | tail -1)
-          [ -n "$SIMULATOR" ] || SIMULATOR=$(echo "$NAMES" | grep -E '^Apple Watch' | sort -uV | tail -1)
-          [ -n "$SIMULATOR" ] || { echo "No Apple Watch simulator found"; exit 1; }
-          echo "Using simulator: $SIMULATOR"
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '
+                [.devices | to_entries[] | select(.key | test("watchOS-"))
+                  | {runtime: .key, devices: .value}]
+                | sort_by(.runtime) | reverse[] | .devices[]
+                | select(.isAvailable and (.name | startswith("Apple Watch")))
+                | .udid
+              ' | head -1)
+          [ -n "$UDID" ] || { echo "No Apple Watch simulator found"; exit 1; }
+          echo "Using simulator UDID: $UDID"
           xcodebuild test \
             -scheme FlowKit-Package \
-            -destination "platform=watchOS Simulator,name=$SIMULATOR,OS=latest" \
+            -destination "platform=watchOS Simulator,id=$UDID" \
             -derivedDataPath .build-watchos
 
   visionos:
@@ -225,13 +253,17 @@ jobs:
           exit 1
       - name: Test visionOS Simulator
         run: |
-          SIMULATOR=$(xcrun simctl list devices available --json \
-            | jq -r '.devices | to_entries[] | .value[] | select(.isAvailable) | .name' \
-            | grep -E '^Apple Vision Pro' \
-            | sort -uV | tail -1)
-          [ -n "$SIMULATOR" ] || { echo "No Apple Vision Pro simulator found"; exit 1; }
-          echo "Using simulator: $SIMULATOR"
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '
+                [.devices | to_entries[] | select(.key | test("xrOS-|visionOS-"))
+                  | {runtime: .key, devices: .value}]
+                | sort_by(.runtime) | reverse[] | .devices[]
+                | select(.isAvailable and (.name | startswith("Apple Vision")))
+                | .udid
+              ' | head -1)
+          [ -n "$UDID" ] || { echo "No Apple Vision Pro simulator found"; exit 1; }
+          echo "Using simulator UDID: $UDID"
           xcodebuild test \
             -scheme FlowKit-Package \
-            -destination "platform=visionOS Simulator,name=$SIMULATOR,OS=latest" \
+            -destination "platform=visionOS Simulator,id=$UDID" \
             -derivedDataPath .build-visionos
