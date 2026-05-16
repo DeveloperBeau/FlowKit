@@ -65,11 +65,10 @@ jobs:
 
   ios:
     name: iOS (Simulator)
-    # macos-26 ships the Xcode 26 family. Pin to 26.5 because Swift 6.3
-    # only lands in Xcode 26.5+, and Package.swift's
-    # swift-tools-version: 6.3 is enforced by Xcode's bundled SwiftPM
-    # resolver regardless of any TOOLCHAINS override.
-    runs-on: macos-26
+    # macos-latest images ship multiple Xcodes; resolve-xcode picks
+    # the requested 26.5 (the first release bundling Swift 6.3, which
+    # Package.swift requires via swift-tools-version: 6.3).
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
@@ -107,7 +106,7 @@ jobs:
 
   tvos:
     name: tvOS (build)
-    runs-on: macos-26
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
@@ -126,7 +125,7 @@ jobs:
 
   watchos:
     name: watchOS (build)
-    runs-on: macos-26
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
@@ -145,7 +144,7 @@ jobs:
 
   visionos:
     name: visionOS (build)
-    runs-on: macos-26
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
