@@ -62,7 +62,7 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: DeveloperBeau/resolve-xcode@2722aef6a717c98ebda5a0ae8d6f624f71552a40
+      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
         with:
           xcode-version: '26.5'
       - name: Show toolchain
@@ -110,7 +110,7 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: DeveloperBeau/resolve-xcode@2722aef6a717c98ebda5a0ae8d6f624f71552a40
+      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
         with:
           xcode-version: '26.5'
       - name: Show toolchain
@@ -140,7 +140,7 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: DeveloperBeau/resolve-xcode@2722aef6a717c98ebda5a0ae8d6f624f71552a40
+      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
         with:
           xcode-version: '26.5'
       - name: Show toolchain
@@ -169,7 +169,7 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: DeveloperBeau/resolve-xcode@2722aef6a717c98ebda5a0ae8d6f624f71552a40
+      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
         with:
           xcode-version: '26.5'
       - name: Show toolchain
@@ -199,7 +199,7 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: DeveloperBeau/resolve-xcode@2722aef6a717c98ebda5a0ae8d6f624f71552a40
+      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
         with:
           xcode-version: '26.5'
       - name: Show toolchain
