@@ -88,7 +88,7 @@ jobs:
                 [.devices | to_entries[] | select(.key | test("iOS-"))
                   | {runtime: .key, devices: .value}]
                 | sort_by(.runtime) | reverse[] | .devices[]
-                | select(.isAvailable and (.name | test("^iPhone [0-9]+[a-z]?$")))
+                | select(.isAvailable and (.name | startswith("iPhone ")))
                 | .udid
               ' | head -1)
           [ -n "$UDID" ] || { echo "No iPhone simulator found"; exit 1; }
@@ -104,6 +104,7 @@ jobs:
       - name: Coverage report
         if: always()
         run: |
+          [ -d .build-ios ] || { echo "No .build-ios; skipping coverage"; exit 0; }
           PROF=$(find .build-ios -name "Coverage.profdata" | head -1)
           if [ -n "$PROF" ]; then
             ARGS=()
