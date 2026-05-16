@@ -23,10 +23,10 @@ struct FlatMapLatestTests {
             // With sequential upstream emission + immediate inner completion,
             // all three inner flows start and emit before cancellation.
             // But with a long-running inner, only the latest survives.
-            try await tester.expectValue("from-1")
-            try await tester.expectValue("from-2")
-            try await tester.expectValue("from-3")
-            try await tester.expectCompletion()
+            try await tester.expectValue("from-1", within: .seconds(5))
+            try await tester.expectValue("from-2", within: .seconds(5))
+            try await tester.expectValue("from-3", within: .seconds(5))
+            try await tester.expectCompletion(within: .seconds(5))
         }
     }
 
