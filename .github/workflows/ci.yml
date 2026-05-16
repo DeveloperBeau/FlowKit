@@ -59,7 +59,7 @@ jobs:
 
   ios:
     name: iOS (Simulator)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
@@ -97,7 +97,7 @@ jobs:
 
   tvos:
     name: tvOS (build)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
@@ -116,7 +116,7 @@ jobs:
 
   watchos:
     name: watchOS (build)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
@@ -135,7 +135,7 @@ jobs:
 
   visionos:
     name: visionOS (build)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
