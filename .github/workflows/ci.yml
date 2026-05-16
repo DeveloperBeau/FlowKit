@@ -80,9 +80,12 @@ jobs:
           exit 1
       - name: Test iOS Simulator (with coverage)
         run: |
+          SIMULATOR=$(xcrun simctl list devices available | grep -oE 'iPhone [0-9]+[a-z]?' | sort -uV | tail -1)
+          [ -n "$SIMULATOR" ] || { echo "No iPhone simulator found"; exit 1; }
+          echo "Using simulator: $SIMULATOR"
           xcodebuild test \
             -scheme FlowKit-Package \
-            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
+            -destination "platform=iOS Simulator,name=$SIMULATOR,OS=latest" \
             -enableCodeCoverage YES \
             -derivedDataPath .build-ios \
             -resultBundlePath .build-ios/Result.xcresult
@@ -123,9 +126,13 @@ jobs:
           exit 1
       - name: Test iPad Simulator
         run: |
+          SIMULATOR=$(xcrun simctl list devices available | grep -oE 'iPad Pro [0-9]+-inch \(M[0-9]+\)' | sort -uV | tail -1)
+          [ -n "$SIMULATOR" ] || SIMULATOR=$(xcrun simctl list devices available | grep -oE 'iPad [A-Za-z0-9 ()-]+' | sort -uV | tail -1)
+          [ -n "$SIMULATOR" ] || { echo "No iPad simulator found"; exit 1; }
+          echo "Using simulator: $SIMULATOR"
           xcodebuild test \
             -scheme FlowKit-Package \
-            -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M5),OS=latest' \
+            -destination "platform=iOS Simulator,name=$SIMULATOR,OS=latest" \
             -derivedDataPath .build-ipados
 
   tvos:
@@ -149,9 +156,12 @@ jobs:
           exit 1
       - name: Test tvOS Simulator
         run: |
+          SIMULATOR=$(xcrun simctl list devices available | grep -oE 'Apple TV[A-Za-z0-9 ]*' | sort -uV | tail -1)
+          [ -n "$SIMULATOR" ] || { echo "No Apple TV simulator found"; exit 1; }
+          echo "Using simulator: $SIMULATOR"
           xcodebuild test \
             -scheme FlowKit-Package \
-            -destination 'platform=tvOS Simulator,name=Apple TV,OS=latest' \
+            -destination "platform=tvOS Simulator,name=$SIMULATOR,OS=latest" \
             -derivedDataPath .build-tvos
 
   watchos:
@@ -175,9 +185,13 @@ jobs:
           exit 1
       - name: Test watchOS Simulator
         run: |
+          SIMULATOR=$(xcrun simctl list devices available | grep -oE 'Apple Watch Series [0-9]+ \([0-9]+mm\)' | sort -uV | tail -1)
+          [ -n "$SIMULATOR" ] || SIMULATOR=$(xcrun simctl list devices available | grep -oE 'Apple Watch[A-Za-z0-9 ()-]+' | sort -uV | tail -1)
+          [ -n "$SIMULATOR" ] || { echo "No Apple Watch simulator found"; exit 1; }
+          echo "Using simulator: $SIMULATOR"
           xcodebuild test \
             -scheme FlowKit-Package \
-            -destination 'platform=watchOS Simulator,name=Apple Watch Series 11 (46mm),OS=latest' \
+            -destination "platform=watchOS Simulator,name=$SIMULATOR,OS=latest" \
             -derivedDataPath .build-watchos
 
   visionos:
@@ -201,7 +215,10 @@ jobs:
           exit 1
       - name: Test visionOS Simulator
         run: |
+          SIMULATOR=$(xcrun simctl list devices available | grep -oE 'Apple Vision Pro[A-Za-z0-9 ]*' | sort -uV | tail -1)
+          [ -n "$SIMULATOR" ] || { echo "No Apple Vision Pro simulator found"; exit 1; }
+          echo "Using simulator: $SIMULATOR"
           xcodebuild test \
             -scheme FlowKit-Package \
-            -destination 'platform=visionOS Simulator,name=Apple Vision Pro,OS=latest' \
+            -destination "platform=visionOS Simulator,name=$SIMULATOR,OS=latest" \
             -derivedDataPath .build-visionos
