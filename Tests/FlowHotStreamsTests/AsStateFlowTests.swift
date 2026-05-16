@@ -34,7 +34,12 @@ struct AsStateFlowTests {
             strategy: .eager
         )
 
-        try? await Task.sleep(for: .seconds(0.05))
+        // Poll instead of a fixed sleep; Linux CI under release config
+        // can take >50ms for the eager upstream task to land.
+        for _ in 0..<40 {
+            if await stateFlow.value == "eager-emit" { break }
+            try? await Task.sleep(for: .seconds(0.05))
+        }
         #expect(await stateFlow.value == "eager-emit")
     }
 }
