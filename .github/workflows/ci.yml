@@ -57,17 +57,8 @@ jobs:
             --filter FlowPublicAPITests \
             --filter FlowTestingPublicAPITests
 
-  # Apple platform jobs exercise the UIKit/AppKit bridge code paths that
-  # `swift test` on macOS does not compile. macOS only builds the AppKit
-  # branch of FlowUIKitBridge, so UIKit-conditional compile errors slip past
-  # the macOS job and Linux job (which excludes UI entirely). Each job below
-  # builds with xcodebuild to surface those failures.
-
   ios:
     name: iOS (Simulator)
-    # macos-latest images ship multiple Xcodes; resolve-xcode picks
-    # the requested 26.5 (the first release bundling Swift 6.3, which
-    # Package.swift requires via swift-tools-version: 6.3).
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
