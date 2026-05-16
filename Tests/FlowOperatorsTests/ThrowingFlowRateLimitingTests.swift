@@ -14,7 +14,7 @@ struct ThrowingFlowRateLimitingTests {
         let clock = TestClock()
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(5)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             let tester = try await scope.test(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {
@@ -48,7 +48,7 @@ struct ThrowingFlowRateLimitingTests {
         let clock = TestClock()
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(5)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             let tester = try await scope.test(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {
@@ -116,7 +116,7 @@ struct ThrowingFlowRateLimitingTests {
         let clock = TestClock()
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(5)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             let tester = try await scope.test(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {

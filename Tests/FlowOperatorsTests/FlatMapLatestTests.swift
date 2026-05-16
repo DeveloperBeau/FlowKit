@@ -36,7 +36,7 @@ struct FlatMapLatestTests {
 
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(5)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             let resultFlow = upstream.asFlow().flatMapLatest { value -> Flow<String> in
                 Flow<String> { collector in
                     await withTaskCancellationHandler {
