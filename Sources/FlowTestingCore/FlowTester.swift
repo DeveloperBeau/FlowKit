@@ -20,7 +20,7 @@ public actor FlowTester<Element: Sendable> {
     }
 
     public func awaitValue(
-        within timeout: Duration = .seconds(1),
+        within timeout: Duration = .seconds(5),
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws -> Element {
         let event = try await base.awaitNextEvent(within: timeout)
@@ -38,7 +38,7 @@ public actor FlowTester<Element: Sendable> {
 
     public func expectValue(
         _ expected: Element,
-        within timeout: Duration = .seconds(1),
+        within timeout: Duration = .seconds(5),
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws where Element: Equatable {
         let actual = try await awaitValue(within: timeout, sourceLocation: sourceLocation)
@@ -63,7 +63,7 @@ public actor FlowTester<Element: Sendable> {
     }
 
     public func expectCompletion(
-        within timeout: Duration = .seconds(1),
+        within timeout: Duration = .seconds(5),
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws {
         let event = try await base.awaitNextEvent(within: timeout)

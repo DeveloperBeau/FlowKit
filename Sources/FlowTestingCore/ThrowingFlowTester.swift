@@ -24,7 +24,7 @@ public actor ThrowingFlowTester<Element: Sendable> {
     }
 
     public func awaitValue(
-        within timeout: Duration = .seconds(1),
+        within timeout: Duration = .seconds(5),
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws -> Element {
         let event = try await base.awaitNextEvent(within: timeout)
@@ -42,7 +42,7 @@ public actor ThrowingFlowTester<Element: Sendable> {
 
     public func expectValue(
         _ expected: Element,
-        within timeout: Duration = .seconds(1),
+        within timeout: Duration = .seconds(5),
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws where Element: Equatable {
         let actual = try await awaitValue(within: timeout, sourceLocation: sourceLocation)
@@ -67,7 +67,7 @@ public actor ThrowingFlowTester<Element: Sendable> {
     }
 
     public func expectCompletion(
-        within timeout: Duration = .seconds(1),
+        within timeout: Duration = .seconds(5),
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws {
         let event = try await base.awaitNextEvent(within: timeout)
@@ -85,7 +85,7 @@ public actor ThrowingFlowTester<Element: Sendable> {
 
     public func expectError<E: Error & Equatable>(
         _ expected: E,
-        within timeout: Duration = .seconds(1),
+        within timeout: Duration = .seconds(5),
         sourceLocation: SourceLocation = #_sourceLocation
     ) async throws {
         let event = try await base.awaitNextEvent(within: timeout)
@@ -110,7 +110,7 @@ public actor ThrowingFlowTester<Element: Sendable> {
 
     public func expectError(
         _ description: String,
-        within timeout: Duration = .seconds(1),
+        within timeout: Duration = .seconds(5),
         sourceLocation: SourceLocation = #_sourceLocation,
         matching: @Sendable (any Error) -> Bool
     ) async throws {
