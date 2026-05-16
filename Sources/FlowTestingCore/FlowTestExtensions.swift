@@ -6,7 +6,7 @@ extension Flow {
     /// The closure has `timeout` wall-clock time to complete all expectations.
     /// After the closure exits, the tester's collection task is cancelled.
     public func test(
-        timeout: Duration = .seconds(2),
+        timeout: Duration = .seconds(10),
         _ block: @escaping @Sendable (FlowTester<Element>) async throws -> Void
     ) async throws {
         let tester = FlowTester<Element>()
@@ -30,7 +30,7 @@ extension ThrowingFlow {
     /// Collects this throwing flow and provides a `ThrowingFlowTester` for
     /// structured assertions including error matchers.
     public func test(
-        timeout: Duration = .seconds(2),
+        timeout: Duration = .seconds(10),
         _ block: @escaping @Sendable (ThrowingFlowTester<Element>) async throws -> Void
     ) async throws {
         let tester = ThrowingFlowTester<Element>()
