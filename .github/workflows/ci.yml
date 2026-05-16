@@ -65,16 +65,16 @@ jobs:
 
   ios:
     name: iOS (Simulator)
-    # macos-26 ships the Xcode 26 family. resolve-xcode picks the highest
-    # 26.x installed on the image, which is required for Swift 6.3
-    # (Package.swift declares swift-tools-version 6.3, which Xcode's
-    # bundled SwiftPM resolver enforces regardless of TOOLCHAINS).
+    # macos-26 ships the Xcode 26 family. Pin to 26.5 because Swift 6.3
+    # only lands in Xcode 26.5+, and Package.swift's
+    # swift-tools-version: 6.3 is enforced by Xcode's bundled SwiftPM
+    # resolver regardless of any TOOLCHAINS override.
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          xcode-version: '26'
+          xcode-version: '26.5'
       - name: Show toolchain
         run: |
           xcodebuild -version
@@ -110,7 +110,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          xcode-version: '26'
+          xcode-version: '26.5'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Build tvOS Simulator
@@ -127,7 +127,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          xcode-version: '26'
+          xcode-version: '26.5'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Build watchOS Simulator
@@ -144,7 +144,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          xcode-version: '26'
+          xcode-version: '26.5'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Build visionOS Simulator
