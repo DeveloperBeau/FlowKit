@@ -64,7 +64,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          xcode-version: '26.5'
+          xcode-version: '26.3'
       - name: Show toolchain
         run: |
           xcodebuild -version
@@ -102,7 +102,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          xcode-version: '26.5'
+          xcode-version: '26.3'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install tvOS simulator runtime
@@ -121,7 +121,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          xcode-version: '26.5'
+          xcode-version: '26.3'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install watchOS simulator runtime
@@ -140,7 +140,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          xcode-version: '26.5'
+          xcode-version: '26.3'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install visionOS simulator runtime
