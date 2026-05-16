@@ -65,7 +65,7 @@ jobs:
 
   ios:
     name: iOS (Simulator)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Show Xcode version
@@ -74,7 +74,7 @@ jobs:
         run: |
           xcodebuild test \
             -scheme FlowKit-Package \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
             -enableCodeCoverage YES \
             -derivedDataPath .build-ios \
             -resultBundlePath .build-ios/Result.xcresult
@@ -96,7 +96,7 @@ jobs:
 
   tvos:
     name: tvOS (build)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Show Xcode version
@@ -110,7 +110,7 @@ jobs:
 
   watchos:
     name: watchOS (build)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Show Xcode version
@@ -124,7 +124,7 @@ jobs:
 
   visionos:
     name: visionOS (build)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Show Xcode version
