@@ -102,7 +102,7 @@ jobs:
             done
             xcrun llvm-cov report "${ARGS[@]}" \
               -instr-profile="$PROF" \
-              -ignore-filename-regex='/Tests/|.build|checkouts|DerivedSources' || true
+              -ignore-filename-regex='Tests/|.build/|checkouts/|DerivedSources/' || true
           fi
 
   tvos:
