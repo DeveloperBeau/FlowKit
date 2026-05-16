@@ -5,21 +5,24 @@ public import FlowCore
 public import FlowHotStreams
 import FlowOperators
 
-// nonisolated(unsafe) var gives a stable address for use as associated-object
-// keys. The value is never mutated; only its address is used.
-private nonisolated(unsafe) var nsViewControllerFlowScopeKey: UInt8 = 0
-private nonisolated(unsafe) var nsWindowControllerFlowScopeKey: UInt8 = 0
+// A bare, stateless final class is implicitly Sendable. Single global
+// instances provide stable, app-lifetime pointers for use as
+// associated-object keys, with no `nonisolated(unsafe)` required.
+private final class FlowScopeKey: Sendable {}
+private let nsViewControllerFlowScopeKey = FlowScopeKey()
+private let nsWindowControllerFlowScopeKey = FlowScopeKey()
 
 extension NSViewController {
     /// A `FlowScope` tied to this view controller's lifetime. Created
     /// lazily on first access. Cancelled automatically when the view
     /// controller is deallocated (because the associated object is released).
     public var flowScope: FlowScope {
-        if let existing = objc_getAssociatedObject(self, &nsViewControllerFlowScopeKey) as? FlowScope {
+        let key = Unmanaged.passUnretained(nsViewControllerFlowScopeKey).toOpaque()
+        if let existing = objc_getAssociatedObject(self, key) as? FlowScope {
             return existing
         }
         let scope = FlowScope()
-        objc_setAssociatedObject(self, &nsViewControllerFlowScopeKey, scope, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        objc_setAssociatedObject(self, key, scope, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         return scope
     }
 
@@ -52,11 +55,12 @@ extension NSWindowController {
     /// lazily on first access. Cancelled automatically when the window
     /// controller is deallocated (because the associated object is released).
     public var flowScope: FlowScope {
-        if let existing = objc_getAssociatedObject(self, &nsWindowControllerFlowScopeKey) as? FlowScope {
+        let key = Unmanaged.passUnretained(nsWindowControllerFlowScopeKey).toOpaque()
+        if let existing = objc_getAssociatedObject(self, key) as? FlowScope {
             return existing
         }
         let scope = FlowScope()
-        objc_setAssociatedObject(self, &nsWindowControllerFlowScopeKey, scope, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        objc_setAssociatedObject(self, key, scope, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         return scope
     }
 }
