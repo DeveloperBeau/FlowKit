@@ -20,44 +20,42 @@ struct TestClockAdvanceTests {
     @Test("sleep(until:) wakes when clock advances past deadline")
     func sleepWakesOnAdvance() async throws {
         let clock = TestClock()
-        let wokeUp = NSLock()
-        nonisolated(unsafe) var _wokeUp = false
+        let flag = BoolBox()
 
         let task = Task {
             try await clock.sleep(until: TestClock.Instant(offset: .seconds(1)), tolerance: nil)
-            wokeUp.withLock { _wokeUp = true }
+            await flag.set(true)
         }
 
         try? await Task.sleep(for: .seconds(0.01))
-        let beforeAdvance = wokeUp.withLock { _wokeUp }
+        let beforeAdvance = await flag.value
         #expect(!beforeAdvance)
 
         await clock.advance(by: .seconds(1))
         _ = try await task.value
 
-        let afterAdvance = wokeUp.withLock { _wokeUp }
+        let afterAdvance = await flag.value
         #expect(afterAdvance)
     }
 
     @Test("multiple sleepers wake in deadline order via incremental advance")
     func multipleSleepers() async throws {
         let clock = TestClock()
-        let orderLock = NSLock()
-        nonisolated(unsafe) var _wakeOrder: [Int] = []
+        let order = IntCollector()
 
         let t1 = Task {
             try await clock.sleep(until: TestClock.Instant(offset: .seconds(2)), tolerance: nil)
-            orderLock.withLock { _wakeOrder.append(2) }
+            await order.append(2)
         }
 
         let t2 = Task {
             try await clock.sleep(until: TestClock.Instant(offset: .seconds(1)), tolerance: nil)
-            orderLock.withLock { _wakeOrder.append(1) }
+            await order.append(1)
         }
 
         let t3 = Task {
             try await clock.sleep(until: TestClock.Instant(offset: .seconds(3)), tolerance: nil)
-            orderLock.withLock { _wakeOrder.append(3) }
+            await order.append(3)
         }
 
         // Give all sleepers time to register
@@ -72,8 +70,8 @@ struct TestClockAdvanceTests {
         await clock.advance(by: .seconds(1))
         try await t3.value
 
-        let order = orderLock.withLock { _wakeOrder }
-        #expect(order == [1, 2, 3])
+        let snapshot = await order.snapshot
+        #expect(snapshot == [1, 2, 3])
     }
 
     @Test("cancelled sleep throws CancellationError")
@@ -109,4 +107,19 @@ struct TestClockAdvanceTests {
         await clock.advance(by: .zero)
         #expect(clock.now.offset == .zero)
     }
+}
+
+/// Actor-isolated boolean used by tests to share a flag across concurrent
+/// tasks without relying on `nonisolated(unsafe)`.
+actor BoolBox {
+    private(set) var value = false
+    func set(_ newValue: Bool) { value = newValue }
+}
+
+/// Actor-isolated `[Int]` accumulator used by tests to capture wake order
+/// across concurrent tasks without relying on `nonisolated(unsafe)`.
+actor IntCollector {
+    private var values: [Int] = []
+    func append(_ v: Int) { values.append(v) }
+    var snapshot: [Int] { values }
 }
