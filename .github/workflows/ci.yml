@@ -95,8 +95,27 @@ jobs:
               -ignore-filename-regex='Tests/|.build/|checkouts/|DerivedSources/' || true
           fi
 
+  ipados:
+    name: iPadOS (Simulator)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeveloperBeau/resolve-xcode@40aba41a701737f3935987496f9f511f72af875c
+        with:
+          xcode-version: '26.5'
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version
+      - name: Install iOS simulator runtime
+        run: sudo xcodebuild -runFirstLaunch && xcodebuild -downloadPlatform iOS
+      - name: Test iPad Simulator
+        run: |
+          xcodebuild test \
+            -scheme FlowKit-Package \
+            -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M5),OS=latest' \
+            -derivedDataPath .build-ipados
+
   tvos:
-    name: tvOS (build)
+    name: tvOS (Simulator)
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -107,11 +126,11 @@ jobs:
         run: xcodebuild -version && swift --version
       - name: Install tvOS simulator runtime
         run: sudo xcodebuild -runFirstLaunch && xcodebuild -downloadPlatform tvOS
-      - name: Build tvOS Simulator
+      - name: Test tvOS Simulator
         run: |
-          xcodebuild build \
+          xcodebuild test \
             -scheme FlowKit-Package \
-            -destination 'generic/platform=tvOS Simulator' \
+            -destination 'platform=tvOS Simulator,name=Apple TV,OS=latest' \
             -derivedDataPath .build-tvos
 
   watchos:
@@ -134,7 +153,7 @@ jobs:
             -derivedDataPath .build-watchos
 
   visionos:
-    name: visionOS (build)
+    name: visionOS (Simulator)
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -145,9 +164,9 @@ jobs:
         run: xcodebuild -version && swift --version
       - name: Install visionOS simulator runtime
         run: sudo xcodebuild -runFirstLaunch && xcodebuild -downloadPlatform visionOS
-      - name: Build visionOS Simulator
+      - name: Test visionOS Simulator
         run: |
-          xcodebuild build \
+          xcodebuild test \
             -scheme FlowKit-Package \
-            -destination 'generic/platform=visionOS Simulator' \
+            -destination 'platform=visionOS Simulator,name=Apple Vision Pro,OS=latest' \
             -derivedDataPath .build-visionos
