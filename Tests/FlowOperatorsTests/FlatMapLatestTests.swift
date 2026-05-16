@@ -23,10 +23,10 @@ struct FlatMapLatestTests {
             // With sequential upstream emission + immediate inner completion,
             // all three inner flows start and emit before cancellation.
             // But with a long-running inner, only the latest survives.
-            try await tester.expectValue("from-1")
-            try await tester.expectValue("from-2")
-            try await tester.expectValue("from-3")
-            try await tester.expectCompletion()
+            try await tester.expectValue("from-1", within: .seconds(5))
+            try await tester.expectValue("from-2", within: .seconds(5))
+            try await tester.expectValue("from-3", within: .seconds(5))
+            try await tester.expectCompletion(within: .seconds(5))
         }
     }
 
@@ -36,7 +36,7 @@ struct FlatMapLatestTests {
 
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(5)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             let resultFlow = upstream.asFlow().flatMapLatest { value -> Flow<String> in
                 Flow<String> { collector in
                     await withTaskCancellationHandler {
@@ -52,20 +52,29 @@ struct FlatMapLatestTests {
 
             _ = try await scope.test(resultFlow)
 
-            // Give tester time to subscribe
-            try? await Task.sleep(for: .seconds(0.2))
+            // Wait until the subscriber count reaches 1 so we know the
+            // tester has actually subscribed before we start emitting.
+            for _ in 0..<200 {
+                if await upstream.subscriptionCount >= 1 { break }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
 
-            // Emit 1. Starts inner flow for 1.
+            // Emit 1, 2, 3 in sequence; after each emit, poll until the
+            // previous inner flow has registered its cancellation. This
+            // is race-free regardless of how slow the CI runner is.
+            func waitForCancellation(of value: Int) async {
+                for _ in 0..<500 {
+                    if cancelled.withLock({ $0 }).contains(value) { return }
+                    try? await Task.sleep(for: .milliseconds(10))
+                }
+            }
+
             await upstream.emit(1)
-            try? await Task.sleep(for: .seconds(0.2))
-
-            // Emit 2. Should cancel inner flow for 1, start inner flow for 2.
             await upstream.emit(2)
-            try? await Task.sleep(for: .seconds(0.2))
+            await waitForCancellation(of: 1)
 
-            // Emit 3. Should cancel inner flow for 2, start inner flow for 3.
             await upstream.emit(3)
-            try? await Task.sleep(for: .seconds(0.2))
+            await waitForCancellation(of: 2)
 
             #expect(cancelled.withLock { $0 }.contains(1))
             #expect(cancelled.withLock { $0 }.contains(2))

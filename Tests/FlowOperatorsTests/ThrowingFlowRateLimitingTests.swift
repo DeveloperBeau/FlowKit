@@ -14,7 +14,7 @@ struct ThrowingFlowRateLimitingTests {
         let clock = TestClock()
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(5)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             let tester = try await scope.test(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {
@@ -23,7 +23,10 @@ struct ThrowingFlowRateLimitingTests {
                 }.debounce(for: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(for: .seconds(0.02))
+            for _ in 0..<200 {
+                if await upstream.subscriptionCount >= 1 { break }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
             await upstream.emit(42)
             try? await Task.sleep(for: .seconds(0.005))
             await clock.advance(by: .seconds(1))
@@ -48,7 +51,7 @@ struct ThrowingFlowRateLimitingTests {
         let clock = TestClock()
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(5)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             let tester = try await scope.test(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {
@@ -57,7 +60,10 @@ struct ThrowingFlowRateLimitingTests {
                 }.throttle(for: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(for: .seconds(0.02))
+            for _ in 0..<200 {
+                if await upstream.subscriptionCount >= 1 { break }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
             await upstream.emit(1)
             try await tester.expectValue(1)
         }
@@ -116,7 +122,7 @@ struct ThrowingFlowRateLimitingTests {
         let clock = TestClock()
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(5)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             let tester = try await scope.test(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {
@@ -125,7 +131,10 @@ struct ThrowingFlowRateLimitingTests {
                 }.sample(every: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(for: .seconds(0.02))
+            for _ in 0..<200 {
+                if await upstream.subscriptionCount >= 1 { break }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
             await upstream.emit(1)
             await upstream.emit(2)
             try? await Task.sleep(for: .seconds(0.005))

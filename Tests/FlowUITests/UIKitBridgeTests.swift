@@ -6,6 +6,7 @@ import FlowHotStreams
 @testable import FlowUIKitBridge
 
 @Suite("UIKit bridge")
+@MainActor
 struct UIKitBridgeTests {
     @Test("flowScope returns the same instance on repeated access")
     func flowScopeIdentity() {

@@ -4,6 +4,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -13,8 +16,8 @@ jobs:
     name: macOS
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: DeveloperBeau/setup-swift@v1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: DeveloperBeau/resolve-swift@95dd7376c9df6efd1252713de2edbc4ae6df0663  # v1
         with:
           swift-version: '6.3'
       - name: Show Swift version
@@ -30,15 +33,15 @@ jobs:
           if [ -n "$BIN" ] && [ -n "$PROF" ]; then
             xcrun llvm-cov report "$BIN/Contents/MacOS/FlowKitPackageTests" \
               -instr-profile="$PROF" \
-              -ignore-filename-regex='Tests/|.build/' || true
+              -ignore-filename-regex='Tests/|.build/'
           fi
 
   linux:
     name: Linux
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: DeveloperBeau/setup-swift@v1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: DeveloperBeau/resolve-swift@95dd7376c9df6efd1252713de2edbc4ae6df0663  # v1
         with:
           swift-version: '6.3'
       - name: Show Swift version
@@ -56,3 +59,215 @@ jobs:
             --filter FlowTestingCoreTests \
             --filter FlowPublicAPITests \
             --filter FlowTestingPublicAPITests
+
+  ios:
+    name: iOS (Simulator)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
+        with:
+          xcode-version: '26.5'
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Install iOS simulator runtime
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          for i in 1 2 3; do
+            if xcodebuild -downloadPlatform iOS; then exit 0; fi
+            echo "downloadPlatform attempt $i failed; sleeping before retry"
+            sleep 15
+          done
+          exit 1
+      - name: Test iOS Simulator (with coverage)
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '
+                [.devices | to_entries[] | select(.key | test("iOS-"))
+                  | {runtime: .key, devices: .value}]
+                | sort_by(.runtime) | reverse[] | .devices[]
+                | select(.isAvailable and (.name | startswith("iPhone ")))
+                | .udid
+              ' | head -1)
+          [ -n "$UDID" ] || { echo "No iPhone simulator found"; exit 1; }
+          echo "Using simulator UDID: $UDID"
+          xcrun simctl list devices --json | jq -r --arg u "$UDID" '
+            .devices | to_entries[] | .value[] | select(.udid == $u) | "\(.name) on \(.deviceTypeIdentifier)"'
+          xcodebuild test \
+            -scheme FlowKit-Package \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -enableCodeCoverage YES \
+            -derivedDataPath .build-ios \
+            -resultBundlePath .build-ios/Result.xcresult
+      - name: Coverage report
+        if: always()
+        run: |
+          [ -d .build-ios ] || { echo "No .build-ios; skipping coverage"; exit 0; }
+          PROF=$(find .build-ios -name "Coverage.profdata" | head -1)
+          if [ -n "$PROF" ]; then
+            ARGS=()
+            for x in .build-ios/Build/Products/Debug-iphonesimulator/*.xctest; do
+              name=$(basename "$x" .xctest)
+              bin="$x/$name"
+              [ -f "$bin" ] && ARGS+=(-object "$bin")
+            done
+            xcrun llvm-cov report "${ARGS[@]}" \
+              -instr-profile="$PROF" \
+              -ignore-filename-regex='Tests/|.build/|checkouts/|DerivedSources/'
+          fi
+
+  ipados:
+    name: iPadOS (Simulator)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
+        with:
+          xcode-version: '26.5'
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version
+      - name: Install iOS simulator runtime
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          for i in 1 2 3; do
+            if xcodebuild -downloadPlatform iOS; then exit 0; fi
+            echo "downloadPlatform attempt $i failed; sleeping before retry"
+            sleep 15
+          done
+          exit 1
+      - name: Test iPad Simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '
+                [.devices | to_entries[] | select(.key | test("iOS-"))
+                  | {runtime: .key, devices: .value}]
+                | sort_by(.runtime) | reverse[] | .devices[]
+                | select(.isAvailable and (.name | test("^iPad Pro [0-9]+-inch \\(M[0-9]+\\)$")))
+                | .udid
+              ' | head -1)
+          if [ -z "$UDID" ]; then
+            UDID=$(xcrun simctl list devices available --json \
+              | jq -r '
+                  [.devices | to_entries[] | select(.key | test("iOS-"))
+                    | {runtime: .key, devices: .value}]
+                  | sort_by(.runtime) | reverse[] | .devices[]
+                  | select(.isAvailable and (.name | startswith("iPad ")))
+                  | .udid
+                ' | head -1)
+          fi
+          [ -n "$UDID" ] || { echo "No iPad simulator found"; exit 1; }
+          echo "Using simulator UDID: $UDID"
+          xcodebuild test \
+            -scheme FlowKit-Package \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath .build-ipados
+
+  tvos:
+    name: tvOS (Simulator)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
+        with:
+          xcode-version: '26.5'
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version
+      - name: Install tvOS simulator runtime
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          for i in 1 2 3; do
+            if xcodebuild -downloadPlatform tvOS; then exit 0; fi
+            echo "downloadPlatform attempt $i failed; sleeping before retry"
+            sleep 15
+          done
+          exit 1
+      - name: Test tvOS Simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '
+                [.devices | to_entries[] | select(.key | test("tvOS-"))
+                  | {runtime: .key, devices: .value}]
+                | sort_by(.runtime) | reverse[] | .devices[]
+                | select(.isAvailable and (.name | startswith("Apple TV")))
+                | .udid
+              ' | head -1)
+          [ -n "$UDID" ] || { echo "No Apple TV simulator found"; exit 1; }
+          echo "Using simulator UDID: $UDID"
+          xcodebuild test \
+            -scheme FlowKit-Package \
+            -destination "platform=tvOS Simulator,id=$UDID" \
+            -derivedDataPath .build-tvos
+
+  watchos:
+    name: watchOS (Simulator)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
+        with:
+          xcode-version: '26.5'
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version
+      - name: Install watchOS simulator runtime
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          for i in 1 2 3; do
+            if xcodebuild -downloadPlatform watchOS; then exit 0; fi
+            echo "downloadPlatform attempt $i failed; sleeping before retry"
+            sleep 15
+          done
+          exit 1
+      - name: Test watchOS Simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '
+                [.devices | to_entries[] | select(.key | test("watchOS-"))
+                  | {runtime: .key, devices: .value}]
+                | sort_by(.runtime) | reverse[] | .devices[]
+                | select(.isAvailable and (.name | startswith("Apple Watch")))
+                | .udid
+              ' | head -1)
+          [ -n "$UDID" ] || { echo "No Apple Watch simulator found"; exit 1; }
+          echo "Using simulator UDID: $UDID"
+          xcodebuild test \
+            -scheme FlowKit-Package \
+            -destination "platform=watchOS Simulator,id=$UDID" \
+            -derivedDataPath .build-watchos
+
+  visionos:
+    name: visionOS (Simulator)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
+        with:
+          xcode-version: '26.5'
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version
+      - name: Install visionOS simulator runtime
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          for i in 1 2 3; do
+            if xcodebuild -downloadPlatform visionOS; then exit 0; fi
+            echo "downloadPlatform attempt $i failed; sleeping before retry"
+            sleep 15
+          done
+          exit 1
+      - name: Test visionOS Simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '
+                [.devices | to_entries[] | select(.key | test("xrOS-|visionOS-"))
+                  | {runtime: .key, devices: .value}]
+                | sort_by(.runtime) | reverse[] | .devices[]
+                | select(.isAvailable and (.name | startswith("Apple Vision")))
+                | .udid
+              ' | head -1)
+          [ -n "$UDID" ] || { echo "No Apple Vision Pro simulator found"; exit 1; }
+          echo "Using simulator UDID: $UDID"
+          xcodebuild test \
+            -scheme FlowKit-Package \
+            -destination "platform=visionOS Simulator,id=$UDID" \
+            -derivedDataPath .build-visionos

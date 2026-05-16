@@ -15,7 +15,7 @@ public struct TestScope: Sendable {
     /// via `scope.test(_:)`. All collection tasks are cancelled when the block
     /// exits.
     public static func run(
-        timeout: Duration = .seconds(2),
+        timeout: Duration = .seconds(10),
         _ block: @escaping @Sendable (TestScope) async throws -> Void
     ) async throws {
         let flowScope = FlowScope()

@@ -1,21 +1,27 @@
 #if canImport(UIKit) && !os(watchOS)
-import UIKit
+public import UIKit
 import ObjectiveC
-import FlowCore
-import FlowHotStreams
+public import FlowCore
+public import FlowHotStreams
+import FlowOperators
 
-private var flowScopeKey: UInt8 = 0
+// A bare, stateless final class is implicitly Sendable. A single global
+// instance provides a stable, app-lifetime pointer for use as an
+// associated-object key, with no `nonisolated(unsafe)` required.
+private final class FlowScopeKey: Sendable {}
+private let flowScopeKey = FlowScopeKey()
 
 extension UIViewController {
     /// A `FlowScope` tied to this view controller's lifetime. Created
     /// lazily on first access. Cancelled automatically when the view
     /// controller is deallocated (because the associated object is released).
     public var flowScope: FlowScope {
-        if let existing = objc_getAssociatedObject(self, &flowScopeKey) as? FlowScope {
+        let key = Unmanaged.passUnretained(flowScopeKey).toOpaque()
+        if let existing = objc_getAssociatedObject(self, key) as? FlowScope {
             return existing
         }
         let scope = FlowScope()
-        objc_setAssociatedObject(self, &flowScopeKey, scope, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        objc_setAssociatedObject(self, key, scope, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         return scope
     }
 

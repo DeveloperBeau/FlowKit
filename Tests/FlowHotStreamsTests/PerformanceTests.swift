@@ -30,7 +30,7 @@ struct PerformanceTests {
     func sharedFlowLatency() async throws {
         let shared = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(5)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             var testers: [FlowTester<Int>] = []
             for _ in 0..<10 {
                 testers.append(try await scope.test(shared.asFlow()))

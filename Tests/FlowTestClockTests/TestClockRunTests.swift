@@ -7,22 +7,21 @@ struct TestClockRunTests {
     @Test("run advances to the furthest sleeper's deadline")
     func runAdvancesToFurthest() async throws {
         let clock = TestClock()
-        let orderLock = NSLock()
-        nonisolated(unsafe) var _woke: [Int] = []
+        let woke = IntCollector()
 
         async let t1: Void = {
             try await clock.sleep(until: TestClock.Instant(offset: .seconds(1)), tolerance: nil)
-            orderLock.withLock { _woke.append(1) }
+            await woke.append(1)
         }()
 
         async let t2: Void = {
             try await clock.sleep(until: TestClock.Instant(offset: .seconds(5)), tolerance: nil)
-            orderLock.withLock { _woke.append(5) }
+            await woke.append(5)
         }()
 
         async let t3: Void = {
             try await clock.sleep(until: TestClock.Instant(offset: .seconds(3)), tolerance: nil)
-            orderLock.withLock { _woke.append(3) }
+            await woke.append(3)
         }()
 
         try? await Task.sleep(for: .seconds(0.02))
@@ -30,7 +29,7 @@ struct TestClockRunTests {
 
         _ = try await (t1, t2, t3)
 
-        let order = orderLock.withLock { _woke }
+        let order = await woke.snapshot
         #expect(order == [1, 3, 5])
         #expect(clock.now.offset == .seconds(5))
     }

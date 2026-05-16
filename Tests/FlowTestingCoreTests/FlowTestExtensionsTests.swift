@@ -9,7 +9,7 @@ struct FlowTestExtensionsTests {
     @Test("Flow.test collects and exposes values via FlowTester")
     func flowTestCollectsValues() async throws {
         let flow = Flow(of: "one", "two", "three")
-        try await flow.test(timeout: .seconds(2)) { tester in
+        try await flow.test(timeout: .seconds(15)) { tester in
             try await tester.expectValue("one")
             try await tester.expectValue("two")
             try await tester.expectValue("three")
@@ -24,7 +24,7 @@ struct FlowTestExtensionsTests {
             try await collector.emit(1)
             throw BoomError()
         }
-        try await flow.test(timeout: .seconds(2)) { tester in
+        try await flow.test(timeout: .seconds(15)) { tester in
             try await tester.expectValue(1)
             try await tester.expectError(BoomError())
         }

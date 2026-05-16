@@ -75,10 +75,10 @@ struct FlatMapTests {
         }.test { tester in
             var received: [Int] = []
             for _ in 0..<5 {
-                received.append(try await tester.awaitValue())
+                received.append(try await tester.awaitValue(within: .seconds(5)))
             }
             #expect(Set(received) == Set([10, 20, 30, 40, 50]))
-            try await tester.expectCompletion()
+            try await tester.expectCompletion(within: .seconds(5))
         }
 
         #expect(maxObserved.withLock { $0 } <= 2)

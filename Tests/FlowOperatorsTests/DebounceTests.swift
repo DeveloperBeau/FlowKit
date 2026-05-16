@@ -13,7 +13,7 @@ struct DebounceTests {
         let clock = TestClock()
         let upstream = MutableSharedFlow<String>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(5)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             let tester = try await scope.test(
                 upstream.asFlow().debounce(for: .milliseconds(300), clock: clock)
             )
@@ -40,7 +40,7 @@ struct DebounceTests {
         let clock = TestClock()
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(5)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             let tester = try await scope.test(
                 upstream.asFlow().debounce(for: .seconds(1), clock: clock)
             )

@@ -34,7 +34,7 @@ struct FlowObservingTests {
         obj.count = 42
 
         let flow: Flow<Int> = Flow(observing: obj, \.count)
-        try await flow.test(timeout: .seconds(2)) { tester in
+        try await flow.test(timeout: .seconds(15)) { tester in
             try await tester.expectValue(42)
             await tester.cancelAndIgnoreRemaining()
         }
@@ -46,7 +46,7 @@ struct FlowObservingTests {
         let obj = TestObservable()
 
         let flow: Flow<Int> = Flow(observing: obj, \.count)
-        try await flow.test(timeout: .seconds(2)) { tester in
+        try await flow.test(timeout: .seconds(15)) { tester in
             try await tester.expectValue(0) // initial
 
             obj.count = 7
@@ -65,7 +65,7 @@ struct FlowObservingTests {
         let obj = TestObservable()
 
         let flow: Flow<Int> = Flow(observing: obj, \.count)
-        try await flow.test(timeout: .seconds(2)) { tester in
+        try await flow.test(timeout: .seconds(15)) { tester in
             try await tester.expectValue(0)
             obj.count = 0 // equal, no emission
             await tester.expectNoValue(within: .milliseconds(100))
