@@ -70,7 +70,7 @@ jobs:
           xcodebuild -version
           swift --version
       - name: Install iOS simulator runtime
-        run: sudo xcodebuild -downloadPlatform iOS
+        run: xcodebuild -downloadPlatform iOS
       - name: Test iOS Simulator (with coverage)
         run: |
           xcodebuild test \
@@ -106,7 +106,7 @@ jobs:
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install tvOS simulator runtime
-        run: sudo xcodebuild -downloadPlatform tvOS
+        run: xcodebuild -downloadPlatform tvOS
       - name: Build tvOS Simulator
         run: |
           xcodebuild build \
@@ -125,7 +125,7 @@ jobs:
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install watchOS simulator runtime
-        run: sudo xcodebuild -downloadPlatform watchOS
+        run: xcodebuild -downloadPlatform watchOS
       - name: Build watchOS Simulator
         run: |
           xcodebuild build \
@@ -144,7 +144,7 @@ jobs:
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install visionOS simulator runtime
-        run: sudo xcodebuild -downloadPlatform visionOS
+        run: xcodebuild -downloadPlatform visionOS
       - name: Build visionOS Simulator
         run: |
           xcodebuild build \
