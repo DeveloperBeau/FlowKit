@@ -65,22 +65,16 @@ jobs:
 
   ios:
     name: iOS (Simulator)
-    runs-on: macos-latest
+    # macos-26 ships the Xcode 26 family. resolve-xcode picks the highest
+    # 26.x installed on the image, which is required for Swift 6.3
+    # (Package.swift declares swift-tools-version 6.3, which Xcode's
+    # bundled SwiftPM resolver enforces regardless of TOOLCHAINS).
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/resolve-swift@v1
+      - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          swift-version: '6.3'
-      - name: Resolve Swift toolchain bundle id
-        run: |
-          # xcodebuild's TOOLCHAINS env requires a CFBundleIdentifier, not
-          # the `swift` alias the resolve-swift action exports. Override
-          # with the actual identifier from the installed toolchain so
-          # xcodebuild uses Swift 6.3 instead of Xcode's bundled toolchain.
-          TC_ID=$(plutil -extract CFBundleIdentifier raw \
-            /Library/Developer/Toolchains/swift-latest.xctoolchain/Info.plist)
-          echo "TOOLCHAINS=$TC_ID" >> "$GITHUB_ENV"
-          echo "Using toolchain: $TC_ID"
+          xcode-version: '26'
       - name: Show toolchain
         run: |
           xcodebuild -version
@@ -111,17 +105,12 @@ jobs:
 
   tvos:
     name: tvOS (build)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/resolve-swift@v1
+      - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          swift-version: '6.3'
-      - name: Resolve Swift toolchain bundle id
-        run: |
-          TC_ID=$(plutil -extract CFBundleIdentifier raw \
-            /Library/Developer/Toolchains/swift-latest.xctoolchain/Info.plist)
-          echo "TOOLCHAINS=$TC_ID" >> "$GITHUB_ENV"
+          xcode-version: '26'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Build tvOS Simulator
@@ -133,17 +122,12 @@ jobs:
 
   watchos:
     name: watchOS (build)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/resolve-swift@v1
+      - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          swift-version: '6.3'
-      - name: Resolve Swift toolchain bundle id
-        run: |
-          TC_ID=$(plutil -extract CFBundleIdentifier raw \
-            /Library/Developer/Toolchains/swift-latest.xctoolchain/Info.plist)
-          echo "TOOLCHAINS=$TC_ID" >> "$GITHUB_ENV"
+          xcode-version: '26'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Build watchOS Simulator
@@ -155,17 +139,12 @@ jobs:
 
   visionos:
     name: visionOS (build)
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/resolve-swift@v1
+      - uses: DeveloperBeau/resolve-xcode@v1
         with:
-          swift-version: '6.3'
-      - name: Resolve Swift toolchain bundle id
-        run: |
-          TC_ID=$(plutil -extract CFBundleIdentifier raw \
-            /Library/Developer/Toolchains/swift-latest.xctoolchain/Info.plist)
-          echo "TOOLCHAINS=$TC_ID" >> "$GITHUB_ENV"
+          xcode-version: '26'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Build visionOS Simulator
