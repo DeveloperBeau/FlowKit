@@ -163,7 +163,14 @@ jobs:
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install visionOS simulator runtime
-        run: sudo xcodebuild -runFirstLaunch && xcodebuild -downloadPlatform visionOS
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          for i in 1 2 3; do
+            if xcodebuild -downloadPlatform visionOS; then exit 0; fi
+            echo "downloadPlatform attempt $i failed; sleeping before retry"
+            sleep 15
+          done
+          exit 1
       - name: Test visionOS Simulator
         run: |
           xcodebuild test \
