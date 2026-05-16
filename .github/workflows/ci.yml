@@ -62,7 +62,7 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/resolve-xcode@40aba41a701737f3935987496f9f511f72af875c
+      - uses: DeveloperBeau/resolve-xcode@2722aef6a717c98ebda5a0ae8d6f624f71552a40
         with:
           xcode-version: '26.5'
       - name: Show toolchain
@@ -70,7 +70,14 @@ jobs:
           xcodebuild -version
           swift --version
       - name: Install iOS simulator runtime
-        run: sudo xcodebuild -runFirstLaunch && xcodebuild -downloadPlatform iOS
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          for i in 1 2 3; do
+            if xcodebuild -downloadPlatform iOS; then exit 0; fi
+            echo "downloadPlatform attempt $i failed; sleeping before retry"
+            sleep 15
+          done
+          exit 1
       - name: Test iOS Simulator (with coverage)
         run: |
           xcodebuild test \
@@ -100,13 +107,20 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/resolve-xcode@40aba41a701737f3935987496f9f511f72af875c
+      - uses: DeveloperBeau/resolve-xcode@2722aef6a717c98ebda5a0ae8d6f624f71552a40
         with:
           xcode-version: '26.5'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install iOS simulator runtime
-        run: sudo xcodebuild -runFirstLaunch && xcodebuild -downloadPlatform iOS
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          for i in 1 2 3; do
+            if xcodebuild -downloadPlatform iOS; then exit 0; fi
+            echo "downloadPlatform attempt $i failed; sleeping before retry"
+            sleep 15
+          done
+          exit 1
       - name: Test iPad Simulator
         run: |
           xcodebuild test \
@@ -119,13 +133,20 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/resolve-xcode@40aba41a701737f3935987496f9f511f72af875c
+      - uses: DeveloperBeau/resolve-xcode@2722aef6a717c98ebda5a0ae8d6f624f71552a40
         with:
           xcode-version: '26.5'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install tvOS simulator runtime
-        run: sudo xcodebuild -runFirstLaunch && xcodebuild -downloadPlatform tvOS
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          for i in 1 2 3; do
+            if xcodebuild -downloadPlatform tvOS; then exit 0; fi
+            echo "downloadPlatform attempt $i failed; sleeping before retry"
+            sleep 15
+          done
+          exit 1
       - name: Test tvOS Simulator
         run: |
           xcodebuild test \
@@ -138,13 +159,20 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/resolve-xcode@40aba41a701737f3935987496f9f511f72af875c
+      - uses: DeveloperBeau/resolve-xcode@2722aef6a717c98ebda5a0ae8d6f624f71552a40
         with:
           xcode-version: '26.5'
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install watchOS simulator runtime
-        run: sudo xcodebuild -runFirstLaunch && xcodebuild -downloadPlatform watchOS
+        run: |
+          sudo xcodebuild -runFirstLaunch
+          for i in 1 2 3; do
+            if xcodebuild -downloadPlatform watchOS; then exit 0; fi
+            echo "downloadPlatform attempt $i failed; sleeping before retry"
+            sleep 15
+          done
+          exit 1
       - name: Test watchOS Simulator
         run: |
           xcodebuild test \
@@ -157,7 +185,7 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - uses: DeveloperBeau/resolve-xcode@40aba41a701737f3935987496f9f511f72af875c
+      - uses: DeveloperBeau/resolve-xcode@2722aef6a717c98ebda5a0ae8d6f624f71552a40
         with:
           xcode-version: '26.5'
       - name: Show toolchain
