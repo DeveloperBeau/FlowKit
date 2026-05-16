@@ -66,10 +66,21 @@ jobs:
   ios:
     name: iOS (Simulator)
     runs-on: macos-26
+    env:
+      # Swift 6.3 ships as an extra .xctoolchain. The `swift` alias
+      # selects the latest installed extra toolchain, so xcodebuild
+      # picks up the one installed by setup-swift instead of the
+      # bundled Xcode toolchain (Swift 6.2.1).
+      TOOLCHAINS: swift
     steps:
       - uses: actions/checkout@v4
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - uses: DeveloperBeau/setup-swift@v1
+        with:
+          swift-version: '6.3'
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
       - name: Test iOS Simulator (with coverage)
         run: |
           xcodebuild test \
@@ -97,10 +108,15 @@ jobs:
   tvos:
     name: tvOS (build)
     runs-on: macos-26
+    env:
+      TOOLCHAINS: swift
     steps:
       - uses: actions/checkout@v4
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - uses: DeveloperBeau/setup-swift@v1
+        with:
+          swift-version: '6.3'
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version
       - name: Build tvOS Simulator
         run: |
           xcodebuild build \
@@ -111,10 +127,15 @@ jobs:
   watchos:
     name: watchOS (build)
     runs-on: macos-26
+    env:
+      TOOLCHAINS: swift
     steps:
       - uses: actions/checkout@v4
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - uses: DeveloperBeau/setup-swift@v1
+        with:
+          swift-version: '6.3'
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version
       - name: Build watchOS Simulator
         run: |
           xcodebuild build \
@@ -125,10 +146,15 @@ jobs:
   visionos:
     name: visionOS (build)
     runs-on: macos-26
+    env:
+      TOOLCHAINS: swift
     steps:
       - uses: actions/checkout@v4
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - uses: DeveloperBeau/setup-swift@v1
+        with:
+          swift-version: '6.3'
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version
       - name: Build visionOS Simulator
         run: |
           xcodebuild build \
