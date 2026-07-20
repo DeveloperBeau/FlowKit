@@ -65,9 +65,20 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
-        with:
-          xcode-version: '26.5'
+      - name: Select an installed Xcode that provides Swift 6.3
+        run: |
+          # No pinned Xcode: pick whichever installed Xcode ships Swift 6.3,
+          # newest first, so the toolchain matches the package's tools version.
+          for xcode in $(ls -d /Applications/Xcode*.app | sort -Vr); do
+            if "$xcode/Contents/Developer/usr/bin/swift" --version 2>&1 | grep -q "Swift version 6.3"; then
+              sudo xcode-select -s "$xcode"
+              break
+            fi
+          done
+          xcodebuild -version
+          swift --version
+          swift --version 2>&1 | grep -q "Swift version 6.3" \
+            || { echo "::error::No installed Xcode provides Swift 6.3"; exit 1; }
       - name: Show toolchain
         run: |
           xcodebuild -version
@@ -123,9 +134,20 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
-        with:
-          xcode-version: '26.5'
+      - name: Select an installed Xcode that provides Swift 6.3
+        run: |
+          # No pinned Xcode: pick whichever installed Xcode ships Swift 6.3,
+          # newest first, so the toolchain matches the package's tools version.
+          for xcode in $(ls -d /Applications/Xcode*.app | sort -Vr); do
+            if "$xcode/Contents/Developer/usr/bin/swift" --version 2>&1 | grep -q "Swift version 6.3"; then
+              sudo xcode-select -s "$xcode"
+              break
+            fi
+          done
+          xcodebuild -version
+          swift --version
+          swift --version 2>&1 | grep -q "Swift version 6.3" \
+            || { echo "::error::No installed Xcode provides Swift 6.3"; exit 1; }
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install iOS simulator runtime
@@ -169,9 +191,20 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
-        with:
-          xcode-version: '26.5'
+      - name: Select an installed Xcode that provides Swift 6.3
+        run: |
+          # No pinned Xcode: pick whichever installed Xcode ships Swift 6.3,
+          # newest first, so the toolchain matches the package's tools version.
+          for xcode in $(ls -d /Applications/Xcode*.app | sort -Vr); do
+            if "$xcode/Contents/Developer/usr/bin/swift" --version 2>&1 | grep -q "Swift version 6.3"; then
+              sudo xcode-select -s "$xcode"
+              break
+            fi
+          done
+          xcodebuild -version
+          swift --version
+          swift --version 2>&1 | grep -q "Swift version 6.3" \
+            || { echo "::error::No installed Xcode provides Swift 6.3"; exit 1; }
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install tvOS simulator runtime
@@ -205,9 +238,20 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
-        with:
-          xcode-version: '26.5'
+      - name: Select an installed Xcode that provides Swift 6.3
+        run: |
+          # No pinned Xcode: pick whichever installed Xcode ships Swift 6.3,
+          # newest first, so the toolchain matches the package's tools version.
+          for xcode in $(ls -d /Applications/Xcode*.app | sort -Vr); do
+            if "$xcode/Contents/Developer/usr/bin/swift" --version 2>&1 | grep -q "Swift version 6.3"; then
+              sudo xcode-select -s "$xcode"
+              break
+            fi
+          done
+          xcodebuild -version
+          swift --version
+          swift --version 2>&1 | grep -q "Swift version 6.3" \
+            || { echo "::error::No installed Xcode provides Swift 6.3"; exit 1; }
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install watchOS simulator runtime
@@ -241,9 +285,20 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: DeveloperBeau/resolve-xcode@a1ffc9f40f2f638592b75f17b347af7034f41bf4
-        with:
-          xcode-version: '26.5'
+      - name: Select an installed Xcode that provides Swift 6.3
+        run: |
+          # No pinned Xcode: pick whichever installed Xcode ships Swift 6.3,
+          # newest first, so the toolchain matches the package's tools version.
+          for xcode in $(ls -d /Applications/Xcode*.app | sort -Vr); do
+            if "$xcode/Contents/Developer/usr/bin/swift" --version 2>&1 | grep -q "Swift version 6.3"; then
+              sudo xcode-select -s "$xcode"
+              break
+            fi
+          done
+          xcodebuild -version
+          swift --version
+          swift --version 2>&1 | grep -q "Swift version 6.3" \
+            || { echo "::error::No installed Xcode provides Swift 6.3"; exit 1; }
       - name: Show toolchain
         run: xcodebuild -version && swift --version
       - name: Install visionOS simulator runtime
