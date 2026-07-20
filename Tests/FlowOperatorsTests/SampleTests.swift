@@ -18,13 +18,13 @@ struct SampleTests {
                 upstream.asFlow().sample(every: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(for: .seconds(0.02))
+            while await upstream.subscriptionCount < 1 { await Task.yield() }
 
             await upstream.emit(1)
             await upstream.emit(2)
             await upstream.emit(3)
             // Allow collect task to drain all buffered values before sampling
-            try? await Task.sleep(for: .seconds(0.005))
+            for _ in 0..<50 { await Task.yield() } // drain buffered emits
 
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(3) // most recent at sample point
@@ -45,7 +45,10 @@ struct SampleTests {
                 upstream.asFlow().sample(every: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(for: .seconds(0.02))
+            while await upstream.subscriptionCount < 1 { await Task.yield() }
+            // Wait until sample has registered its interval sleep before
+            // advancing, rather than racing that registration.
+            while await clock.sleeperCount < 1 { await Task.yield() }
 
             // No values emitted. Advance two intervals.
             await clock.advance(by: .seconds(2))
@@ -53,6 +56,7 @@ struct SampleTests {
 
             // Now emit and advance
             await upstream.emit(42)
+            for _ in 0..<50 { await Task.yield() } // drain the emit before advancing
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }

@@ -73,6 +73,13 @@ public final class TestClock: Clock, @unchecked Sendable {
 
     public var minimumResolution: Duration { .zero }
 
+    /// The number of sleepers currently waiting on this clock. A test uses it
+    /// to wait until a time-based operator has registered its sleep before
+    /// advancing, instead of racing that registration with a real sleep.
+    public var sleeperCount: Int {
+        lock.withLock { state.sleepers.count }
+    }
+
     public func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
         // Each sleeper gets a unique ID so the cancellation handler can
         // remove exactly the right entry from the sleepers array.

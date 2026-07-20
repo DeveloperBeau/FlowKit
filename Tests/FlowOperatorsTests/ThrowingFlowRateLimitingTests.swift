@@ -28,7 +28,7 @@ struct ThrowingFlowRateLimitingTests {
                 try? await Task.sleep(for: .milliseconds(10))
             }
             await upstream.emit(42)
-            try? await Task.sleep(for: .seconds(0.005))
+            for _ in 0..<50 { await Task.yield() } // drain buffered emits
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }
@@ -137,7 +137,7 @@ struct ThrowingFlowRateLimitingTests {
             }
             await upstream.emit(1)
             await upstream.emit(2)
-            try? await Task.sleep(for: .seconds(0.005))
+            for _ in 0..<50 { await Task.yield() } // drain buffered emits
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(2)
         }
