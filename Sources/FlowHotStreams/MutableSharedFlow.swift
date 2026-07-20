@@ -21,7 +21,36 @@ public actor MutableSharedFlow<Element: Sendable>: SharedFlow {
         self.bufferCapacity = replay + extraBufferCapacity
         self.overflow = onBufferOverflow
         self.replayBuffer = RingBufferAdapter(capacity: replay)
-        self.subscription = MulticastSubscription<Element>()
+        self.subscription = MulticastSubscription<Element>(
+            bufferingPolicy: Self.subscriberBufferingPolicy(
+                capacity: replay + extraBufferCapacity,
+                overflow: onBufferOverflow
+            )
+        )
+    }
+
+    /// Maps the buffer capacity and overflow policy to a per-subscriber
+    /// `AsyncStream` buffering policy.
+    ///
+    /// A capacity of zero, or the `.suspend` policy, falls back to unbounded:
+    /// zero has no room to bound, and `.suspend` needs the emitter to
+    /// backpressure, which an `AsyncStream` continuation cannot do. The drop
+    /// policies map to a bounded buffer, so a slow subscriber conflates
+    /// (`.dropOldest`) or sheds new values (`.dropLatest`) instead of growing
+    /// without bound.
+    private static func subscriberBufferingPolicy(
+        capacity: Int,
+        overflow: BufferOverflow
+    ) -> AsyncStream<Element>.Continuation.BufferingPolicy {
+        guard capacity > 0 else { return .unbounded }
+        switch overflow {
+        case .dropOldest:
+            return .bufferingNewest(capacity)
+        case .dropLatest:
+            return .bufferingOldest(capacity)
+        case .suspend:
+            return .unbounded
+        }
     }
 
     public var subscriptionCount: Int {
