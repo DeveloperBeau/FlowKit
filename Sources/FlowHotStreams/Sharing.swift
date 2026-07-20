@@ -5,23 +5,38 @@ public import FlowSharedModels
 extension Flow where Element: Equatable {
     /// Converts this cold flow into a hot `StateFlow` with the given initial
     /// value and sharing strategy.
+    ///
+    /// - Parameter clock: The clock the sharing strategy times its stop delay
+    ///   against. Injectable so a test can drive `whileSubscribed`'s timeout
+    ///   with virtual time.
     public func asStateFlow(
         initialValue: Element,
-        strategy: SharingStrategy = .whileSubscribed(stopTimeout: .seconds(5))
+        strategy: SharingStrategy = .whileSubscribed(stopTimeout: .seconds(5)),
+        clock: any Clock<Duration> = ContinuousClock()
     ) -> any StateFlow<Element> {
         let state = MutableStateFlow(initialValue)
+        let source = self
+        // Holds the running upstream collection so `stop` can cancel it.
+        // Without this the collection Task is orphaned and `whileSubscribed`
+        // never actually stops the source.
+        let upstream = Mutex<Task<Void, Never>?>(nil)
 
         let coordinator = SharingCoordinator(
             strategy: strategy,
-            clock: ContinuousClock(),
+            clock: clock,
             start: {
-                Task {
-                    await self.collect { value in
-                        await state.send(value)
-                    }
+                let task = Task { await source.collect { value in await state.send(value) } }
+                upstream.withLock { previous in
+                    previous?.cancel()
+                    previous = task
                 }
             },
-            stop: {}
+            stop: {
+                upstream.withLock { task in
+                    task?.cancel()
+                    task = nil
+                }
+            }
         )
 
         return CoordinatedStateFlow(
@@ -34,23 +49,35 @@ extension Flow where Element: Equatable {
 extension Flow {
     /// Converts this cold flow into a hot `SharedFlow` with the given replay
     /// buffer size and sharing strategy.
+    ///
+    /// - Parameter clock: The clock the sharing strategy times its stop delay
+    ///   against. Injectable so a test can drive `whileSubscribed`'s timeout
+    ///   with virtual time.
     public func asSharedFlow(
         replay: Int = 0,
-        strategy: SharingStrategy = .whileSubscribed(stopTimeout: .seconds(5))
+        strategy: SharingStrategy = .whileSubscribed(stopTimeout: .seconds(5)),
+        clock: any Clock<Duration> = ContinuousClock()
     ) -> any SharedFlow<Element> {
         let shared = MutableSharedFlow<Element>(replay: replay)
+        let source = self
+        let upstream = Mutex<Task<Void, Never>?>(nil)
 
         let coordinator = SharingCoordinator(
             strategy: strategy,
-            clock: ContinuousClock(),
+            clock: clock,
             start: {
-                Task {
-                    await self.collect { value in
-                        await shared.emit(value)
-                    }
+                let task = Task { await source.collect { value in await shared.emit(value) } }
+                upstream.withLock { previous in
+                    previous?.cancel()
+                    previous = task
                 }
             },
-            stop: {}
+            stop: {
+                upstream.withLock { task in
+                    task?.cancel()
+                    task = nil
+                }
+            }
         )
 
         return CoordinatedSharedFlow(
