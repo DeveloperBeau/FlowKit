@@ -56,7 +56,7 @@ struct FlatMapLatestTests {
             // tester has actually subscribed before we start emitting.
             for _ in 0..<200 {
                 if await upstream.subscriptionCount >= 1 { break }
-                try? await Task.sleep(for: .milliseconds(10))
+                await Task.yield()
             }
 
             // Emit 1, 2, 3 in sequence; after each emit, poll until the
@@ -65,7 +65,7 @@ struct FlatMapLatestTests {
             func waitForCancellation(of value: Int) async {
                 for _ in 0..<500 {
                     if cancelled.withLock({ $0 }).contains(value) { return }
-                    try? await Task.sleep(for: .milliseconds(10))
+                    await Task.yield()
                 }
             }
 

@@ -31,7 +31,9 @@ struct AsyncStreamBridgeTests {
     @Test("asAsyncStream cancels collection when the stream is cancelled")
     func cancelsOnStreamCancellation() async {
         let wasCancelled = Mutex(false)
+        let started = Mutex(false)
         let flow = Flow<Int> { _ in
+            started.withLock { $0 = true }
             await withTaskCancellationHandler {
                 while !Task.isCancelled {
                     await Task.yield()
@@ -46,7 +48,9 @@ struct AsyncStreamBridgeTests {
             for await _ in stream { break }
         }
 
-        try? await Task.sleep(for: .seconds(0.01))
+        // Wait until the flow is actually collecting before cancelling, so its
+        // cancellation handler is registered and can fire.
+        while !started.withLock({ $0 }) { await Task.yield() }
         task.cancel()
         await task.value
 
@@ -89,7 +93,9 @@ struct AsyncStreamBridgeTests {
     @Test("asAsyncThrowingStream cancels collection on stream cancellation")
     func throwingCancelsCollection() async {
         let wasCancelled = Mutex(false)
+        let started = Mutex(false)
         let flow = ThrowingFlow<Int> { _ in
+            started.withLock { $0 = true }
             await withTaskCancellationHandler {
                 while !Task.isCancelled {
                     await Task.yield()
@@ -106,7 +112,9 @@ struct AsyncStreamBridgeTests {
             } catch {}
         }
 
-        try? await Task.sleep(for: .seconds(0.01))
+        // Wait until the flow is actually collecting before cancelling, so its
+        // cancellation handler is registered and can fire.
+        while !started.withLock({ $0 }) { await Task.yield() }
         task.cancel()
         await task.value
 

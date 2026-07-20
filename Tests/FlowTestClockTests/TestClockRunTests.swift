@@ -24,7 +24,7 @@ struct TestClockRunTests {
             await woke.append(3)
         }()
 
-        try? await Task.sleep(for: .seconds(0.02))
+        while await clock.sleeperCount < 3 { await Task.yield() }
         await clock.run()
 
         _ = try await (t1, t2, t3)
