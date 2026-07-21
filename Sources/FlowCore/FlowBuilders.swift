@@ -21,8 +21,11 @@ extension Flow {
 
     public static var never: Flow<Element> {
         Flow { _ in
+            // Suspend rather than spin: a yield loop stays runnable and burns
+            // a cooperative-pool thread for the flow's whole lifetime.
+            // Cancellation wakes the sleep immediately.
             while !Task.isCancelled {
-                await Task.yield()
+                try? await Task.sleep(for: .seconds(86_400))
             }
         }
     }

@@ -90,6 +90,12 @@ jobs:
           done
           exit 1
       - name: Test iOS Simulator (with coverage)
+        env:
+          # Constrained runner: widen FlowTesting wall-clock timeouts so
+          # executor backlog under full-parallel suites cannot blow hang
+          # detectors on tests that pass locally in milliseconds. xcodebuild
+          # forwards TEST_RUNNER_-prefixed variables to the test process.
+          TEST_RUNNER_FLOWKIT_TIMEOUT_SCALE: "6"
         run: |
           UDID=$(xcrun simctl list devices available --json \
             | jq -r '
