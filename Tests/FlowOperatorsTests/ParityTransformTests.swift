@@ -75,13 +75,13 @@ struct EnumeratedTests {
 struct RunningScanTests {
     @Test("scan emits the first value unchanged then running accumulations")
     func runningAccumulation() async {
-        let result = await Flow(of: 1, 2, 3, 4).scan(+).toArray()
+        let result = await Flow(of: 1, 2, 3, 4).scan { $0 + $1 }.toArray()
         #expect(result == [1, 3, 6, 10])
     }
 
     @Test("scan without initial on an empty flow emits nothing")
     func runningScanEmpty() async {
-        let result = await Flow<Int>.empty.scan(+).toArray()
+        let result = await Flow<Int>.empty.scan { $0 + $1 }.toArray()
         #expect(result == [])
     }
 
