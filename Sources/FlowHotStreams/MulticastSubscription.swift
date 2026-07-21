@@ -5,15 +5,21 @@ internal actor MulticastSubscription<Element: Sendable> {
         let continuation: AsyncStream<Element>.Continuation
     }
 
+    /// The per-subscriber buffering policy. A slow subscriber's buffer is
+    /// bounded by this, so a fast emitter conflates or drops for it rather than
+    /// letting its buffer grow without bound.
+    private let bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy
     private var subscribers: [UUID: Subscriber] = [:]
 
-    init() {}
+    init(bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy = .unbounded) {
+        self.bufferingPolicy = bufferingPolicy
+    }
 
     var subscriberCount: Int { subscribers.count }
 
     func makeSubscription() -> (UUID, AsyncStream<Element>) {
         let id = UUID()
-        let (stream, continuation) = AsyncStream<Element>.makeStream(bufferingPolicy: .unbounded)
+        let (stream, continuation) = AsyncStream<Element>.makeStream(bufferingPolicy: bufferingPolicy)
         subscribers[id] = Subscriber(continuation: continuation)
         return (id, stream)
     }
