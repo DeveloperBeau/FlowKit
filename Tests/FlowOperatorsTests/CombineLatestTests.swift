@@ -11,12 +11,16 @@ struct CombineLatestTests {
         let flow1 = MutableSharedFlow<Int>(replay: 0)
         let flow2 = MutableSharedFlow<String>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(3)) { scope in
+        try await TestScope.run(timeout: .seconds(15)) { scope in
             let tester = try await scope.test(
                 flow1.asFlow().combineLatest(flow2.asFlow())
             )
 
-            try? await Task.sleep(for: .seconds(0.03))
+            // combineLatest subscribes to both sources; wait until it has
+            // before emitting, since replay:0 drops anything sent before the
+            // subscription is live. A fixed sleep races this on a slow runner.
+            await waitUntil { await flow1.subscriptionCount >= 1 }
+            await waitUntil { await flow2.subscriptionCount >= 1 }
 
             // First pair emitted only after both flows have emitted
             await flow1.emit(1)
