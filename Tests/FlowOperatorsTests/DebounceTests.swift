@@ -18,7 +18,9 @@ struct DebounceTests {
                 upstream.asFlow().debounce(for: .milliseconds(300), clock: clock)
             )
 
-            try? await Task.sleep(for: .seconds(0.02))
+            // Wait for the debounce to subscribe before emitting; replay:0
+            // drops anything sent before the subscription is live.
+            await waitUntil { await upstream.subscriptionCount >= 1 }
 
             await upstream.emit("h")
             await clock.advance(by: .milliseconds(100))
@@ -45,13 +47,12 @@ struct DebounceTests {
                 upstream.asFlow().debounce(for: .seconds(1), clock: clock)
             )
 
-            try? await Task.sleep(for: .seconds(0.02))
+            await waitUntil { await upstream.subscriptionCount >= 1 }
 
             await upstream.emit(42)
-            // Allow collect task to process the value and register the clock sleep
-            // before we advance the clock. MutableSharedFlow.emit returns as soon
-            // as the value is buffered, not after consumers process it.
-            try? await Task.sleep(for: .seconds(0.005))
+            // Wait until the debounce has registered its clock sleep before
+            // advancing, instead of racing that registration with a real sleep.
+            await waitUntil { clock.sleeperCount >= 1 }
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }

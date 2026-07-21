@@ -13,6 +13,37 @@ private let isSupported = {
     return false
 }()
 
+/// Polls until `condition` holds. Observation updates hop through the
+/// collection task and back to the main actor, so a fixed sleep is a race —
+/// on a slow simulator the update lands after it. This converges once the
+/// update arrives. Bounded like `waitUntil` so a condition that never
+/// converges returns to the caller, whose assertion then fails the test
+/// instead of hanging the suite. Kept local (rather than using `waitUntil`)
+/// because the condition closure here is main-actor-bound and non-Sendable.
+@MainActor
+private func poll(until condition: () -> Bool) async {
+    let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+    var spins = 0
+    while !condition() {
+        if ContinuousClock.now >= deadline { return }
+        spins += 1
+        if spins <= 50 {
+            await Task.yield()
+        } else {
+            // Back off so a waiting test releases its pool thread instead of
+            // starving the narrow cooperative pools on CI simulators.
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+    }
+}
+
+/// Gives a stopped or deduplicated observer every scheduling chance to (wrongly)
+/// apply an update, so a negative assertion is not merely racing the update.
+@MainActor
+private func settle() async {
+    for _ in 0..<100 { await Task.yield() }
+}
+
 @Suite("ObservedStateFlow", .enabled(if: isSupported))
 @MainActor
 struct ObservedStateFlowTests {
@@ -30,11 +61,11 @@ struct ObservedStateFlowTests {
         let source = MutableStateFlow(1)
         let observed = ObservedStateFlow(source, initialValue: 0)
         observed.start()
-        try? await Task.sleep(for: .seconds(0.05))
+        await poll { observed.value == 1 }
         #expect(observed.value == 1)
 
         await source.send(99)
-        try? await Task.sleep(for: .seconds(0.05))
+        await poll { observed.value == 99 }
         #expect(observed.value == 99)
         observed.stop()
     }
@@ -42,26 +73,30 @@ struct ObservedStateFlowTests {
     @Test("start is idempotent")
     func startIdempotent() async {
         guard #available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *) else { return }
-        let source = MutableStateFlow(0)
+        let source = MutableStateFlow(1)
         let observed = ObservedStateFlow(source, initialValue: 0)
         observed.start()
         observed.start() // no-op second call
-        try? await Task.sleep(for: .seconds(0.02))
+        // A second start must not double-collect or crash; wait for the single
+        // collection to land, then tear down.
+        await poll { observed.value == 1 }
         observed.stop()
     }
 
     @Test("stop cancels collection")
     func stopCancels() async {
         guard #available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *) else { return }
-        let source = MutableStateFlow(0)
+        let source = MutableStateFlow(1)
         let observed = ObservedStateFlow(source, initialValue: 0)
         observed.start()
-        try? await Task.sleep(for: .seconds(0.02))
+        // Confirm collection is actually running before stopping it.
+        await poll { observed.value == 1 }
         observed.stop()
-        // After stop, new source emissions should not update value
+
         await source.send(777)
-        try? await Task.sleep(for: .seconds(0.03))
-        #expect(observed.value != 777)
+        _ = await source.value // ensure the send is fully processed
+        await settle()
+        #expect(observed.value == 1, "a stopped observer must not apply new emissions")
     }
 
     @Test("deduplicates equal values")
@@ -70,11 +105,12 @@ struct ObservedStateFlowTests {
         let source = MutableStateFlow(5)
         let observed = ObservedStateFlow(source, initialValue: 0)
         observed.start()
-        try? await Task.sleep(for: .seconds(0.05))
+        await poll { observed.value == 5 }
         #expect(observed.value == 5)
 
         await source.send(5) // equal, no update
-        try? await Task.sleep(for: .seconds(0.02))
+        _ = await source.value
+        await settle()
         #expect(observed.value == 5)
         observed.stop()
     }
@@ -90,7 +126,7 @@ struct ObservedStateFlowTests {
         )
         observed.start()
         await source.send(10)
-        try? await Task.sleep(for: .seconds(0.05))
+        await poll { observed.value == 10 }
         #expect(observed.value == 10)
         observed.stop()
     }
@@ -106,7 +142,7 @@ struct ObservedStateFlowTests {
         )
         observed.start()
         await source.send(20)
-        try? await Task.sleep(for: .seconds(0.05))
+        await poll { observed.value == 20 }
         #expect(observed.value == 20)
         observed.stop()
     }
@@ -138,8 +174,7 @@ struct CollectedStateTests {
         let wrapper = CollectedState(wrappedValue: 0, source)
         wrapper.update() // simulates SwiftUI calling update during view update
         await source.send(42)
-        try? await Task.sleep(for: .seconds(0.05))
-        // After update() + send, wrappedValue should reflect new value
+        await poll { wrapper.wrappedValue == 42 }
         #expect(wrapper.wrappedValue == 42)
     }
 
@@ -151,7 +186,7 @@ struct CollectedStateTests {
         wrapper.update()
         wrapper.update()
         wrapper.update()
-        try? await Task.sleep(for: .seconds(0.03))
+        await poll { wrapper.wrappedValue == 5 }
         #expect(wrapper.wrappedValue == 5)
     }
 }
@@ -162,15 +197,15 @@ struct ObservedStateFlowDeinitTests {
     @Test("deinit cancels collection task")
     func deinitCancels() async {
         guard #available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *) else { return }
-        let source = MutableStateFlow(0)
+        let source = MutableStateFlow(1)
         do {
             let observed = ObservedStateFlow(source, initialValue: 0)
             observed.start()
-            try? await Task.sleep(for: .seconds(0.02))
+            await poll { observed.value == 1 }
             // observed goes out of scope here, so isolated deinit fires
         }
-        try? await Task.sleep(for: .seconds(0.05))
-        // No assertion. Just verify deinit path runs without crash.
+        await settle()
+        // No assertion. Just verify the deinit path runs without crash.
     }
 }
 #endif
