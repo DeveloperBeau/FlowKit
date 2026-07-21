@@ -133,6 +133,25 @@ private actor SuspendingBuffer<Element: Sendable> {
     }
 }
 
+// MARK: - bufferUnbounded
+
+extension Flow {
+    /// Buffers upstream values without bound, so the upstream never waits for
+    /// the collector. Equivalent to Kotlin's `buffer(Channel.UNLIMITED)`.
+    ///
+    /// Use for bursty streams where every value must survive a slow consumer —
+    /// e.g. a reconnect burst of server push frames that all have to reach the
+    /// database. Values are delivered in order; on upstream completion the
+    /// remaining buffered values still drain before the flow completes.
+    /// Memory grows with the backlog — prefer `buffer(size:policy:)` when a
+    /// bound exists.
+    ///
+    /// - Returns: A flow that never backpressures its upstream.
+    public func bufferUnbounded() -> Flow<Element> {
+        buffer(size: .max, policy: .suspend)
+    }
+}
+
 // MARK: - keepingLatest
 
 extension Flow {
