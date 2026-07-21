@@ -22,6 +22,12 @@ public final class ObservedStateFlow<Element: Sendable & Equatable> {
     @ObservationIgnored
     private var collectionTask: Task<Void, Never>?
 
+    /// Whether updates should be applied. `stop()` clears it on the main actor
+    /// and `applyUpdate` also runs on the main actor and checks it, so a value
+    /// that raced the task's cancellation can never mutate `value` after a stop.
+    @ObservationIgnored
+    private var isActive = false
+
     public enum UpdatePolicy: Sendable {
         case immediate
         case animated(Animation)
@@ -40,6 +46,7 @@ public final class ObservedStateFlow<Element: Sendable & Equatable> {
 
     public func start() {
         guard collectionTask == nil else { return }
+        isActive = true
         collectionTask = Task { [weak self] in
             guard let self else { return }
             await self.source.asFlow().collect { [weak self] newValue in
@@ -49,12 +56,13 @@ public final class ObservedStateFlow<Element: Sendable & Equatable> {
     }
 
     public func stop() {
+        isActive = false
         collectionTask?.cancel()
         collectionTask = nil
     }
 
     private func applyUpdate(_ newValue: Element) {
-        guard newValue != value else { return }
+        guard isActive, newValue != value else { return }
         switch updatePolicy {
         case .immediate:
             value = newValue

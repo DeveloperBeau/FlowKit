@@ -79,7 +79,7 @@ let package = Package(
 
         .target(
             name: "FlowSwiftUI",
-            dependencies: ["FlowCore", "FlowHotStreams", "Flow"],
+            dependencies: ["FlowSharedModels", "FlowCore", "FlowHotStreams", "Flow"],
             swiftSettings: strictSettings
         ),
         .target(
@@ -135,7 +135,7 @@ let package = Package(
         ),
         .testTarget(
             name: "FlowTestClockTests",
-            dependencies: ["FlowTestClock"],
+            dependencies: ["FlowTestClock", "FlowTestingCore"],
             swiftSettings: strictSettings
         ),
         .testTarget(

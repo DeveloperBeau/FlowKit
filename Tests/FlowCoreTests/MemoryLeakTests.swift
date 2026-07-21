@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import FlowSharedModels
+import FlowTestingCore
 @testable import FlowCore
 
 @Suite("Memory safety")
@@ -16,7 +17,7 @@ struct MemoryLeakTests {
             let task = scope.launch { [holder] in
                 _ = holder
                 while !Task.isCancelled {
-                    await Task.yield()
+                    try? await Task.sleep(for: .milliseconds(1))
                 }
             }
             try? await Task.sleep(for: .seconds(0.01))
@@ -30,21 +31,22 @@ struct MemoryLeakTests {
     @Test("FlowScope deinit cancels in-flight tasks")
     func scopeDeinitCancels() async {
         let ranToCompletion = Mutex(false)
+        let started = Mutex(false)
         do {
             let scope = FlowScope()
             _ = scope.launch {
-                await withTaskCancellationHandler {
-                    while !Task.isCancelled {
-                        await Task.yield()
-                    }
-                } onCancel: {
-                    // Task cancelled
+                started.withLock { $0 = true }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(1))
                 }
                 ranToCompletion.withLock { $0 = true }
             }
-            try? await Task.sleep(for: .seconds(0.01))
+            // Ensure the task is running before the scope deinits.
+            await waitUntil { started.withLock { $0 } }
         }
-        try? await Task.sleep(for: .seconds(0.05))
+        // Converge on the cancelled body running to completion, bounded so a
+        // genuine regression fails instead of hanging the suite.
+        await waitUntil { ranToCompletion.withLock { $0 } }
         #expect(ranToCompletion.withLock { $0 })
     }
 
@@ -54,8 +56,9 @@ struct MemoryLeakTests {
         let task = scope.launch {
             // Completes immediately
         }
+        // The task removes itself from the scope as the last step of its
+        // closure, so completion implies removal — no sleep needed.
         await task.value
-        try? await Task.sleep(for: .seconds(0.02))
         #expect(scope.activeTaskCount == 0)
     }
 
