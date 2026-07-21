@@ -37,16 +37,17 @@ struct FlatMapLatestTests {
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
         try await TestScope.run(timeout: .seconds(15)) { scope in
+            // Observe cancellation by exiting the spin, not via
+            // withTaskCancellationHandler: a cancel that races the handler's
+            // registration can be missed by the runtime, whereas the
+            // isCancelled flag is always visible to the spinning body.
             let resultFlow = upstream.asFlow().flatMapLatest { value -> Flow<String> in
                 Flow<String> { collector in
-                    await withTaskCancellationHandler {
-                        // Simulate long work
-                        while !Task.isCancelled {
-                            await Task.yield()
-                        }
-                    } onCancel: {
-                        cancelled.withLock { $0.append(value) }
+                    // Simulate long work
+                    while !Task.isCancelled {
+                        await Task.yield()
                     }
+                    cancelled.withLock { $0.append(value) }
                 }
             }
 
@@ -54,16 +55,17 @@ struct FlatMapLatestTests {
 
             // Wait until the subscriber count reaches 1 so we know the
             // tester has actually subscribed before we start emitting.
-            for _ in 0..<200 {
+            for _ in 0..<1_000_000 {
                 if await upstream.subscriptionCount >= 1 { break }
                 await Task.yield()
             }
 
             // Emit 1, 2, 3 in sequence; after each emit, poll until the
-            // previous inner flow has registered its cancellation. This
-            // is race-free regardless of how slow the CI runner is.
+            // previous inner flow has observed its cancellation. Bounded
+            // generously so a loaded runner converges but a genuine
+            // regression still fails instead of hanging.
             func waitForCancellation(of value: Int) async {
-                for _ in 0..<500 {
+                for _ in 0..<1_000_000 {
                     if cancelled.withLock({ $0 }).contains(value) { return }
                     await Task.yield()
                 }

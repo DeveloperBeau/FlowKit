@@ -22,15 +22,15 @@ struct FlowScopeTests {
         let wasCancelled = Mutex(false)
         let started = Mutex(false)
 
+        // Observe cancellation by exiting the spin: a cancel that races
+        // withTaskCancellationHandler's registration can be missed by the
+        // runtime, whereas the isCancelled flag is always visible.
         let task = scope.launch {
             started.withLock { $0 = true }
-            await withTaskCancellationHandler {
-                while !Task.isCancelled {
-                    await Task.yield()
-                }
-            } onCancel: {
-                wasCancelled.withLock { $0 = true }
+            while !Task.isCancelled {
+                await Task.yield()
             }
+            wasCancelled.withLock { $0 = true }
         }
 
         // Wait until the task is actually running before cancelling, rather than
@@ -79,23 +79,26 @@ struct FlowScopeTests {
 
         do {
             let scope = FlowScope()
+            // Observe cancellation by exiting the spin: a cancel that races
+            // withTaskCancellationHandler's registration can be missed by the
+            // runtime, whereas the isCancelled flag is always visible.
             _ = scope.launch {
                 started.withLock { $0 = true }
-                await withTaskCancellationHandler {
-                    while !Task.isCancelled {
-                        await Task.yield()
-                    }
-                } onCancel: {
-                    wasCancelled.withLock { $0 = true }
+                while !Task.isCancelled {
+                    await Task.yield()
                 }
+                wasCancelled.withLock { $0 = true }
             }
             // Ensure the task is running before the scope deinits.
             while !started.withLock({ $0 }) { await Task.yield() }
         }
 
-        // Converge on deinit's cancellation reaching the handler rather than
-        // racing a fixed sleep against it.
-        while !wasCancelled.withLock({ $0 }) { await Task.yield() }
+        // Converge on deinit's cancellation reaching the task, bounded so a
+        // genuine regression fails instead of hanging the suite.
+        for _ in 0..<1_000_000 {
+            if wasCancelled.withLock({ $0 }) { break }
+            await Task.yield()
+        }
         #expect(wasCancelled.withLock { $0 })
     }
 }

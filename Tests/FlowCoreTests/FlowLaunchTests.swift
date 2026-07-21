@@ -48,15 +48,15 @@ struct FlowLaunchTests {
         let wasCancelled = Mutex(false)
         let started = Mutex(false)
 
+        // Observe cancellation by exiting the spin: a cancel that races
+        // withTaskCancellationHandler's registration can be missed by the
+        // runtime, whereas the isCancelled flag is always visible.
         let flow = Flow<Int> { _ in
             started.withLock { $0 = true }
-            await withTaskCancellationHandler {
-                while !Task.isCancelled {
-                    await Task.yield()
-                }
-            } onCancel: {
-                wasCancelled.withLock { $0 = true }
+            while !Task.isCancelled {
+                await Task.yield()
             }
+            wasCancelled.withLock { $0 = true }
         }
 
         let task = flow.launch(in: scope)

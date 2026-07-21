@@ -32,15 +32,16 @@ struct AsyncStreamBridgeTests {
     func cancelsOnStreamCancellation() async {
         let wasCancelled = Mutex(false)
         let started = Mutex(false)
+        // Observe cancellation by exiting the spin, not via
+        // withTaskCancellationHandler: a cancel that races the handler's
+        // registration can be missed by the runtime, whereas the isCancelled
+        // flag is always visible to the spinning body.
         let flow = Flow<Int> { _ in
             started.withLock { $0 = true }
-            await withTaskCancellationHandler {
-                while !Task.isCancelled {
-                    await Task.yield()
-                }
-            } onCancel: {
-                wasCancelled.withLock { $0 = true }
+            while !Task.isCancelled {
+                await Task.yield()
             }
+            wasCancelled.withLock { $0 = true }
         }
 
         let task = Task {
@@ -48,15 +49,18 @@ struct AsyncStreamBridgeTests {
             for await _ in stream { break }
         }
 
-        // Wait until the flow is actually collecting before cancelling, so its
-        // cancellation handler is registered and can fire.
+        // Wait until the flow is actually collecting before cancelling.
         while !started.withLock({ $0 }) { await Task.yield() }
         task.cancel()
         await task.value
 
-        // The outer iteration task can finish before the flow's collection task
-        // runs its cancellation handler; converge on that handler firing.
-        while !wasCancelled.withLock({ $0 }) { await Task.yield() }
+        // The outer iteration task can finish before the flow's collection
+        // task observes its cancellation; give it a bounded convergence
+        // window so a genuine regression fails instead of hanging the suite.
+        for _ in 0..<1_000_000 {
+            if wasCancelled.withLock({ $0 }) { break }
+            await Task.yield()
+        }
         #expect(wasCancelled.withLock { $0 })
     }
 
@@ -97,15 +101,16 @@ struct AsyncStreamBridgeTests {
     func throwingCancelsCollection() async {
         let wasCancelled = Mutex(false)
         let started = Mutex(false)
+        // Observe cancellation by exiting the spin, not via
+        // withTaskCancellationHandler: a cancel that races the handler's
+        // registration can be missed by the runtime, whereas the isCancelled
+        // flag is always visible to the spinning body.
         let flow = ThrowingFlow<Int> { _ in
             started.withLock { $0 = true }
-            await withTaskCancellationHandler {
-                while !Task.isCancelled {
-                    await Task.yield()
-                }
-            } onCancel: {
-                wasCancelled.withLock { $0 = true }
+            while !Task.isCancelled {
+                await Task.yield()
             }
+            wasCancelled.withLock { $0 = true }
         }
 
         let task = Task {
@@ -115,15 +120,18 @@ struct AsyncStreamBridgeTests {
             } catch {}
         }
 
-        // Wait until the flow is actually collecting before cancelling, so its
-        // cancellation handler is registered and can fire.
+        // Wait until the flow is actually collecting before cancelling.
         while !started.withLock({ $0 }) { await Task.yield() }
         task.cancel()
         await task.value
 
-        // The outer iteration task can finish before the flow's collection task
-        // runs its cancellation handler; converge on that handler firing.
-        while !wasCancelled.withLock({ $0 }) { await Task.yield() }
+        // The outer iteration task can finish before the flow's collection
+        // task observes its cancellation; give it a bounded convergence
+        // window so a genuine regression fails instead of hanging the suite.
+        for _ in 0..<1_000_000 {
+            if wasCancelled.withLock({ $0 }) { break }
+            await Task.yield()
+        }
         #expect(wasCancelled.withLock { $0 })
     }
 }

@@ -30,21 +30,25 @@ struct MemoryLeakTests {
     @Test("FlowScope deinit cancels in-flight tasks")
     func scopeDeinitCancels() async {
         let ranToCompletion = Mutex(false)
+        let started = Mutex(false)
         do {
             let scope = FlowScope()
             _ = scope.launch {
-                await withTaskCancellationHandler {
-                    while !Task.isCancelled {
-                        await Task.yield()
-                    }
-                } onCancel: {
-                    // Task cancelled
+                started.withLock { $0 = true }
+                while !Task.isCancelled {
+                    await Task.yield()
                 }
                 ranToCompletion.withLock { $0 = true }
             }
-            try? await Task.sleep(for: .seconds(0.01))
+            // Ensure the task is running before the scope deinits.
+            while !started.withLock({ $0 }) { await Task.yield() }
         }
-        try? await Task.sleep(for: .seconds(0.05))
+        // Converge on the cancelled body running to completion, bounded so a
+        // genuine regression fails instead of hanging the suite.
+        for _ in 0..<1_000_000 {
+            if ranToCompletion.withLock({ $0 }) { break }
+            await Task.yield()
+        }
         #expect(ranToCompletion.withLock { $0 })
     }
 
@@ -54,8 +58,9 @@ struct MemoryLeakTests {
         let task = scope.launch {
             // Completes immediately
         }
+        // The task removes itself from the scope as the last step of its
+        // closure, so completion implies removal — no sleep needed.
         await task.value
-        try? await Task.sleep(for: .seconds(0.02))
         #expect(scope.activeTaskCount == 0)
     }
 
