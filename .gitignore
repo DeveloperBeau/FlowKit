@@ -28,3 +28,5 @@ DerivedData/
 # macOS
 .DS_Store
 graphy-out/
+
+CLAUDE.local.md

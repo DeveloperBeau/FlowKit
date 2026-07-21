@@ -25,6 +25,24 @@ struct FlowReachabilityTests {
         #expect(scope.activeTaskCount == 0)
     }
 
+    @Test("AsyncSequence bridges are reachable")
+    func asyncSequenceBridgesReachable() async throws {
+        var streamed: [Int] = []
+        for await value in Flow(of: 1, 2).asAsyncStream() {
+            streamed.append(value)
+        }
+        #expect(streamed == [1, 2])
+
+        let (stream, continuation) = AsyncStream<Int>.makeStream()
+        continuation.yield(3)
+        continuation.finish()
+        let collected = Mutex<[Int]>([])
+        try await stream.asThrowingFlow().collect { value in
+            collected.withLock { $0.append(value) }
+        }
+        #expect(collected.withLock { $0 } == [3])
+    }
+
     @Test("Transform operators are reachable")
     func operatorsReachable() async {
         let flow = Flow(of: 1, 2, 3, 4, 5)
