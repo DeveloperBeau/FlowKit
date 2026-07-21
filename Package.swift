@@ -144,6 +144,12 @@ let package = Package(
             swiftSettings: strictSettings
         ),
 
+        .testTarget(
+            name: "FlowSimulationTests",
+            dependencies: ["Flow", "FlowTesting"],
+            swiftSettings: strictSettings
+        ),
+
         // Public API reachability tests — umbrella-only imports
 
         .testTarget(

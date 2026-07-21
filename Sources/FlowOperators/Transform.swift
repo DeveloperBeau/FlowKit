@@ -15,6 +15,22 @@ extension Flow {
     }
 }
 
+extension Flow {
+    /// Transforms each value with a throwing closure, converting this
+    /// non-failing flow into a `ThrowingFlow`. This is the explicit bridge
+    /// from `Flow` to `ThrowingFlow` described in the `Flow` documentation.
+    public func mapThrowing<U: Sendable>(
+        _ transform: @escaping @Sendable (Element) async throws -> U
+    ) -> ThrowingFlow<U> {
+        ThrowingFlow<U> { downstream in
+            for await value in self.asAsyncStream() {
+                let transformed = try await transform(value)
+                try await downstream.emit(transformed)
+            }
+        }
+    }
+}
+
 extension ThrowingFlow {
     public func map<U: Sendable>(
         _ transform: @escaping @Sendable (Element) async throws -> U
