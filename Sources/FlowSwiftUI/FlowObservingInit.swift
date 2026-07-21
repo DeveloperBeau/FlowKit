@@ -1,7 +1,7 @@
 #if canImport(Observation)
 public import Observation
 public import FlowCore
-private import os
+internal import FlowSharedModels
 
 extension Flow where Element: Sendable {
     /// Creates a flow that emits an `@Observable` object's key-path value, then
@@ -84,7 +84,7 @@ private func _awaitChange<Root: Observable & AnyObject & Sendable, Value: Equata
     since previous: Value,
     isolation: isolated (any Actor)?
 ) async {
-    let box = OSAllocatedUnfairLock<CheckedContinuation<Void, Never>?>(initialState: nil)
+    let box = Mutex<CheckedContinuation<Void, Never>?>(nil)
     @Sendable func resumeOnce() {
         let waiter = box.withLock { current -> CheckedContinuation<Void, Never>? in
             let waiter = current
