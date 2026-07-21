@@ -170,13 +170,19 @@ public final class TestClock: Clock, @unchecked Sendable {
     }
 
     /// Suspends until the cooperative pool has run the tasks made ready by a
-    /// wake. Awaiting a detached background-priority task forces the executor
-    /// to get through already-ready higher-priority work first; one plain
-    /// `Task.yield()` only requeues the caller once and gives no such
-    /// guarantee under load.
+    /// wake. Awaiting a detached task forces the executor to get through the
+    /// work already queued ahead of it first; one plain `Task.yield()` only
+    /// requeues the caller once and gives no such guarantee under load.
+    ///
+    /// The drain runs at default priority deliberately. A background-priority
+    /// drain would also flush below-default work, but iOS simulators throttle
+    /// background QoS so hard that each hop costs seconds and clock-driven
+    /// tests blow their timeouts; everything a test clock wakes runs at
+    /// default or above, so default-priority drains give the same ordering
+    /// guarantee without the throttling.
     private static func drainScheduler() async {
         for _ in 0..<20 {
-            await Task.detached(priority: .background) { await Task.yield() }.value
+            await Task.detached { await Task.yield() }.value
         }
     }
 }
