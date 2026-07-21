@@ -20,8 +20,10 @@ struct FlowScopeTests {
     func cancelCancelsTasks() async {
         let scope = FlowScope()
         let wasCancelled = Mutex(false)
+        let started = Mutex(false)
 
         let task = scope.launch {
+            started.withLock { $0 = true }
             await withTaskCancellationHandler {
                 while !Task.isCancelled {
                     await Task.yield()
@@ -31,8 +33,9 @@ struct FlowScopeTests {
             }
         }
 
-        // Give the task a moment to start
-        try? await Task.sleep(for: .seconds(0.005))
+        // Wait until the task is actually running before cancelling, rather than
+        // racing a fixed sleep against it.
+        while !started.withLock({ $0 }) { await Task.yield() }
 
         scope.cancel()
         await task.value
@@ -72,10 +75,12 @@ struct FlowScopeTests {
     @Test("deinit cancels pending tasks")
     func deinitCancels() async {
         let wasCancelled = Mutex(false)
+        let started = Mutex(false)
 
         do {
             let scope = FlowScope()
             _ = scope.launch {
+                started.withLock { $0 = true }
                 await withTaskCancellationHandler {
                     while !Task.isCancelled {
                         await Task.yield()
@@ -84,11 +89,13 @@ struct FlowScopeTests {
                     wasCancelled.withLock { $0 = true }
                 }
             }
-            try? await Task.sleep(for: .seconds(0.005))
+            // Ensure the task is running before the scope deinits.
+            while !started.withLock({ $0 }) { await Task.yield() }
         }
 
-        // Give time for deinit to propagate cancellation
-        try? await Task.sleep(for: .seconds(0.05))
+        // Converge on deinit's cancellation reaching the handler rather than
+        // racing a fixed sleep against it.
+        while !wasCancelled.withLock({ $0 }) { await Task.yield() }
         #expect(wasCancelled.withLock { $0 })
     }
 }

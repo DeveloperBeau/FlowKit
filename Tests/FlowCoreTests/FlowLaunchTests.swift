@@ -36,9 +36,8 @@ struct FlowLaunchTests {
 
         _ = flow.launch(in: scope)
 
-        // Give the launch a moment to register
-        try? await Task.sleep(for: .seconds(0.005))
-
+        // launch registers the task synchronously before returning, so the count
+        // is already 1 here — no need to sleep and race it.
         #expect(scope.activeTaskCount == 1)
         scope.cancel()
     }
@@ -47,8 +46,10 @@ struct FlowLaunchTests {
     func cancellingScopeCancelsFlow() async {
         let scope = FlowScope()
         let wasCancelled = Mutex(false)
+        let started = Mutex(false)
 
         let flow = Flow<Int> { _ in
+            started.withLock { $0 = true }
             await withTaskCancellationHandler {
                 while !Task.isCancelled {
                     await Task.yield()
@@ -59,7 +60,8 @@ struct FlowLaunchTests {
         }
 
         let task = flow.launch(in: scope)
-        try? await Task.sleep(for: .seconds(0.005))
+        // Cancel a running task, not a not-yet-started one.
+        while !started.withLock({ $0 }) { await Task.yield() }
         scope.cancel()
         await task.value
 

@@ -54,6 +54,9 @@ struct AsyncStreamBridgeTests {
         task.cancel()
         await task.value
 
+        // The outer iteration task can finish before the flow's collection task
+        // runs its cancellation handler; converge on that handler firing.
+        while !wasCancelled.withLock({ $0 }) { await Task.yield() }
         #expect(wasCancelled.withLock { $0 })
     }
 
@@ -118,6 +121,9 @@ struct AsyncStreamBridgeTests {
         task.cancel()
         await task.value
 
+        // The outer iteration task can finish before the flow's collection task
+        // runs its cancellation handler; converge on that handler firing.
+        while !wasCancelled.withLock({ $0 }) { await Task.yield() }
         #expect(wasCancelled.withLock { $0 })
     }
 }
