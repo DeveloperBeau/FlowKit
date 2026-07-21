@@ -75,6 +75,38 @@ extension ThrowingFlow {
     }
 }
 
+// MARK: - filterIsInstance
+
+extension Flow {
+    /// Emits only the elements that are instances of `T`, cast to `T`.
+    ///
+    /// Sugar over `compactMap { $0 as? T }`, matching Kotlin's
+    /// `filterIsInstance<T>()`. The canonical use is demultiplexing a
+    /// heterogeneous event stream into per-type flows.
+    ///
+    /// - Parameter type: The element type to keep. Usually written
+    ///   explicitly (`.filterIsInstance(LocationEvent.self)`); inferable
+    ///   from context.
+    /// - Returns: A flow of the matching elements, in upstream order.
+    public func filterIsInstance<T: Sendable>(_ type: T.Type = T.self) -> Flow<T> {
+        compactMap { $0 as? T }
+    }
+}
+
+extension ThrowingFlow {
+    /// Emits only the elements that are instances of `T`, cast to `T`.
+    ///
+    /// Sugar over `compactMap { $0 as? T }`, matching Kotlin's
+    /// `filterIsInstance<T>()`. Errors propagate unchanged.
+    ///
+    /// - Parameter type: The element type to keep. Usually written
+    ///   explicitly; inferable from context.
+    /// - Returns: A throwing flow of the matching elements, in upstream order.
+    public func filterIsInstance<T: Sendable>(_ type: T.Type = T.self) -> ThrowingFlow<T> {
+        compactMap { $0 as? T }
+    }
+}
+
 // MARK: - filter
 
 extension Flow {
