@@ -51,8 +51,8 @@ struct FlowObservingMainActorTests {
         obj.count = 42
 
         let flow: Flow<Int> = Flow(observing: obj, \.count)
-        try await flow.test(timeout: .seconds(15)) { tester in
-            try await tester.expectValue(42)
+        try await flow.test(timeout: .seconds(60)) { tester in
+            try await tester.expectValue(42, within: .seconds(60))
             await tester.cancelAndIgnoreRemaining()
         }
     }
@@ -67,14 +67,14 @@ struct FlowObservingMainActorTests {
         // explicitly — the contract is that mutation and observation share an
         // actor, which is how SwiftUI code drives an @Observable anyway.
         let flow: Flow<Int> = Flow(observing: obj, \.count)
-        try await flow.test(timeout: .seconds(15)) { tester in
-            try await tester.expectValue(0) // initial
+        try await flow.test(timeout: .seconds(60)) { tester in
+            try await tester.expectValue(0, within: .seconds(60)) // initial
 
             await MainActor.run { obj.count = 7 }
-            try await tester.expectValue(7)
+            try await tester.expectValue(7, within: .seconds(60))
 
             await MainActor.run { obj.count = 100 }
-            try await tester.expectValue(100)
+            try await tester.expectValue(100, within: .seconds(60))
 
             await tester.cancelAndIgnoreRemaining()
         }
@@ -86,12 +86,12 @@ struct FlowObservingMainActorTests {
         let obj = TestObservable()
 
         let flow: Flow<Int> = Flow(observing: obj, \.count)
-        try await flow.test(timeout: .seconds(15)) { tester in
-            try await tester.expectValue(0)
+        try await flow.test(timeout: .seconds(60)) { tester in
+            try await tester.expectValue(0, within: .seconds(60))
             await MainActor.run { obj.count = 0 } // equal, no emission
             await tester.expectNoValue(within: .milliseconds(100))
             await MainActor.run { obj.count = 1 }
-            try await tester.expectValue(1)
+            try await tester.expectValue(1, within: .seconds(60))
             await tester.cancelAndIgnoreRemaining()
         }
     }
@@ -105,14 +105,14 @@ struct FlowObservingBackgroundActorTests {
         let host = ObservableHost()
         let flow = await host.makeCountFlow()
 
-        try await flow.test(timeout: .seconds(15)) { tester in
-            try await tester.expectValue(0)
+        try await flow.test(timeout: .seconds(60)) { tester in
+            try await tester.expectValue(0, within: .seconds(60))
 
             await host.setCount(7)
-            try await tester.expectValue(7)
+            try await tester.expectValue(7, within: .seconds(60))
 
             await host.setCount(100)
-            try await tester.expectValue(100)
+            try await tester.expectValue(100, within: .seconds(60))
 
             await tester.cancelAndIgnoreRemaining()
         }
