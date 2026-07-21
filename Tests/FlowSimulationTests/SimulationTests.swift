@@ -79,6 +79,27 @@ private actor StartCounter {
     func increment() { starts += 1 }
 }
 
+/// Records the last value that fully passed through a point in a pipeline.
+private actor Probe<Value: Sendable> {
+    private(set) var last: Value?
+    func record(_ value: Value) { last = value }
+}
+
+extension Flow {
+    /// Delivers each value downstream first, then records it on `probe`.
+    /// Once the probe has seen a value, the downstream operator has fully
+    /// processed it — unlike a fixed number of `Task.yield()`s, this makes
+    /// "wait for the burst to drain before advancing the clock" deterministic.
+    fileprivate func tap(after probe: Probe<Element>) -> Flow<Element> {
+        Flow { downstream in
+            await self.collect { value in
+                await downstream.emit(value)
+                await probe.record(value)
+            }
+        }
+    }
+}
+
 // MARK: - Scenarios
 
 @Suite("Simulation: FlowKit in the wild")
@@ -91,10 +112,12 @@ struct SimulationTests {
         let keyData = Sealed.randomKey()
         let gps = MutableSharedFlow<LocationFix>(replay: 0)
         let backend = MockBackend()
+        let delivered = Probe<LocationFix>()
 
         // High-frequency fixes → keep only the latest per 30s window →
         // encrypt + encode → upload. The shape of a real telemetry agent.
         let pipeline = gps.asFlow()
+            .tap(after: delivered)
             .sample(every: .seconds(30), clock: clock)
             .mapThrowing { fix in try Sealed.encrypt(fix, keyData: keyData) }
             .map { blob in
@@ -113,7 +136,7 @@ struct SimulationTests {
                     LocationFix(latitude: 51.5 + Double(tick) / 10_000, longitude: -0.12, tick: tick)
                 )
             }
-            for _ in 0..<50 { await Task.yield() } // drain buffered emits
+            await waitUntil { await delivered.last?.tick == 199 }
             await clock.advance(by: .seconds(30))
 
             let firstUpload = try await tester.awaitValue()
@@ -125,7 +148,7 @@ struct SimulationTests {
             for tick in 200..<220 {
                 await gps.emit(LocationFix(latitude: 51.6, longitude: -0.12, tick: tick))
             }
-            for _ in 0..<50 { await Task.yield() }
+            await waitUntil { await delivered.last?.tick == 219 }
             await clock.advance(by: .seconds(30))
 
             let secondUpload = try await tester.awaitValue()
@@ -193,8 +216,10 @@ struct SimulationTests {
         let clock = TestClock()
         let keystrokes = MutableSharedFlow<String>(replay: 0)
         let service = SearchService()
+        let typed = Probe<String>()
 
         let results = keystrokes.asFlow()
+            .tap(after: typed)
             .debounce(for: .milliseconds(300), clock: clock)
             .removeDuplicates()
             .flatMapLatest { query in
@@ -208,10 +233,13 @@ struct SimulationTests {
             await waitUntil { await keystrokes.subscriptionCount >= 1 }
 
             await keystrokes.emit("f")
+            await waitUntil { await typed.last == "f" }
             await clock.advance(by: .milliseconds(100))
             await keystrokes.emit("fl")
+            await waitUntil { await typed.last == "fl" }
             await clock.advance(by: .milliseconds(100))
             await keystrokes.emit("flow")
+            await waitUntil { await typed.last == "flow" }
 
             // Still typing: nothing has reached the backend.
             await tester.expectNoValue(within: .milliseconds(50))
