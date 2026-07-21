@@ -13,6 +13,7 @@ struct ThrowingFlowRateLimitingTests {
     func debounceEmitsAfterSilence() async throws {
         let clock = TestClock()
         let upstream = MutableSharedFlow<Int>(replay: 0)
+        let probe = FlowProbe<Int>()
 
         try await TestScope.run(timeout: .seconds(15)) { scope in
             let tester = try await scope.test(
@@ -20,7 +21,7 @@ struct ThrowingFlowRateLimitingTests {
                     for await value in upstream.asFlow().asAsyncStream() {
                         try await collector.emit(value)
                     }
-                }.debounce(for: .seconds(1), clock: clock)
+                }.tap(after: probe).debounce(for: .seconds(1), clock: clock)
             )
 
             for _ in 0..<200 {
@@ -28,7 +29,9 @@ struct ThrowingFlowRateLimitingTests {
                 try? await Task.sleep(for: .milliseconds(10))
             }
             await upstream.emit(42)
-            for _ in 0..<50 { await Task.yield() } // drain buffered emits
+            // Wait until debounce has registered the value before advancing.
+            await waitUntil { await probe.last == 42 }
+            await waitUntil { clock.sleeperCount >= 1 }
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }
@@ -121,6 +124,7 @@ struct ThrowingFlowRateLimitingTests {
     func sampleEmitsAtIntervals() async throws {
         let clock = TestClock()
         let upstream = MutableSharedFlow<Int>(replay: 0)
+        let probe = FlowProbe<Int>()
 
         try await TestScope.run(timeout: .seconds(15)) { scope in
             let tester = try await scope.test(
@@ -128,7 +132,7 @@ struct ThrowingFlowRateLimitingTests {
                     for await value in upstream.asFlow().asAsyncStream() {
                         try await collector.emit(value)
                     }
-                }.sample(every: .seconds(1), clock: clock)
+                }.tap(after: probe).sample(every: .seconds(1), clock: clock)
             )
 
             for _ in 0..<200 {
@@ -137,7 +141,9 @@ struct ThrowingFlowRateLimitingTests {
             }
             await upstream.emit(1)
             await upstream.emit(2)
-            for _ in 0..<50 { await Task.yield() } // drain buffered emits
+            // Wait until sample has stored the burst before advancing.
+            await waitUntil { await probe.last == 2 }
+            await waitUntil { clock.sleeperCount >= 1 }
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(2)
         }

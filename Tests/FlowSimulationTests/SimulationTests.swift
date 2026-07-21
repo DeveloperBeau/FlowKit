@@ -79,27 +79,6 @@ private actor StartCounter {
     func increment() { starts += 1 }
 }
 
-/// Records the last value that fully passed through a point in a pipeline.
-private actor Probe<Value: Sendable> {
-    private(set) var last: Value?
-    func record(_ value: Value) { last = value }
-}
-
-extension Flow {
-    /// Delivers each value downstream first, then records it on `probe`.
-    /// Once the probe has seen a value, the downstream operator has fully
-    /// processed it — unlike a fixed number of `Task.yield()`s, this makes
-    /// "wait for the burst to drain before advancing the clock" deterministic.
-    fileprivate func tap(after probe: Probe<Element>) -> Flow<Element> {
-        Flow { downstream in
-            await self.collect { value in
-                await downstream.emit(value)
-                await probe.record(value)
-            }
-        }
-    }
-}
-
 // MARK: - Scenarios
 
 @Suite("Simulation: FlowKit in the wild")
@@ -112,7 +91,7 @@ struct SimulationTests {
         let keyData = Sealed.randomKey()
         let gps = MutableSharedFlow<LocationFix>(replay: 0)
         let backend = MockBackend()
-        let delivered = Probe<LocationFix>()
+        let delivered = FlowProbe<LocationFix>()
 
         // High-frequency fixes → keep only the latest per 30s window →
         // encrypt + encode → upload. The shape of a real telemetry agent.
@@ -216,7 +195,7 @@ struct SimulationTests {
         let clock = TestClock()
         let keystrokes = MutableSharedFlow<String>(replay: 0)
         let service = SearchService()
-        let typed = Probe<String>()
+        let typed = FlowProbe<String>()
 
         let results = keystrokes.asFlow()
             .tap(after: typed)
