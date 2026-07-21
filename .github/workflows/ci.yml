@@ -17,6 +17,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
       - uses: DeveloperBeau/resolve-swift@95dd7376c9df6efd1252713de2edbc4ae6df0663  # v1
         with:
           swift-version: '6.3'
@@ -41,6 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
       - uses: DeveloperBeau/resolve-swift@95dd7376c9df6efd1252713de2edbc4ae6df0663  # v1
         with:
           swift-version: '6.3'
@@ -69,6 +73,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/select-xcode
       - name: Show toolchain
         run: |
@@ -130,6 +136,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/select-xcode
       - name: Show toolchain
         run: xcodebuild -version && swift --version
