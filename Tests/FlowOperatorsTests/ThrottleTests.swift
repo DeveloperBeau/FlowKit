@@ -18,7 +18,7 @@ struct ThrottleTests {
                 upstream.asFlow().throttle(for: .seconds(1), latest: true, clock: clock)
             )
 
-            while await upstream.subscriptionCount < 1 { await Task.yield() }
+            await waitUntil { await upstream.subscriptionCount >= 1 }
 
             await upstream.emit(1)   // emitted immediately (first value)
             try await tester.expectValue(1)
@@ -42,7 +42,7 @@ struct ThrottleTests {
                 upstream.asFlow().throttle(for: .seconds(1), latest: false, clock: clock)
             )
 
-            while await upstream.subscriptionCount < 1 { await Task.yield() }
+            await waitUntil { await upstream.subscriptionCount >= 1 }
 
             await upstream.emit(1)   // first value, emitted
             try await tester.expectValue(1)

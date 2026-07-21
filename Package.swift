@@ -135,7 +135,7 @@ let package = Package(
         ),
         .testTarget(
             name: "FlowTestClockTests",
-            dependencies: ["FlowTestClock"],
+            dependencies: ["FlowTestClock", "FlowTestingCore"],
             swiftSettings: strictSettings
         ),
         .testTarget(

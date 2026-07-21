@@ -1,5 +1,6 @@
 import Testing
 import FlowSharedModels
+import FlowTestingCore
 @testable import FlowCore
 
 @Suite("Flow.launch(in:)")
@@ -30,7 +31,7 @@ struct FlowLaunchTests {
         let flow = Flow<Int> { _ in
             // Suspend forever until cancelled
             while !Task.isCancelled {
-                await Task.yield()
+                try? await Task.sleep(for: .milliseconds(1))
             }
         }
 
@@ -54,14 +55,14 @@ struct FlowLaunchTests {
         let flow = Flow<Int> { _ in
             started.withLock { $0 = true }
             while !Task.isCancelled {
-                await Task.yield()
+                try? await Task.sleep(for: .milliseconds(1))
             }
             wasCancelled.withLock { $0 = true }
         }
 
         let task = flow.launch(in: scope)
         // Cancel a running task, not a not-yet-started one.
-        while !started.withLock({ $0 }) { await Task.yield() }
+        await waitUntil { started.withLock { $0 } }
         scope.cancel()
         await task.value
 

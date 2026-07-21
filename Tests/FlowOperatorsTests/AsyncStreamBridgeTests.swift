@@ -39,7 +39,7 @@ struct AsyncStreamBridgeTests {
         let flow = Flow<Int> { _ in
             started.withLock { $0 = true }
             while !Task.isCancelled {
-                await Task.yield()
+                try? await Task.sleep(for: .milliseconds(1))
             }
             wasCancelled.withLock { $0 = true }
         }
@@ -50,17 +50,14 @@ struct AsyncStreamBridgeTests {
         }
 
         // Wait until the flow is actually collecting before cancelling.
-        while !started.withLock({ $0 }) { await Task.yield() }
+        await waitUntil { started.withLock { $0 } }
         task.cancel()
         await task.value
 
         // The outer iteration task can finish before the flow's collection
         // task observes its cancellation; give it a bounded convergence
         // window so a genuine regression fails instead of hanging the suite.
-        for _ in 0..<1_000_000 {
-            if wasCancelled.withLock({ $0 }) { break }
-            await Task.yield()
-        }
+        await waitUntil { wasCancelled.withLock { $0 } }
         #expect(wasCancelled.withLock { $0 })
     }
 
@@ -108,7 +105,7 @@ struct AsyncStreamBridgeTests {
         let flow = ThrowingFlow<Int> { _ in
             started.withLock { $0 = true }
             while !Task.isCancelled {
-                await Task.yield()
+                try? await Task.sleep(for: .milliseconds(1))
             }
             wasCancelled.withLock { $0 = true }
         }
@@ -121,17 +118,14 @@ struct AsyncStreamBridgeTests {
         }
 
         // Wait until the flow is actually collecting before cancelling.
-        while !started.withLock({ $0 }) { await Task.yield() }
+        await waitUntil { started.withLock { $0 } }
         task.cancel()
         await task.value
 
         // The outer iteration task can finish before the flow's collection
         // task observes its cancellation; give it a bounded convergence
         // window so a genuine regression fails instead of hanging the suite.
-        for _ in 0..<1_000_000 {
-            if wasCancelled.withLock({ $0 }) { break }
-            await Task.yield()
-        }
+        await waitUntil { wasCancelled.withLock { $0 } }
         #expect(wasCancelled.withLock { $0 })
     }
 }

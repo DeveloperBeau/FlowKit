@@ -19,8 +19,8 @@ struct CombineLatestTests {
             // combineLatest subscribes to both sources; wait until it has
             // before emitting, since replay:0 drops anything sent before the
             // subscription is live. A fixed sleep races this on a slow runner.
-            while await flow1.subscriptionCount < 1 { await Task.yield() }
-            while await flow2.subscriptionCount < 1 { await Task.yield() }
+            await waitUntil { await flow1.subscriptionCount >= 1 }
+            await waitUntil { await flow2.subscriptionCount >= 1 }
 
             // First pair emitted only after both flows have emitted
             await flow1.emit(1)

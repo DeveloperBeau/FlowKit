@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import FlowSharedModels
+import FlowTestingCore
 @testable import FlowCore
 
 @Suite("Memory safety")
@@ -16,7 +17,7 @@ struct MemoryLeakTests {
             let task = scope.launch { [holder] in
                 _ = holder
                 while !Task.isCancelled {
-                    await Task.yield()
+                    try? await Task.sleep(for: .milliseconds(1))
                 }
             }
             try? await Task.sleep(for: .seconds(0.01))
@@ -36,19 +37,16 @@ struct MemoryLeakTests {
             _ = scope.launch {
                 started.withLock { $0 = true }
                 while !Task.isCancelled {
-                    await Task.yield()
+                    try? await Task.sleep(for: .milliseconds(1))
                 }
                 ranToCompletion.withLock { $0 = true }
             }
             // Ensure the task is running before the scope deinits.
-            while !started.withLock({ $0 }) { await Task.yield() }
+            await waitUntil { started.withLock { $0 } }
         }
         // Converge on the cancelled body running to completion, bounded so a
         // genuine regression fails instead of hanging the suite.
-        for _ in 0..<1_000_000 {
-            if ranToCompletion.withLock({ $0 }) { break }
-            await Task.yield()
-        }
+        await waitUntil { ranToCompletion.withLock { $0 } }
         #expect(ranToCompletion.withLock { $0 })
     }
 

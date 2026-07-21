@@ -20,7 +20,17 @@ private let isSupported = {
 /// rather than passing flakily).
 @MainActor
 private func poll(until condition: () -> Bool) async {
-    while !condition() { await Task.yield() }
+    var spins = 0
+    while !condition() {
+        spins += 1
+        if spins <= 50 {
+            await Task.yield()
+        } else {
+            // Back off so a waiting test releases its pool thread instead of
+            // starving the narrow cooperative pools on CI simulators.
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+    }
 }
 
 /// Gives a stopped or deduplicated observer every scheduling chance to (wrongly)

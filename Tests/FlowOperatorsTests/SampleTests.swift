@@ -18,7 +18,7 @@ struct SampleTests {
                 upstream.asFlow().sample(every: .seconds(1), clock: clock)
             )
 
-            while await upstream.subscriptionCount < 1 { await Task.yield() }
+            await waitUntil { await upstream.subscriptionCount >= 1 }
 
             await upstream.emit(1)
             await upstream.emit(2)
@@ -45,10 +45,10 @@ struct SampleTests {
                 upstream.asFlow().sample(every: .seconds(1), clock: clock)
             )
 
-            while await upstream.subscriptionCount < 1 { await Task.yield() }
+            await waitUntil { await upstream.subscriptionCount >= 1 }
             // Wait until sample has registered its interval sleep before
             // advancing, rather than racing that registration.
-            while await clock.sleeperCount < 1 { await Task.yield() }
+            await waitUntil { clock.sleeperCount >= 1 }
 
             // No values emitted. Advance two intervals.
             await clock.advance(by: .seconds(2))

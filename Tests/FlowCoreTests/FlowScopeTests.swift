@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import FlowSharedModels
+import FlowTestingCore
 @testable import FlowCore
 
 @Suite("FlowScope")
@@ -28,14 +29,14 @@ struct FlowScopeTests {
         let task = scope.launch {
             started.withLock { $0 = true }
             while !Task.isCancelled {
-                await Task.yield()
+                try? await Task.sleep(for: .milliseconds(1))
             }
             wasCancelled.withLock { $0 = true }
         }
 
         // Wait until the task is actually running before cancelling, rather than
         // racing a fixed sleep against it.
-        while !started.withLock({ $0 }) { await Task.yield() }
+        await waitUntil { started.withLock { $0 } }
 
         scope.cancel()
         await task.value
@@ -85,20 +86,17 @@ struct FlowScopeTests {
             _ = scope.launch {
                 started.withLock { $0 = true }
                 while !Task.isCancelled {
-                    await Task.yield()
+                    try? await Task.sleep(for: .milliseconds(1))
                 }
                 wasCancelled.withLock { $0 = true }
             }
             // Ensure the task is running before the scope deinits.
-            while !started.withLock({ $0 }) { await Task.yield() }
+            await waitUntil { started.withLock { $0 } }
         }
 
         // Converge on deinit's cancellation reaching the task, bounded so a
         // genuine regression fails instead of hanging the suite.
-        for _ in 0..<1_000_000 {
-            if wasCancelled.withLock({ $0 }) { break }
-            await Task.yield()
-        }
+        await waitUntil { wasCancelled.withLock { $0 } }
         #expect(wasCancelled.withLock { $0 })
     }
 }
