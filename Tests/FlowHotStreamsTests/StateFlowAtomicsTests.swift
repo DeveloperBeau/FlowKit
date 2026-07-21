@@ -8,26 +8,26 @@ struct StateFlowAtomicsTests {
     @Test("getAndUpdate returns the previous value and applies the update")
     func getAndUpdate() async {
         let state = MutableStateFlow(10)
-        let previous = await state.getAndUpdate { $0 + 5 }
+        let previous = state.getAndUpdate { $0 + 5 }
         #expect(previous == 10)
-        #expect(await state.value == 15)
+        #expect(state.value == 15)
     }
 
     @Test("updateAndGet returns the new value")
     func updateAndGet() async {
         let state = MutableStateFlow(10)
-        let next = await state.updateAndGet { $0 * 2 }
+        let next = state.updateAndGet { $0 * 2 }
         #expect(next == 20)
-        #expect(await state.value == 20)
+        #expect(state.value == 20)
     }
 
     @Test("compareAndSet swaps only when the expectation matches")
     func compareAndSet() async {
         let state = MutableStateFlow("a")
-        #expect(await state.compareAndSet(expected: "a", newValue: "b"))
-        #expect(await state.value == "b")
-        #expect(await !state.compareAndSet(expected: "a", newValue: "c"))
-        #expect(await state.value == "b")
+        #expect(state.compareAndSet(expected: "a", newValue: "b"))
+        #expect(state.value == "b")
+        #expect(!state.compareAndSet(expected: "a", newValue: "c"))
+        #expect(state.value == "b")
     }
 
     @Test("100 concurrent getAndUpdate increments lose no updates")
@@ -35,10 +35,10 @@ struct StateFlowAtomicsTests {
         let state = MutableStateFlow(0)
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<100 {
-                group.addTask { await state.getAndUpdate { $0 + 1 } }
+                group.addTask { state.getAndUpdate { $0 + 1 } }
             }
         }
-        #expect(await state.value == 100)
+        #expect(state.value == 100)
     }
 }
 

@@ -25,7 +25,7 @@ extension Flow where Element: Equatable {
             strategy: strategy,
             clock: clock,
             start: {
-                let task = Task { await source.collect { value in await state.send(value) } }
+                let task = Task { await source.collect { value in state.send(value) } }
                 upstream.withLock { previous in
                     previous?.cancel()
                     previous = task
@@ -89,10 +89,10 @@ extension Flow {
 
 // MARK: - Internal coordinated wrappers
 
-private actor CoordinatedStateFlow<Element: Sendable & Equatable>: StateFlow {
+private final class CoordinatedStateFlow<Element: Sendable & Equatable>: StateFlow, Sendable {
     private let inner: MutableStateFlow<Element>
     private let coordinator: SharingCoordinator
-    private var activated: Bool = false
+    private let activated = Mutex(false)
 
     init(inner: MutableStateFlow<Element>, coordinator: SharingCoordinator) {
         self.inner = inner
@@ -101,11 +101,9 @@ private actor CoordinatedStateFlow<Element: Sendable & Equatable>: StateFlow {
         Task { await coordinator.activate() }
     }
 
-    var value: Element {
-        get async { await inner.value }
-    }
+    var value: Element { inner.value }
 
-    nonisolated func asFlow() -> Flow<Element> {
+    func asFlow() -> Flow<Element> {
         Flow<Element> { [weak self] collector in
             guard let self else { return }
             await self.ensureActivated()
@@ -122,9 +120,12 @@ private actor CoordinatedStateFlow<Element: Sendable & Equatable>: StateFlow {
     }
 
     private func ensureActivated() async {
-        guard !activated else { return }
-        activated = true
-        await coordinator.activate()
+        let firstActivation = activated.withLock { flag -> Bool in
+            if flag { return false }
+            flag = true
+            return true
+        }
+        if firstActivation { await coordinator.activate() }
     }
 }
 

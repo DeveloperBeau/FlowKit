@@ -253,13 +253,13 @@ struct SimulationTests {
             await waitUntil { await screenA.receivedValues().contains(initial) }
             await waitUntil { await screenB.receivedValues().contains(initial) }
 
-            await location.update { fix in
+            location.update { fix in
                 var fix = fix
                 fix.latitude = 52.0
                 fix.tick += 1
                 return fix
             }
-            await uploadCount.send(1)
+            uploadCount.send(1)
 
             let final = DashboardSnapshot(latitude: 52.0, uploadCount: 1)
             await waitUntil { await screenA.receivedValues().contains(final) }
