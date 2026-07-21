@@ -14,7 +14,7 @@ public func waitUntil(
     timeout: Duration = .seconds(30),
     _ condition: @Sendable () async -> Bool
 ) async {
-    let deadline = ContinuousClock.now.advanced(by: timeout)
+    let deadline = ContinuousClock.now.advanced(by: scaledTimeout(timeout))
     var spins = 0
     while !(await condition()) {
         if ContinuousClock.now >= deadline { return }
