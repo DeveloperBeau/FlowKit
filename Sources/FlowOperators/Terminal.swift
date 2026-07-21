@@ -112,3 +112,49 @@ extension Flow {
         await currentTask.withLock { $0 }?.value
     }
 }
+
+// MARK: - last
+
+extension Flow {
+    /// Returns the final emitted value, or `nil` if the flow completes
+    /// without emitting. Suspends until the flow completes.
+    public func last() async -> Element? {
+        let result = Mutex<Element?>(nil)
+        await self.collect { value in
+            result.withLock { $0 = value }
+        }
+        return result.withLock { $0 }
+    }
+}
+
+// MARK: - count
+
+extension Flow {
+    /// Returns how many values the flow emits before completing.
+    public func count() async -> Int {
+        let result = Mutex(0)
+        await self.collect { _ in
+            result.withLock { $0 += 1 }
+        }
+        return result.withLock { $0 }
+    }
+}
+
+// MARK: - contains / allSatisfy
+
+extension Flow {
+    /// Returns whether any emitted value matches `predicate`.
+    public func contains(
+        where predicate: @escaping @Sendable (Element) -> Bool
+    ) async -> Bool {
+        await first(where: predicate) != nil
+    }
+
+    /// Returns whether every emitted value matches `predicate`. An empty
+    /// flow satisfies any predicate.
+    public func allSatisfy(
+        _ predicate: @escaping @Sendable (Element) -> Bool
+    ) async -> Bool {
+        await first(where: { !predicate($0) }) == nil
+    }
+}

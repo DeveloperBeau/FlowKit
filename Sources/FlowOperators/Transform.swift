@@ -1,4 +1,5 @@
 public import FlowCore
+import FlowSharedModels
 
 // MARK: - map
 
@@ -259,5 +260,224 @@ private actor ScanState<Acc: Sendable> {
     ) async throws -> Acc {
         current = try await accumulator(current, value)
         return current
+    }
+}
+
+// MARK: - drop(while:)
+
+extension Flow {
+    /// Skips values until `predicate` first returns `false`; that value and
+    /// everything after it are emitted.
+    public func drop(
+        while predicate: @escaping @Sendable (Element) async -> Bool
+    ) -> Flow<Element> {
+        Flow<Element> { downstream in
+            let dropping = Mutex(true)
+            await self.collect { value in
+                if dropping.withLock({ $0 }) {
+                    if await predicate(value) { return }
+                    dropping.withLock { $0 = false }
+                }
+                await downstream.emit(value)
+            }
+        }
+    }
+}
+
+extension ThrowingFlow {
+    /// Skips values until `predicate` first returns `false`; that value and
+    /// everything after it are emitted.
+    public func drop(
+        while predicate: @escaping @Sendable (Element) async throws -> Bool
+    ) -> ThrowingFlow<Element> {
+        ThrowingFlow<Element> { downstream in
+            let dropping = Mutex(true)
+            try await self.collect { value in
+                if dropping.withLock({ $0 }) {
+                    if try await predicate(value) { return }
+                    dropping.withLock { $0 = false }
+                }
+                try await downstream.emit(value)
+            }
+        }
+    }
+}
+
+// MARK: - prefix(while:)
+
+extension Flow {
+    /// Emits values while `predicate` returns `true`; the first failing value
+    /// and everything after it are ignored.
+    public func prefix(
+        while predicate: @escaping @Sendable (Element) async -> Bool
+    ) -> Flow<Element> {
+        Flow<Element> { downstream in
+            let active = Mutex(true)
+            await self.collect { value in
+                guard active.withLock({ $0 }) else { return }
+                if await predicate(value) {
+                    await downstream.emit(value)
+                } else {
+                    active.withLock { $0 = false }
+                }
+            }
+        }
+    }
+}
+
+extension ThrowingFlow {
+    /// Emits values while `predicate` returns `true`; the first failing value
+    /// and everything after it are ignored.
+    public func prefix(
+        while predicate: @escaping @Sendable (Element) async throws -> Bool
+    ) -> ThrowingFlow<Element> {
+        ThrowingFlow<Element> { downstream in
+            let active = Mutex(true)
+            try await self.collect { value in
+                guard active.withLock({ $0 }) else { return }
+                if try await predicate(value) {
+                    try await downstream.emit(value)
+                } else {
+                    active.withLock { $0 = false }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - enumerated
+
+extension Flow {
+    /// Emits `(offset, element)` pairs counting from zero, mirroring
+    /// `Sequence.enumerated()`.
+    public func enumerated() -> Flow<(offset: Int, element: Element)> {
+        Flow<(offset: Int, element: Element)> { downstream in
+            let counter = Mutex(0)
+            await self.collect { value in
+                let offset = counter.withLock { count -> Int in
+                    defer { count += 1 }
+                    return count
+                }
+                await downstream.emit((offset: offset, element: value))
+            }
+        }
+    }
+}
+
+extension ThrowingFlow {
+    /// Emits `(offset, element)` pairs counting from zero, mirroring
+    /// `Sequence.enumerated()`.
+    public func enumerated() -> ThrowingFlow<(offset: Int, element: Element)> {
+        ThrowingFlow<(offset: Int, element: Element)> { downstream in
+            let counter = Mutex(0)
+            try await self.collect { value in
+                let offset = counter.withLock { count -> Int in
+                    defer { count += 1 }
+                    return count
+                }
+                try await downstream.emit((offset: offset, element: value))
+            }
+        }
+    }
+}
+
+// MARK: - scan (no initial value)
+
+extension Flow {
+    /// Emits the first value unchanged, then each accumulation of the running
+    /// result with the next value. An empty upstream emits nothing.
+    public func scan(
+        _ accumulator: @escaping @Sendable (Element, Element) async -> Element
+    ) -> Flow<Element> {
+        Flow<Element> { downstream in
+            let running = Mutex<Element?>(nil)
+            await self.collect { value in
+                let next: Element
+                if let current = running.withLock({ $0 }) {
+                    next = await accumulator(current, value)
+                } else {
+                    next = value
+                }
+                running.withLock { $0 = next }
+                await downstream.emit(next)
+            }
+        }
+    }
+}
+
+extension ThrowingFlow {
+    /// Emits the first value unchanged, then each accumulation of the running
+    /// result with the next value. An empty upstream emits nothing.
+    public func scan(
+        _ accumulator: @escaping @Sendable (Element, Element) async throws -> Element
+    ) -> ThrowingFlow<Element> {
+        ThrowingFlow<Element> { downstream in
+            let running = Mutex<Element?>(nil)
+            try await self.collect { value in
+                let next: Element
+                if let current = running.withLock({ $0 }) {
+                    next = try await accumulator(current, value)
+                } else {
+                    next = value
+                }
+                running.withLock { $0 = next }
+                try await downstream.emit(next)
+            }
+        }
+    }
+}
+
+// MARK: - chunks(ofCount:)
+
+extension Flow {
+    /// Groups values into arrays of `count` elements, emitting any partial
+    /// final chunk on completion. Mirrors Swift Algorithms' `chunks(ofCount:)`.
+    public func chunks(ofCount count: Int) -> Flow<[Element]> {
+        precondition(count > 0, "chunk size must be positive")
+        return Flow<[Element]> { downstream in
+            let pending = Mutex<[Element]>([])
+            await self.collect { value in
+                let full: [Element]? = pending.withLock { chunk in
+                    chunk.append(value)
+                    guard chunk.count == count else { return nil }
+                    defer { chunk.removeAll(keepingCapacity: true) }
+                    return chunk
+                }
+                if let full {
+                    await downstream.emit(full)
+                }
+            }
+            let remainder = pending.withLock { $0 }
+            if !remainder.isEmpty {
+                await downstream.emit(remainder)
+            }
+        }
+    }
+}
+
+extension ThrowingFlow {
+    /// Groups values into arrays of `count` elements, emitting any partial
+    /// final chunk on completion. A failing upstream discards the partial
+    /// chunk and rethrows. Mirrors Swift Algorithms' `chunks(ofCount:)`.
+    public func chunks(ofCount count: Int) -> ThrowingFlow<[Element]> {
+        precondition(count > 0, "chunk size must be positive")
+        return ThrowingFlow<[Element]> { downstream in
+            let pending = Mutex<[Element]>([])
+            try await self.collect { value in
+                let full: [Element]? = pending.withLock { chunk in
+                    chunk.append(value)
+                    guard chunk.count == count else { return nil }
+                    defer { chunk.removeAll(keepingCapacity: true) }
+                    return chunk
+                }
+                if let full {
+                    try await downstream.emit(full)
+                }
+            }
+            let remainder = pending.withLock { $0 }
+            if !remainder.isEmpty {
+                try await downstream.emit(remainder)
+            }
+        }
     }
 }

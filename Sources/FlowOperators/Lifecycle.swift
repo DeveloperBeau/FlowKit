@@ -1,4 +1,5 @@
 public import FlowCore
+import FlowSharedModels
 
 // MARK: - onStart
 
@@ -91,6 +92,46 @@ extension ThrowingFlow {
             } catch {
                 await action(error)
                 throw error
+            }
+        }
+    }
+}
+
+// MARK: - onEmpty
+
+extension Flow {
+    /// Runs `handler` with the downstream collector if the flow completes
+    /// without emitting, allowing fallback values to be emitted in its place.
+    public func onEmpty(
+        _ handler: @escaping @Sendable (Collector<Element>) async -> Void
+    ) -> Flow<Element> {
+        Flow<Element> { downstream in
+            let emitted = Mutex(false)
+            await self.collect { value in
+                emitted.withLock { $0 = true }
+                await downstream.emit(value)
+            }
+            if !emitted.withLock({ $0 }) {
+                await handler(downstream)
+            }
+        }
+    }
+}
+
+extension ThrowingFlow {
+    /// Runs `handler` with the downstream collector if the flow completes
+    /// normally without emitting. A failing upstream rethrows instead.
+    public func onEmpty(
+        _ handler: @escaping @Sendable (ThrowingCollector<Element>) async throws -> Void
+    ) -> ThrowingFlow<Element> {
+        ThrowingFlow<Element> { downstream in
+            let emitted = Mutex(false)
+            try await self.collect { value in
+                emitted.withLock { $0 = true }
+                try await downstream.emit(value)
+            }
+            if !emitted.withLock({ $0 }) {
+                try await handler(downstream)
             }
         }
     }
