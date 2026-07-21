@@ -127,12 +127,18 @@ public final class TestClock: Clock, @unchecked Sendable {
 
     /// Advances virtual time to `deadline`, waking sleepers in deadline order.
     ///
-    /// Sleepers wake one at a time with a scheduler drain between each, so a
-    /// woken task runs its follow-on work before the next sleeper is resumed.
-    /// Merely resuming the whole batch in order would not give that guarantee:
-    /// resuming only schedules a task, and the executor is free to run a
-    /// later-deadline task first. One-at-a-time waking with drains is the
-    /// strategy pointfreeco/swift-clocks proved out.
+    /// Sleepers are resumed one at a time with a scheduler drain between
+    /// each, so a woken task normally runs its follow-on work before the
+    /// next sleeper is resumed. Merely resuming the whole batch in order
+    /// would not even approximate that: resuming only schedules a task, and
+    /// the executor is free to run a later-deadline task first. One-at-a-time
+    /// waking with drains is the strategy pointfreeco/swift-clocks proved out.
+    ///
+    /// Only the *resumption* order is guaranteed. The drain is a best-effort
+    /// fence: under a saturated cooperative pool a woken task's follow-on
+    /// work can still interleave with a later sleeper's. Code that must
+    /// observe effects in deadline order should advance incrementally and
+    /// await the woken work between steps.
     public func advance(to deadline: Instant) async {
         while true {
             // Drain first so work triggered by the previous wake (including
