@@ -126,3 +126,9 @@ internal struct RingBufferAdapter<Element: Sendable>: Sendable {
         return result
     }
 }
+
+extension MutableSharedFlow {
+    /// The values a new subscriber would receive on subscription, oldest
+    /// first. Empty when `replay` is zero.
+    public var replayCache: [Element] { replayBuffer.elements }
+}

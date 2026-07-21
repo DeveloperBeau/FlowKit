@@ -231,3 +231,57 @@ private actor ThrowingFlatMapLatestState<U: Sendable> {
         }
     }
 }
+
+// MARK: - mapLatest / transformLatest
+
+extension Flow {
+    /// Like `map`, but cancels an in-flight transform when a new upstream
+    /// value arrives; only the most recent value's result is emitted.
+    public func mapLatest<U: Sendable>(
+        _ transform: @escaping @Sendable (Element) async -> U
+    ) -> Flow<U> {
+        flatMapLatest { value in
+            Flow<U> { collector in
+                await collector.emit(await transform(value))
+            }
+        }
+    }
+
+    /// Like `transform`, but cancels an in-flight transformation when a new
+    /// upstream value arrives.
+    public func transformLatest<U: Sendable>(
+        _ transformation: @escaping @Sendable (Element, Collector<U>) async -> Void
+    ) -> Flow<U> {
+        flatMapLatest { value in
+            Flow<U> { collector in
+                await transformation(value, collector)
+            }
+        }
+    }
+}
+
+extension ThrowingFlow {
+    /// Like `map`, but cancels an in-flight transform when a new upstream
+    /// value arrives; only the most recent value's result is emitted.
+    public func mapLatest<U: Sendable>(
+        _ transform: @escaping @Sendable (Element) async throws -> U
+    ) -> ThrowingFlow<U> {
+        flatMapLatest { value in
+            ThrowingFlow<U> { collector in
+                try await collector.emit(try await transform(value))
+            }
+        }
+    }
+
+    /// Like `transform`, but cancels an in-flight transformation when a new
+    /// upstream value arrives.
+    public func transformLatest<U: Sendable>(
+        _ transformation: @escaping @Sendable (Element, ThrowingCollector<U>) async throws -> Void
+    ) -> ThrowingFlow<U> {
+        flatMapLatest { value in
+            ThrowingFlow<U> { collector in
+                try await transformation(value, collector)
+            }
+        }
+    }
+}

@@ -25,6 +25,40 @@ struct FlowReachabilityTests {
         #expect(scope.activeTaskCount == 0)
     }
 
+    @Test("AsyncSequence bridges are reachable")
+    func asyncSequenceBridgesReachable() async throws {
+        var streamed: [Int] = []
+        for await value in Flow(of: 1, 2).asAsyncStream() {
+            streamed.append(value)
+        }
+        #expect(streamed == [1, 2])
+
+        let (stream, continuation) = AsyncStream<Int>.makeStream()
+        continuation.yield(3)
+        continuation.finish()
+        let collected = Mutex<[Int]>([])
+        try await stream.asThrowingFlow().collect { value in
+            collected.withLock { $0.append(value) }
+        }
+        #expect(collected.withLock { $0 } == [3])
+    }
+
+    @Test("Kotlin-parity additions are reachable")
+    func parityAdditionsReachable() async throws {
+        let chunked = await Flow(0..<5).chunks(ofCount: 2).toArray()
+        #expect(chunked == [[0, 1], [2, 3], [4]])
+        #expect(await Flow(of: 1, 2, 3).drop(while: { $0 < 3 }).last() == 3)
+        #expect(await Flow(of: 2, 4).allSatisfy { $0.isMultiple(of: 2) })
+
+        let combined = await Flow(of: 1).combineLatest(Flow(of: 2), Flow(of: 3)) { $0 + $1 + $2 }.first()
+        #expect(combined == 6)
+
+        let timed = Flow(of: "ok").timeout(for: .seconds(5))
+        let received = Mutex<[String]>([])
+        try await timed.collect { value in received.withLock { $0.append(value) } }
+        #expect(received.withLock { $0 } == ["ok"])
+    }
+
     @Test("Transform operators are reachable")
     func operatorsReachable() async {
         let flow = Flow(of: 1, 2, 3, 4, 5)

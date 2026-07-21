@@ -187,3 +187,110 @@ extension ThrowingFlow {
         }
     }
 }
+
+// MARK: - combineLatest (higher arity)
+
+extension Flow {
+    /// Combines three flows, emitting the latest triple whenever any of them
+    /// emits. Emission starts once every flow has produced a value.
+    public func combineLatest<U: Sendable, V: Sendable>(
+        _ second: Flow<U>,
+        _ third: Flow<V>
+    ) -> Flow<(Element, U, V)> {
+        Flow<(Element, U, V)> { downstream in
+            let stream1 = self.asAsyncStream()
+            let stream2 = second.asAsyncStream()
+            let stream3 = third.asAsyncStream()
+            for await (a, b, c) in AsyncAlgorithms.combineLatest(stream1, stream2, stream3) {
+                await downstream.emit((a, b, c))
+                if Task.isCancelled { break }
+            }
+        }
+    }
+
+    /// Combines three flows and applies `transform` to each latest triple.
+    public func combineLatest<U: Sendable, V: Sendable, R: Sendable>(
+        _ second: Flow<U>,
+        _ third: Flow<V>,
+        _ transform: @escaping @Sendable (Element, U, V) async -> R
+    ) -> Flow<R> {
+        combineLatest(second, third).map { await transform($0.0, $0.1, $0.2) }
+    }
+
+    /// Combines four flows, emitting the latest tuple whenever any of them
+    /// emits. Emission starts once every flow has produced a value.
+    public func combineLatest<U: Sendable, V: Sendable, W: Sendable>(
+        _ second: Flow<U>,
+        _ third: Flow<V>,
+        _ fourth: Flow<W>
+    ) -> Flow<(Element, U, V, W)> {
+        combineLatest(second, third)
+            .combineLatest(fourth) { triple, d in
+                (triple.0, triple.1, triple.2, d)
+            }
+    }
+
+    /// Combines four flows and applies `transform` to each latest tuple.
+    public func combineLatest<U: Sendable, V: Sendable, W: Sendable, R: Sendable>(
+        _ second: Flow<U>,
+        _ third: Flow<V>,
+        _ fourth: Flow<W>,
+        _ transform: @escaping @Sendable (Element, U, V, W) async -> R
+    ) -> Flow<R> {
+        combineLatest(second, third, fourth).map { await transform($0.0, $0.1, $0.2, $0.3) }
+    }
+
+    /// Combines five flows, emitting the latest tuple whenever any of them
+    /// emits. Emission starts once every flow has produced a value.
+    public func combineLatest<U: Sendable, V: Sendable, W: Sendable, X: Sendable>(
+        _ second: Flow<U>,
+        _ third: Flow<V>,
+        _ fourth: Flow<W>,
+        _ fifth: Flow<X>
+    ) -> Flow<(Element, U, V, W, X)> {
+        combineLatest(second, third)
+            .combineLatest(fourth, fifth) { triple, d, e in
+                (triple.0, triple.1, triple.2, d, e)
+            }
+    }
+
+    /// Combines five flows and applies `transform` to each latest tuple.
+    public func combineLatest<U: Sendable, V: Sendable, W: Sendable, X: Sendable, R: Sendable>(
+        _ second: Flow<U>,
+        _ third: Flow<V>,
+        _ fourth: Flow<W>,
+        _ fifth: Flow<X>,
+        _ transform: @escaping @Sendable (Element, U, V, W, X) async -> R
+    ) -> Flow<R> {
+        combineLatest(second, third, fourth, fifth).map { await transform($0.0, $0.1, $0.2, $0.3, $0.4) }
+    }
+}
+
+extension ThrowingFlow {
+    /// Combines three throwing flows, emitting the latest triple whenever any
+    /// of them emits. Errors from any side propagate downstream.
+    public func combineLatest<U: Sendable, V: Sendable>(
+        _ second: ThrowingFlow<U>,
+        _ third: ThrowingFlow<V>
+    ) -> ThrowingFlow<(Element, U, V)> {
+        ThrowingFlow<(Element, U, V)> { downstream in
+            let stream1 = self.asAsyncThrowingStream()
+            let stream2 = second.asAsyncThrowingStream()
+            let stream3 = third.asAsyncThrowingStream()
+            for try await (a, b, c) in AsyncAlgorithms.combineLatest(stream1, stream2, stream3) {
+                try await downstream.emit((a, b, c))
+                if Task.isCancelled { break }
+            }
+        }
+    }
+
+    /// Combines three throwing flows and applies `transform` to each latest
+    /// triple.
+    public func combineLatest<U: Sendable, V: Sendable, R: Sendable>(
+        _ second: ThrowingFlow<U>,
+        _ third: ThrowingFlow<V>,
+        _ transform: @escaping @Sendable (Element, U, V) async throws -> R
+    ) -> ThrowingFlow<R> {
+        combineLatest(second, third).map { try await transform($0.0, $0.1, $0.2) }
+    }
+}

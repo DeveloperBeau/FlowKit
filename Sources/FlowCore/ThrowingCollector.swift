@@ -37,3 +37,13 @@ public struct ThrowingCollector<Element: Sendable>: Sendable {
         try await action(value)
     }
 }
+
+extension ThrowingCollector {
+    /// Emits every value of `flow` into this collector, in order, rethrowing
+    /// the flow's error if it fails.
+    public func emitAll(_ flow: ThrowingFlow<Element>) async throws {
+        try await flow.collect { value in
+            try await self.emit(value)
+        }
+    }
+}

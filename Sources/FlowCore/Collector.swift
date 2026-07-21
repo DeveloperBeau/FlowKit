@@ -29,3 +29,13 @@ public struct Collector<Element: Sendable>: Sendable {
         try! await throwing.emit(value)
     }
 }
+
+extension Collector {
+    /// Emits every value of `flow` into this collector, in order. Useful in
+    /// `Flow` bodies that splice another flow into their own emissions.
+    public func emitAll(_ flow: Flow<Element>) async {
+        await flow.collect { value in
+            await self.emit(value)
+        }
+    }
+}

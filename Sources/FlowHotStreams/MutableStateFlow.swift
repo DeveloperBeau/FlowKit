@@ -39,3 +39,31 @@ public actor MutableStateFlow<Element: Sendable & Equatable>: StateFlow {
         }
     }
 }
+
+extension MutableStateFlow {
+    /// Atomically applies `transform` and returns the value that was current
+    /// before the update.
+    @discardableResult
+    public func getAndUpdate(_ transform: @Sendable (Element) -> Element) async -> Element {
+        let previous = value
+        await send(transform(previous))
+        return previous
+    }
+
+    /// Atomically applies `transform` and returns the resulting value.
+    @discardableResult
+    public func updateAndGet(_ transform: @Sendable (Element) -> Element) async -> Element {
+        let next = transform(value)
+        await send(next)
+        return next
+    }
+
+    /// Sets `newValue` only if the current value equals `expected`. Returns
+    /// whether the swap happened.
+    @discardableResult
+    public func compareAndSet(expected: Element, newValue: Element) async -> Bool {
+        guard value == expected else { return false }
+        await send(newValue)
+        return true
+    }
+}
