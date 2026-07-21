@@ -33,6 +33,10 @@ let package = Package(
         .package(
             url: "https://github.com/apple/swift-docc-plugin",
             exact: "1.4.6"
+        ),
+        .package(
+            url: "https://github.com/apple/swift-crypto",
+            exact: "4.5.1"
         )
     ],
     targets: [
@@ -146,7 +150,11 @@ let package = Package(
 
         .testTarget(
             name: "FlowSimulationTests",
-            dependencies: ["Flow", "FlowTesting"],
+            dependencies: [
+                "Flow",
+                "FlowTesting",
+                .product(name: "Crypto", package: "swift-crypto")
+            ],
             swiftSettings: strictSettings
         ),
 
