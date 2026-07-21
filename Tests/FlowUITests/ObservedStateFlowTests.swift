@@ -13,15 +13,19 @@ private let isSupported = {
     return false
 }()
 
-/// Spins until `condition` holds, yielding between checks. Observation updates
-/// hop through the collection task and back to the main actor, so a fixed sleep
-/// is a race — on a slow simulator the update lands after it. This converges
-/// once the update arrives (and hangs into a visible timeout if it never does,
-/// rather than passing flakily).
+/// Polls until `condition` holds. Observation updates hop through the
+/// collection task and back to the main actor, so a fixed sleep is a race —
+/// on a slow simulator the update lands after it. This converges once the
+/// update arrives. Bounded like `waitUntil` so a condition that never
+/// converges returns to the caller, whose assertion then fails the test
+/// instead of hanging the suite. Kept local (rather than using `waitUntil`)
+/// because the condition closure here is main-actor-bound and non-Sendable.
 @MainActor
 private func poll(until condition: () -> Bool) async {
+    let deadline = ContinuousClock.now.advanced(by: .seconds(30))
     var spins = 0
     while !condition() {
+        if ContinuousClock.now >= deadline { return }
         spins += 1
         if spins <= 50 {
             await Task.yield()
