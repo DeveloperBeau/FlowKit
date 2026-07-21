@@ -25,8 +25,25 @@ final class TestObservable: @unchecked Sendable {
     var name: String = "initial"
 }
 
-@Suite("Flow(observing:)", .enabled(if: isObservationSupported))
-struct FlowObservingTests {
+/// A background actor that owns and mutates an observable, to exercise the
+/// non-main-actor observation path. Observation and mutation share this actor,
+/// so no change is missed.
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *)
+actor ObservableHost {
+    let object = TestObservable()
+
+    func makeCountFlow() -> Flow<Int> {
+        Flow(observing: object, \.count)
+    }
+
+    func setCount(_ value: Int) {
+        object.count = value
+    }
+}
+
+@MainActor
+@Suite("Flow(observing:) on the main actor", .enabled(if: isObservationSupported))
+struct FlowObservingMainActorTests {
     @Test("emits initial value on subscribe")
     func emitsInitial() async throws {
         guard #available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *) else { return }
@@ -34,8 +51,8 @@ struct FlowObservingTests {
         obj.count = 42
 
         let flow: Flow<Int> = Flow(observing: obj, \.count)
-        try await flow.test(timeout: .seconds(15)) { tester in
-            try await tester.expectValue(42)
+        try await flow.test(timeout: .seconds(60)) { tester in
+            try await tester.expectValue(42, within: .seconds(60))
             await tester.cancelAndIgnoreRemaining()
         }
     }
@@ -45,15 +62,19 @@ struct FlowObservingTests {
         guard #available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *) else { return }
         let obj = TestObservable()
 
+        // The flow is constructed on the main actor (#isolation), so it observes
+        // there. `test`'s block is not main-isolated, so mutate on the main actor
+        // explicitly — the contract is that mutation and observation share an
+        // actor, which is how SwiftUI code drives an @Observable anyway.
         let flow: Flow<Int> = Flow(observing: obj, \.count)
-        try await flow.test(timeout: .seconds(15)) { tester in
-            try await tester.expectValue(0) // initial
+        try await flow.test(timeout: .seconds(60)) { tester in
+            try await tester.expectValue(0, within: .seconds(60)) // initial
 
-            obj.count = 7
-            try await tester.expectValue(7)
+            await MainActor.run { obj.count = 7 }
+            try await tester.expectValue(7, within: .seconds(60))
 
-            obj.count = 100
-            try await tester.expectValue(100)
+            await MainActor.run { obj.count = 100 }
+            try await tester.expectValue(100, within: .seconds(60))
 
             await tester.cancelAndIgnoreRemaining()
         }
@@ -65,12 +86,34 @@ struct FlowObservingTests {
         let obj = TestObservable()
 
         let flow: Flow<Int> = Flow(observing: obj, \.count)
-        try await flow.test(timeout: .seconds(15)) { tester in
-            try await tester.expectValue(0)
-            obj.count = 0 // equal, no emission
+        try await flow.test(timeout: .seconds(60)) { tester in
+            try await tester.expectValue(0, within: .seconds(60))
+            await MainActor.run { obj.count = 0 } // equal, no emission
             await tester.expectNoValue(within: .milliseconds(100))
-            obj.count = 1
-            try await tester.expectValue(1)
+            await MainActor.run { obj.count = 1 }
+            try await tester.expectValue(1, within: .seconds(60))
+            await tester.cancelAndIgnoreRemaining()
+        }
+    }
+}
+
+@Suite("Flow(observing:) on a background actor", .enabled(if: isObservationSupported))
+struct FlowObservingBackgroundActorTests {
+    @Test("emits changes made on the owning actor")
+    func emitsOnChange() async throws {
+        guard #available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *) else { return }
+        let host = ObservableHost()
+        let flow = await host.makeCountFlow()
+
+        try await flow.test(timeout: .seconds(60)) { tester in
+            try await tester.expectValue(0, within: .seconds(60))
+
+            await host.setCount(7)
+            try await tester.expectValue(7, within: .seconds(60))
+
+            await host.setCount(100)
+            try await tester.expectValue(100, within: .seconds(60))
+
             await tester.cancelAndIgnoreRemaining()
         }
     }

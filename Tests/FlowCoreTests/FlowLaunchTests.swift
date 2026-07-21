@@ -1,5 +1,6 @@
 import Testing
 import FlowSharedModels
+import FlowTestingCore
 @testable import FlowCore
 
 @Suite("Flow.launch(in:)")
@@ -30,15 +31,14 @@ struct FlowLaunchTests {
         let flow = Flow<Int> { _ in
             // Suspend forever until cancelled
             while !Task.isCancelled {
-                await Task.yield()
+                try? await Task.sleep(for: .milliseconds(1))
             }
         }
 
         _ = flow.launch(in: scope)
 
-        // Give the launch a moment to register
-        try? await Task.sleep(for: .seconds(0.005))
-
+        // launch registers the task synchronously before returning, so the count
+        // is already 1 here — no need to sleep and race it.
         #expect(scope.activeTaskCount == 1)
         scope.cancel()
     }
@@ -47,19 +47,22 @@ struct FlowLaunchTests {
     func cancellingScopeCancelsFlow() async {
         let scope = FlowScope()
         let wasCancelled = Mutex(false)
+        let started = Mutex(false)
 
+        // Observe cancellation by exiting the spin: a cancel that races
+        // withTaskCancellationHandler's registration can be missed by the
+        // runtime, whereas the isCancelled flag is always visible.
         let flow = Flow<Int> { _ in
-            await withTaskCancellationHandler {
-                while !Task.isCancelled {
-                    await Task.yield()
-                }
-            } onCancel: {
-                wasCancelled.withLock { $0 = true }
+            started.withLock { $0 = true }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(1))
             }
+            wasCancelled.withLock { $0 = true }
         }
 
         let task = flow.launch(in: scope)
-        try? await Task.sleep(for: .seconds(0.005))
+        // Cancel a running task, not a not-yet-started one.
+        await waitUntil { started.withLock { $0 } }
         scope.cancel()
         await task.value
 

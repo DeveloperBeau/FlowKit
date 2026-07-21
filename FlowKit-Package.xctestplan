@@ -1,0 +1,80 @@
+{
+  "configurations" : [
+    {
+      "id" : "A28850EE-40FD-4927-B4FA-6E0485165C3C",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "FlowCoreTests",
+        "name" : "FlowCoreTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "FlowHotStreamsTests",
+        "name" : "FlowHotStreamsTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "FlowOperatorsTests",
+        "name" : "FlowOperatorsTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "FlowPublicAPITests",
+        "name" : "FlowPublicAPITests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "FlowSharedModelsTests",
+        "name" : "FlowSharedModelsTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "FlowTestClockTests",
+        "name" : "FlowTestClockTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "FlowTestingCoreTests",
+        "name" : "FlowTestingCoreTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "FlowTestingPublicAPITests",
+        "name" : "FlowTestingPublicAPITests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "FlowUITests",
+        "name" : "FlowUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

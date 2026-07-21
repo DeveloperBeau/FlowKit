@@ -3,7 +3,33 @@ import Foundation
 import FlowCore
 import FlowSharedModels
 import FlowTestClock
+import FlowTestingCore
 @testable import FlowHotStreams
+
+/// Yields until `flag` is set. The delayed stop fires on the coordinator actor
+/// after the clock wakes its sleeper, so this converges on that instead of
+/// racing it with a real sleep.
+private func waitUntilTrue(_ flag: Mutex<Bool>) async {
+    await waitUntil { flag.withLock { $0 } }
+}
+
+/// Yields a bounded number of times so a "did not happen" assertion gives the
+/// wrong behaviour every scheduling chance to occur before it is checked.
+private func settle() async {
+    for _ in 0..<100 { await Task.yield() }
+}
+
+/// Yields until the delayed-stop sleep is registered on the clock, so advancing
+/// the clock deterministically wakes it rather than firing before it exists.
+private func waitForSleeper(_ clock: TestClock) async {
+    await waitUntil { clock.sleeperCount >= 1 }
+}
+
+/// Yields until the clock has no sleepers, i.e. a cancelled stop's sleep has
+/// been torn down before the next one is scheduled.
+private func waitForNoSleepers(_ clock: TestClock) async {
+    await waitUntil { clock.sleeperCount == 0 }
+}
 
 @Suite("SharingCoordinator")
 struct SharingCoordinatorTests {
@@ -17,8 +43,8 @@ struct SharingCoordinatorTests {
             stop: {}
         )
 
+        // activate runs the start closure synchronously for eager.
         await coordinator.activate()
-        try? await Task.sleep(for: .seconds(0.02))
         #expect(upstreamStarted.withLock { $0 })
         await coordinator.deactivate()
     }
@@ -34,11 +60,10 @@ struct SharingCoordinatorTests {
         )
 
         await coordinator.activate()
-        try? await Task.sleep(for: .seconds(0.02))
         #expect(!upstreamStarted.withLock { $0 })
 
+        // subscriberDidAppear runs the start closure synchronously.
         await coordinator.subscriberDidAppear()
-        try? await Task.sleep(for: .seconds(0.02))
         #expect(upstreamStarted.withLock { $0 })
         await coordinator.deactivate()
     }
@@ -58,11 +83,11 @@ struct SharingCoordinatorTests {
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidDisappear()
 
-        try? await Task.sleep(for: .seconds(0.02))
-        #expect(!upstreamStopped.withLock { $0 })
+        await waitForSleeper(clock)
+        #expect(!upstreamStopped.withLock { $0 }, "the stop must not fire before the timeout elapses")
 
         await clock.advance(by: .seconds(5))
-        try? await Task.sleep(for: .seconds(0.02))
+        await waitUntilTrue(upstreamStopped)
         #expect(upstreamStopped.withLock { $0 })
         await coordinator.deactivate()
     }
@@ -81,14 +106,14 @@ struct SharingCoordinatorTests {
         await coordinator.activate()
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidDisappear()
+        await waitForSleeper(clock)
 
         await clock.advance(by: .seconds(4))
-        await coordinator.subscriberDidAppear()
+        await coordinator.subscriberDidAppear() // cancels the pending stop
 
         await clock.advance(by: .seconds(10))
-        try? await Task.sleep(for: .seconds(0.02))
-
-        #expect(!upstreamStopped.withLock { $0 })
+        await settle()
+        #expect(!upstreamStopped.withLock { $0 }, "a returning subscriber must cancel the stop")
         await coordinator.deactivate()
     }
 
@@ -107,17 +132,20 @@ struct SharingCoordinatorTests {
 
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidDisappear()
+        await waitForSleeper(clock)
         await clock.advance(by: .seconds(2))
 
-        await coordinator.subscriberDidAppear()
-        await coordinator.subscriberDidDisappear()
+        await coordinator.subscriberDidAppear() // cancels the pending stop
+        await waitForNoSleepers(clock) // the cancelled stop's sleep is torn down
+        await coordinator.subscriberDidDisappear() // schedules a fresh stop
+        await waitForSleeper(clock)
 
         await clock.advance(by: .seconds(4))
-        try? await Task.sleep(for: .seconds(0.02))
-        #expect(!upstreamStopped.withLock { $0 })
+        await settle()
+        #expect(!upstreamStopped.withLock { $0 }, "the fresh timeout has not elapsed yet")
 
         await clock.advance(by: .seconds(2))
-        try? await Task.sleep(for: .seconds(0.02))
+        await waitUntilTrue(upstreamStopped)
         #expect(upstreamStopped.withLock { $0 })
         await coordinator.deactivate()
     }
@@ -134,11 +162,10 @@ struct SharingCoordinatorTests {
             stop: { upstreamStopped.withLock { $0 = true } }
         )
         await coordinator.activate()
-        try? await Task.sleep(for: .seconds(0.02))
         #expect(upstreamStarted.withLock { $0 })
 
+        // deactivate runs the stop closure synchronously.
         await coordinator.deactivate()
-        try? await Task.sleep(for: .seconds(0.02))
         #expect(upstreamStopped.withLock { $0 })
     }
 
@@ -153,9 +180,8 @@ struct SharingCoordinatorTests {
         )
         await coordinator.activate()
         await coordinator.subscriberDidAppear()
+        // Zero timeout stops synchronously as the last subscriber leaves.
         await coordinator.subscriberDidDisappear()
-
-        try? await Task.sleep(for: .seconds(0.01))
         #expect(upstreamStopped.withLock { $0 })
         await coordinator.deactivate()
     }
@@ -174,11 +200,11 @@ struct SharingCoordinatorTests {
         await coordinator.activate()
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidAppear()
-        await coordinator.subscriberDidDisappear()  // still one left
+        await coordinator.subscriberDidDisappear() // still one subscriber left
 
         await clock.advance(by: .seconds(10))
-        try? await Task.sleep(for: .seconds(0.01))
-        #expect(!upstreamStopped.withLock { $0 })
+        await settle()
+        #expect(!upstreamStopped.withLock { $0 }, "a remaining subscriber must keep the upstream alive")
         await coordinator.deactivate()
     }
 }

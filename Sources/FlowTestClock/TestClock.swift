@@ -73,6 +73,13 @@ public final class TestClock: Clock, @unchecked Sendable {
 
     public var minimumResolution: Duration { .zero }
 
+    /// The number of sleepers currently waiting on this clock. A test uses it
+    /// to wait until a time-based operator has registered its sleep before
+    /// advancing, instead of racing that registration with a real sleep.
+    public var sleeperCount: Int {
+        lock.withLock { state.sleepers.count }
+    }
+
     public func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
         // Each sleeper gets a unique ID so the cancellation handler can
         // remove exactly the right entry from the sleepers array.
@@ -115,39 +122,67 @@ public final class TestClock: Clock, @unchecked Sendable {
     /// Advances virtual time by `duration` and wakes any sleepers whose
     /// deadlines have now passed. Sleepers wake in deadline order.
     public func advance(by duration: Duration) async {
-        let toWake: [Sleeper] = lock.withLock {
-            state.currentInstant = state.currentInstant.advanced(by: duration)
-            let newNow = state.currentInstant
-
-            var toWake: [Sleeper] = []
-            while let first = state.sleepers.first, first.deadline <= newNow {
-                toWake.append(state.sleepers.removeFirst())
-            }
-            return toWake
-        }
-
-        for sleeper in toWake {
-            sleeper.continuation.resume()
-        }
-
-        await Task.yield()
+        await advance(to: lock.withLock { state.currentInstant.advanced(by: duration) })
     }
 
-    /// Advances virtual time through all currently-registered sleepers,
-    /// waking them in deadline order.
-    public func run() async {
+    /// Advances virtual time to `deadline`, waking sleepers in deadline order.
+    ///
+    /// Sleepers wake one at a time with a scheduler drain between each, so a
+    /// woken task runs its follow-on work before the next sleeper is resumed.
+    /// Merely resuming the whole batch in order would not give that guarantee:
+    /// resuming only schedules a task, and the executor is free to run a
+    /// later-deadline task first. One-at-a-time waking with drains is the
+    /// strategy pointfreeco/swift-clocks proved out.
+    public func advance(to deadline: Instant) async {
         while true {
-            let nextDeadline: Instant? = lock.withLock {
-                state.sleepers.first?.deadline
+            // Drain first so work triggered by the previous wake (including
+            // re-registered sleeps from repeating operators) settles before
+            // the next sleeper is chosen.
+            await Self.drainScheduler()
+
+            let next: Sleeper? = lock.withLock {
+                guard let first = state.sleepers.first, first.deadline <= deadline else {
+                    if state.currentInstant < deadline {
+                        state.currentInstant = deadline
+                    }
+                    return nil
+                }
+                state.currentInstant = first.deadline
+                return state.sleepers.removeFirst()
             }
 
-            guard let deadline = nextDeadline else { return }
-            let delta = now.duration(to: deadline)
-            if delta > .zero {
-                await advance(by: delta)
-            } else {
-                await Task.yield()
+            guard let sleeper = next else {
+                await Self.drainScheduler()
+                return
             }
+            sleeper.continuation.resume()
+        }
+    }
+
+    /// Advances virtual time through all registered sleepers, waking them in
+    /// deadline order, until none remain (including sleeps re-registered by
+    /// woken tasks along the way).
+    public func run() async {
+        await Self.drainScheduler()
+        while let deadline = lock.withLock({ state.sleepers.first?.deadline }) {
+            await advance(to: deadline)
+        }
+    }
+
+    /// Suspends until the cooperative pool has run the tasks made ready by a
+    /// wake. Awaiting a detached task forces the executor to get through the
+    /// work already queued ahead of it first; one plain `Task.yield()` only
+    /// requeues the caller once and gives no such guarantee under load.
+    ///
+    /// The drain runs at default priority deliberately. A background-priority
+    /// drain would also flush below-default work, but iOS simulators throttle
+    /// background QoS so hard that each hop costs seconds and clock-driven
+    /// tests blow their timeouts; everything a test clock wakes runs at
+    /// default or above, so default-priority drains give the same ordering
+    /// guarantee without the throttling.
+    private static func drainScheduler() async {
+        for _ in 0..<20 {
+            await Task.detached { await Task.yield() }.value
         }
     }
 }

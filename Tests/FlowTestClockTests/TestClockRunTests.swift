@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import FlowTestingCore
 @testable import FlowTestClock
 
 @Suite("TestClock run")
@@ -24,7 +25,7 @@ struct TestClockRunTests {
             await woke.append(3)
         }()
 
-        try? await Task.sleep(for: .seconds(0.02))
+        await waitUntil { clock.sleeperCount >= 3 }
         await clock.run()
 
         _ = try await (t1, t2, t3)
