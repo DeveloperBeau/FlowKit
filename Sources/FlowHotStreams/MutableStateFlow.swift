@@ -12,6 +12,14 @@ public actor MutableStateFlow<Element: Sendable & Equatable>: StateFlow {
 
     public var value: Element { currentValue }
 
+    /// The number of collectors currently attached via `asFlow()`, matching
+    /// `MutableSharedFlow.subscriptionCount`. Use it to collect an upstream
+    /// flow only while the state is observed (Kotlin's `WhileSubscribed`
+    /// ViewModel convention).
+    public var subscriptionCount: Int {
+        get async { await subscription.subscriberCount }
+    }
+
     public func send(_ newValue: Element) async {
         guard newValue != currentValue else { return }
         currentValue = newValue
