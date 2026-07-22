@@ -1,6 +1,7 @@
 import Testing
 import FlowCore
 import FlowSharedModels
+import FlowHotStreams
 import FlowTesting
 import FlowOperators
 
@@ -98,5 +99,60 @@ struct EmitAllTests {
             try await tester.expectValue(1)
             try await tester.expectError(Bad())
         }
+    }
+
+    @Test("emitAll of an empty flow returns immediately and the body continues")
+    func emptyFlowReturnsImmediately() async {
+        let combined = Flow<Int> { collector in
+            await collector.emit(0)
+            await collector.emitAll(Flow<Int>.empty)
+            await collector.emit(1)
+        }
+        #expect(await combined.toArray() == [0, 1])
+    }
+
+    @Test("ThrowingCollector.emitAll of an empty flow returns immediately")
+    func throwingEmptyFlowReturnsImmediately() async throws {
+        let combined = ThrowingFlow<Int> { collector in
+            try await collector.emit(0)
+            try await collector.emitAll(ThrowingFlow<Int> { _ in })
+            try await collector.emit(1)
+        }
+        try await TestScope.run { scope in
+            let tester = try await scope.test(combined)
+            try await tester.expectValue(0)
+            try await tester.expectValue(1)
+            try await tester.expectCompletion()
+        }
+    }
+
+    @Test("cancellation mid-emitAll stops the inner collection promptly")
+    func cancellationStopsInnerCollection() async {
+        let inner = MutableSharedFlow<Int>(replay: 0)
+        let received = Mutex<[Int]>([])
+
+        let outer = Flow<Int> { collector in
+            await collector.emitAll(inner.asFlow())
+        }
+        let subscriber = Task {
+            await outer.collect { value in
+                received.withLock { $0.append(value) }
+            }
+        }
+        await waitUntil { await inner.subscriptionCount >= 1 }
+
+        await inner.emit(1)
+        await inner.emit(2)
+        await waitUntil { received.withLock { $0.count } >= 2 }
+
+        subscriber.cancel()
+        // The cancelled subscriber must detach from the inner flow; emissions
+        // after that must not be delivered.
+        await waitUntil { await inner.subscriptionCount == 0 }
+        #expect(await inner.subscriptionCount == 0, "cancellation must tear down the inner subscription")
+
+        await inner.emit(3)
+        for _ in 0..<100 { await Task.yield() }
+        #expect(received.withLock { $0 } == [1, 2], "no delivery after cancellation")
     }
 }
