@@ -13,18 +13,18 @@ struct ReadOnlyViewTests {
         let source = MutableStateFlow(0)
         let view = source.asStateFlow()
 
-        #expect(await view.value == 0)
+        #expect(view.value == 0)
 
-        await source.send(1)
-        #expect(await view.value == 1)
+        source.send(1)
+        #expect(view.value == 1)
 
         // A late subscriber on the view replays the current value.
         try await view.asFlow().test { tester in
             try await tester.expectValue(1)
-            await source.send(2)
+            source.send(2)
             try await tester.expectValue(2)
         }
-        #expect(await view.value == 2)
+        #expect(view.value == 2)
     }
 
     @Test("state view cannot be cast back to its mutable source")
@@ -55,16 +55,16 @@ struct ReadOnlyViewTests {
 
         await withTaskGroup(of: Void.self) { group in
             for value in 1...100 {
-                group.addTask { await source.send(value) }
+                group.addTask { source.send(value) }
             }
         }
         // Deterministic final value after the storm quiesces.
-        await source.send(-1)
+        source.send(-1)
 
         await waitUntil { latestA.withLock { $0 } == -1 && latestB.withLock { $0 } == -1 }
         #expect(latestA.withLock { $0 } == -1)
         #expect(latestB.withLock { $0 } == -1)
-        #expect(await view.value == -1)
+        #expect(view.value == -1)
 
         subscriberA.cancel()
         subscriberB.cancel()

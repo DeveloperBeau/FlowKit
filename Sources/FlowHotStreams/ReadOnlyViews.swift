@@ -1,4 +1,4 @@
-public import FlowCore
+internal import FlowCore
 
 extension MutableStateFlow {
     /// Returns a read-only view of this state flow.
@@ -35,9 +35,7 @@ extension MutableSharedFlow {
 private struct ReadOnlyStateFlow<Element: Sendable & Equatable>: StateFlow {
     let base: MutableStateFlow<Element>
 
-    var value: Element {
-        get async { await base.value }
-    }
+    var value: Element { base.value }
 
     func asFlow() -> Flow<Element> {
         base.asFlow()
