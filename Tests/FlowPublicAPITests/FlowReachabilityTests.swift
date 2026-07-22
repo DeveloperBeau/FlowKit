@@ -74,11 +74,11 @@ struct FlowReachabilityTests {
     @Test("MutableStateFlow and StateFlow protocol are reachable")
     func stateFlowReachable() async {
         let state = MutableStateFlow(0)
-        await state.send(42)
-        #expect(await state.value == 42)
+        state.send(42)
+        #expect(state.value == 42)
 
         let asProtocol: any StateFlow<Int> = state
-        #expect(await asProtocol.value == 42)
+        #expect(asProtocol.value == 42)
     }
 
     @Test("MutableSharedFlow and SharedFlow protocol are reachable")

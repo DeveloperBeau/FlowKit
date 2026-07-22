@@ -47,16 +47,16 @@ struct HotStreamHardeningTests {
         await withTaskGroup(of: Void.self) { group in
             for writer in 0..<8 {
                 group.addTask {
-                    for step in 0..<100 { await state.send(writer * 1000 + step) }
+                    for step in 0..<100 { state.send(writer * 1000 + step) }
                 }
             }
             await group.waitForAll()
         }
         // The last write wins because the actor serializes sends.
-        await state.send(sentinel)
+        state.send(sentinel)
 
         while !observed.withLock({ $0.last == sentinel }) { await Task.yield() }
-        #expect(await state.value == sentinel, "the final write must survive 800 concurrent writes")
+        #expect(state.value == sentinel, "the final write must survive 800 concurrent writes")
 
         #expect(observed.withLock { $0.last } == sentinel)
 

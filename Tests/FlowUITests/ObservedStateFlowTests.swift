@@ -64,7 +64,7 @@ struct ObservedStateFlowTests {
         await poll { observed.value == 1 }
         #expect(observed.value == 1)
 
-        await source.send(99)
+        source.send(99)
         await poll { observed.value == 99 }
         #expect(observed.value == 99)
         observed.stop()
@@ -93,8 +93,7 @@ struct ObservedStateFlowTests {
         await poll { observed.value == 1 }
         observed.stop()
 
-        await source.send(777)
-        _ = await source.value // ensure the send is fully processed
+        source.send(777) // applied synchronously; delivery to observers is async
         await settle()
         #expect(observed.value == 1, "a stopped observer must not apply new emissions")
     }
@@ -108,8 +107,7 @@ struct ObservedStateFlowTests {
         await poll { observed.value == 5 }
         #expect(observed.value == 5)
 
-        await source.send(5) // equal, no update
-        _ = await source.value
+        source.send(5) // equal, no update
         await settle()
         #expect(observed.value == 5)
         observed.stop()
@@ -125,7 +123,7 @@ struct ObservedStateFlowTests {
             updatePolicy: .animated(.default)
         )
         observed.start()
-        await source.send(10)
+        source.send(10)
         await poll { observed.value == 10 }
         #expect(observed.value == 10)
         observed.stop()
@@ -141,7 +139,7 @@ struct ObservedStateFlowTests {
             updatePolicy: .transaction { Transaction(animation: .default) }
         )
         observed.start()
-        await source.send(20)
+        source.send(20)
         await poll { observed.value == 20 }
         #expect(observed.value == 20)
         observed.stop()
@@ -173,7 +171,7 @@ struct CollectedStateTests {
         let source = MutableStateFlow(0)
         let wrapper = CollectedState(wrappedValue: 0, source)
         wrapper.update() // simulates SwiftUI calling update during view update
-        await source.send(42)
+        source.send(42)
         await poll { wrapper.wrappedValue == 42 }
         #expect(wrapper.wrappedValue == 42)
     }

@@ -24,13 +24,13 @@ struct StateFlowSubscriptionCountTests {
         // First subscriber: start collecting the upstream into the state.
         upstream = Task {
             upstreamActive.withLock { $0 = true }
-            await upstreamValues.asFlow().collect { value in await state.send(value) }
+            await upstreamValues.asFlow().collect { value in state.send(value) }
         }
         await waitUntil { upstreamActive.withLock { $0 } }
         await waitUntil { await upstreamValues.subscriptionCount == 1 }
         await upstreamValues.emit(7)
-        await waitUntil { await state.value == 7 }
-        #expect(await state.value == 7, "upstream flows into the state while subscribed")
+        await waitUntil { state.value == 7 }
+        #expect(state.value == 7, "upstream flows into the state while subscribed")
 
         let second = Task { await state.asFlow().collect { _ in } }
         await waitUntil { await state.subscriptionCount == 2 }
