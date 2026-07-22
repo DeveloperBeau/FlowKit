@@ -39,10 +39,24 @@ struct MapLatestTests {
         }
     }
 
-    @Test("mapLatest with a sequential upstream maps every value")
+    @Test("mapLatest maps every value when the upstream is paced by delivery")
     func sequentialUpstreamMapsAll() async {
-        let result = await Flow(of: 1, 2, 3).mapLatest { $0 * 10 }.toArray()
-        #expect(result == [10, 20, 30])
+        // The upstream emits the next value only after the previous result
+        // was observed, so no transform is ever superseded. A free-running
+        // upstream may legitimately skip intermediate results (Kotlin
+        // mapLatest semantics), which under load made a plain
+        // Flow(of: 1, 2, 3) version of this test flaky.
+        let observed = Mutex<[Int]>([])
+        let upstream = Flow<Int> { collector in
+            for value in 1...3 {
+                await collector.emit(value)
+                await waitUntil { observed.withLock { $0 }.count >= value }
+            }
+        }
+        await upstream.mapLatest { $0 * 10 }.collect { value in
+            observed.withLock { $0.append(value) }
+        }
+        #expect(observed.withLock { $0 } == [10, 20, 30])
     }
 
     @Test("transformLatest can emit multiple values per upstream value")
