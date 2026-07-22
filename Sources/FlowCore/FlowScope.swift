@@ -75,22 +75,25 @@ public final class FlowScope: @unchecked Sendable {
     ) -> Task<Void, Never> {
         let id = UUID()
 
-        let task = Task(priority: priority) { [weak self] in
-            await work()
-            self?.state.withLock { state in
-                state.tasks.removeValue(forKey: id)
+        // The task is created while holding the lock so its self-removal
+        // (which acquires the same lock) cannot run before registration.
+        // Otherwise an instantly-completing task can remove itself as a no-op
+        // and then be registered dead, leaking a table entry forever.
+        return state.withLock { state in
+            let task = Task(priority: priority) { [weak self] in
+                await work()
+                self?.state.withLock { state in
+                    state.tasks.removeValue(forKey: id)
+                }
             }
-        }
 
-        state.withLock { state in
             guard !state.isCancelled else {
                 task.cancel()
-                return
+                return task
             }
             state.tasks[id] = task
+            return task
         }
-
-        return task
     }
 
     /// Cancels all tasks launched in this scope and marks the scope as
