@@ -156,20 +156,40 @@ extension Flow {
         _ transform: @escaping @Sendable (Element) async -> Flow<U>
     ) -> Flow<U> {
         Flow<U> { downstream in
-            let state = FlatMapLatestState<U>()
-            await self.collect { upstreamValue in
-                let inner = await transform(upstreamValue)
-                await state.switchTo(inner: inner, downstream: downstream)
-                // Yield to allow a quick inner task to run and emit before the
-                // next upstream value arrives and triggers cancellation.
-                // Multiple yields are needed to let the inner task traverse the
-                // async emit chain (actor hop + downstream collector).
-                await Task.yield()
-                await Task.yield()
-                await Task.yield()
+            // Every inner emission is stamped with the generation of the
+            // inner flow that produced it and funneled through one FIFO
+            // pipeline; the drain task drops values whose generation is no
+            // longer current. A superseded inner can therefore never deliver
+            // after its replacement, even if it was already suspended inside
+            // an emit when it was cancelled.
+            let (pipeline, feed) = AsyncStream<(generation: UInt64, value: U)>.makeStream()
+            let state = FlatMapLatestState<U>(feed: feed)
+
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    await self.collect { upstreamValue in
+                        let inner = await transform(upstreamValue)
+                        await state.switchTo(inner: inner)
+                        // Yield so a quick inner can emit before the next
+                        // upstream value supersedes it. Best-effort only: a
+                        // fast upstream may skip intermediate inners entirely,
+                        // matching Kotlin's flatMapLatest.
+                        await Task.yield()
+                        await Task.yield()
+                        await Task.yield()
+                    }
+                    // Wait for the last inner flow, then close the pipeline.
+                    await state.finishAfterCurrent()
+                }
+                group.addTask {
+                    for await stamped in pipeline {
+                        guard await state.isCurrent(stamped.generation) else { continue }
+                        await downstream.emit(stamped.value)
+                        if Task.isCancelled { break }
+                    }
+                }
+                await group.waitForAll()
             }
-            // Wait for the last inner flow to complete
-            await state.awaitCurrentCompletion()
         }
     }
 }
@@ -177,57 +197,156 @@ extension Flow {
 extension ThrowingFlow {
     /// Transforms each upstream value into a new `ThrowingFlow`, cancelling
     /// the previously-active inner flow each time a new upstream value arrives.
+    /// Errors from the currently-active inner flow propagate downstream;
+    /// errors from a superseded inner are discarded with it.
     public func flatMapLatest<U: Sendable>(
         _ transform: @escaping @Sendable (Element) async throws -> ThrowingFlow<U>
     ) -> ThrowingFlow<U> {
         ThrowingFlow<U> { downstream in
-            let state = ThrowingFlatMapLatestState<U>()
-            try await self.collect { upstreamValue in
-                let inner = try await transform(upstreamValue)
-                await state.switchTo(inner: inner, downstream: downstream)
-                await Task.yield()
+            // Same stamped-pipeline design as the non-throwing overload; see
+            // there for the ordering rationale. Inner failures travel through
+            // the pipeline too, so only the current generation's error is
+            // rethrown.
+            let (pipeline, feed) = AsyncStream<(generation: UInt64, event: ThrowingInnerEvent<U>)>.makeStream()
+            let state = ThrowingFlatMapLatestState<U>(feed: feed)
+
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    do {
+                        try await self.collect { upstreamValue in
+                            let inner = try await transform(upstreamValue)
+                            await state.switchTo(inner: inner)
+                            await Task.yield()
+                            await Task.yield()
+                            await Task.yield()
+                        }
+                    } catch {
+                        // Close the pipeline so the drain task ends, then
+                        // surface the upstream (or transform) error.
+                        await state.cancelCurrentAndFinish()
+                        throw error
+                    }
+                    await state.finishAfterCurrent()
+                }
+                group.addTask {
+                    for await stamped in pipeline {
+                        guard await state.isCurrent(stamped.generation) else { continue }
+                        switch stamped.event {
+                        case .value(let value):
+                            try await downstream.emit(value)
+                        case .failure(let error):
+                            throw error
+                        }
+                        if Task.isCancelled { break }
+                    }
+                }
+                try await group.waitForAll()
             }
-            try await state.awaitCurrentCompletion()
         }
     }
 }
 
-/// Tracks the currently-active inner flow task for `flatMapLatest`. When a
-/// new inner flow starts, the previous task is cancelled immediately.
-private actor FlatMapLatestState<U: Sendable> {
-    private var currentTask: Task<Void, Never>?
+/// An inner flow's output as it travels the `flatMapLatest` pipeline: a
+/// value, or the error that ended the inner flow.
+private enum ThrowingInnerEvent<U: Sendable>: Sendable {
+    case value(U)
+    case failure(any Error)
+}
 
-    func switchTo(inner: Flow<U>, downstream: Collector<U>) {
+/// Tracks the currently-active inner flow task for `flatMapLatest`. When a
+/// new inner flow starts, the previous task is cancelled immediately and its
+/// generation goes stale, so the drain task discards anything it still emits.
+private actor FlatMapLatestState<U: Sendable> {
+    private let feed: AsyncStream<(generation: UInt64, value: U)>.Continuation
+    private var currentTask: Task<Void, Never>?
+    private var generation: UInt64 = 0
+
+    init(feed: AsyncStream<(generation: UInt64, value: U)>.Continuation) {
+        self.feed = feed
+    }
+
+    func switchTo(inner: Flow<U>) {
         currentTask?.cancel()
+        generation += 1
+        let stamped = generation
+        let feed = feed
         currentTask = Task {
             await inner.collect { value in
-                guard !Task.isCancelled else { return }
-                await downstream.emit(value)
+                feed.yield((generation: stamped, value: value))
             }
         }
     }
 
-    func awaitCurrentCompletion() async {
-        await currentTask?.value
+    func isCurrent(_ stamped: UInt64) -> Bool {
+        stamped == generation
+    }
+
+    /// Awaits the active inner task — forwarding cancellation to it, so a
+    /// long-running inner cannot outlive or hang a torn-down collection —
+    /// then closes the pipeline so the drain task finishes.
+    func finishAfterCurrent() async {
+        defer { feed.finish() }
+        guard let task = currentTask else { return }
+        // Cover the already-cancelled path explicitly rather than relying on
+        // the handler firing during registration.
+        if Task.isCancelled { task.cancel() }
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
     }
 }
 
 private actor ThrowingFlatMapLatestState<U: Sendable> {
-    private var currentTask: Task<Void, any Error>?
+    private let feed: AsyncStream<(generation: UInt64, event: ThrowingInnerEvent<U>)>.Continuation
+    private var currentTask: Task<Void, Never>?
+    private var generation: UInt64 = 0
 
-    func switchTo(inner: ThrowingFlow<U>, downstream: ThrowingCollector<U>) {
+    init(feed: AsyncStream<(generation: UInt64, event: ThrowingInnerEvent<U>)>.Continuation) {
+        self.feed = feed
+    }
+
+    func switchTo(inner: ThrowingFlow<U>) {
         currentTask?.cancel()
+        generation += 1
+        let stamped = generation
+        let feed = feed
         currentTask = Task {
-            try await inner.collect { value in
-                guard !Task.isCancelled else { return }
-                try await downstream.emit(value)
+            do {
+                try await inner.collect { value in
+                    feed.yield((generation: stamped, event: .value(value)))
+                }
+            } catch {
+                feed.yield((generation: stamped, event: .failure(error)))
             }
         }
     }
 
-    func awaitCurrentCompletion() async throws {
-        if let task = currentTask {
-            try await task.value
+    func isCurrent(_ stamped: UInt64) -> Bool {
+        stamped == generation
+    }
+
+    /// Fail-fast teardown for an upstream error: cancel the inner without
+    /// waiting for it and close the pipeline so the drain task ends.
+    func cancelCurrentAndFinish() {
+        currentTask?.cancel()
+        feed.finish()
+    }
+
+    /// Awaits the active inner task — forwarding cancellation to it, so a
+    /// long-running inner cannot outlive or hang a torn-down collection —
+    /// then closes the pipeline so the drain task finishes.
+    func finishAfterCurrent() async {
+        defer { feed.finish() }
+        guard let task = currentTask else { return }
+        // Cover the already-cancelled path explicitly rather than relying on
+        // the handler firing during registration.
+        if Task.isCancelled { task.cancel() }
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
         }
     }
 }
