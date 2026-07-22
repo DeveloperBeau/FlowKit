@@ -1,3 +1,4 @@
+internal import Foundation
 public import FlowSharedModels
 
 /// The outcome of a non-suspending ``ProducerScope/trySend(_:)``.
@@ -33,11 +34,19 @@ public struct ProducerScope<Element: Sendable>: Sendable {
     internal let continuation: AsyncStream<Element>.Continuation
     @usableFromInline
     internal let closeState: Mutex<CloseState>
+    /// Backpressure gate for the `.suspend` overflow policy; `nil` under the
+    /// dropping policies and for unbounded channels, where ``send(_:)`` never
+    /// suspends.
+    internal let gate: SendGate?
 
-    @usableFromInline
-    internal init(continuation: AsyncStream<Element>.Continuation, closeState: Mutex<CloseState>) {
+    internal init(
+        continuation: AsyncStream<Element>.Continuation,
+        closeState: Mutex<CloseState>,
+        gate: SendGate? = nil
+    ) {
         self.continuation = continuation
         self.closeState = closeState
+        self.gate = gate
     }
 
     /// Pushes `value` downstream without suspending. Safe to call from a
@@ -59,6 +68,48 @@ public struct ProducerScope<Element: Sendable>: Sendable {
         @unknown default:
             return .dropped
         }
+    }
+
+    /// Pushes `value` downstream, suspending for backpressure under the
+    /// `.suspend` overflow policy.
+    ///
+    /// With `onBufferOverflow: .suspend` and a positive `bufferCapacity`, this
+    /// suspends while the channel already holds `bufferCapacity` unconsumed
+    /// values and resumes once the collector has processed one — a slow
+    /// downstream pauses the producer instead of losing values. Under the
+    /// dropping policies or an unbounded channel it behaves exactly like
+    /// ``trySend(_:)`` and never suspends.
+    ///
+    /// Only suspending sends participate in backpressure; a ``trySend(_:)``
+    /// on the same channel enqueues without occupying a slot.
+    ///
+    /// - Parameter value: The value to deliver downstream.
+    /// - Returns: ``ChannelSendResult/enqueued`` when buffered;
+    ///   ``ChannelSendResult/dropped`` when a dropping policy discarded it;
+    ///   ``ChannelSendResult/closed`` when the channel was already closed —
+    ///   including a ``close()`` racing the send, and cancellation of the
+    ///   producer before or while the send was suspended. A `.closed` send
+    ///   never delivers its value.
+    @discardableResult
+    public func send(_ value: Element) async -> ChannelSendResult {
+        guard !isClosedForSend else { return .closed }
+        if let gate {
+            let id = UUID()
+            let acquired = await withTaskCancellationHandler {
+                await gate.acquire(id: id)
+            } onCancel: {
+                Task { await gate.cancel(id: id) }
+            }
+            guard acquired else { return .closed }
+            let result = trySend(value)
+            if result != .enqueued {
+                // The value never reached the buffer, so the consumer will
+                // never release the slot this send acquired.
+                await gate.release()
+            }
+            return result
+        }
+        return trySend(value)
     }
 
     /// Whether the channel has closed. Once `true`, ``trySend(_:)`` returns
@@ -105,13 +156,17 @@ public struct ProducerScope<Element: Sendable>: Sendable {
     /// of those fire.
     @usableFromInline
     internal func markClosed() {
-        let waiter = closeState.withLock { state -> CheckedContinuation<Void, Never>? in
-            guard !state.isClosed else { return nil }
+        let (waiter, firstClose) = closeState.withLock { state -> (CheckedContinuation<Void, Never>?, Bool) in
+            guard !state.isClosed else { return (nil, false) }
             state.isClosed = true
             defer { state.waiter = nil }
-            return state.waiter
+            return (state.waiter, true)
         }
         waiter?.resume()
+        if firstClose, let gate {
+            // Wake any producer suspended in `send` so teardown can finish.
+            Task { await gate.close() }
+        }
     }
 }
 
@@ -130,10 +185,11 @@ extension Flow {
     ///   - onBufferOverflow: What a full buffer does with a new value.
     ///     `.dropOldest` (the default) evicts the oldest, keeping the newest —
     ///     the right choice for conflatable signals like location updates.
-    ///     `.dropLatest` discards the incoming value. `.suspend` is not
-    ///     honoured here because ``ProducerScope/trySend(_:)`` never suspends;
-    ///     it degrades to unbounded buffering. For true producer backpressure,
-    ///     apply `.buffer(size:policy:.suspend)` downstream.
+    ///     `.dropLatest` discards the incoming value. `.suspend` gives true
+    ///     producer backpressure through ``ProducerScope/send(_:)``, which
+    ///     suspends while `bufferCapacity` values are unconsumed; the
+    ///     non-suspending ``ProducerScope/trySend(_:)`` cannot backpressure
+    ///     and buffers without bound under this policy.
     public static func channelFlow(
         bufferCapacity: Int = 64,
         onBufferOverflow: BufferOverflow = .dropOldest,
@@ -143,7 +199,16 @@ extension Flow {
             let (stream, continuation) = AsyncStream<Element>.makeStream(
                 bufferingPolicy: channelBufferingPolicy(capacity: bufferCapacity, overflow: onBufferOverflow)
             )
-            let scope = ProducerScope<Element>(continuation: continuation, closeState: Mutex(.init()))
+            // The stream stores values under `.suspend`; the gate is what
+            // bounds them, by suspending `send` past `bufferCapacity`.
+            let gate: SendGate? = (onBufferOverflow == .suspend && bufferCapacity > 0)
+                ? SendGate(capacity: bufferCapacity)
+                : nil
+            let scope = ProducerScope<Element>(
+                continuation: continuation,
+                closeState: Mutex(.init()),
+                gate: gate
+            )
             continuation.onTermination = { _ in scope.markClosed() }
 
             await withTaskGroup(of: Void.self) { group in
@@ -156,6 +221,9 @@ extension Flow {
                 group.addTask {
                     for await value in stream {
                         await downstream.emit(value)
+                        // The consumer has processed the value: free its
+                        // backpressure slot so a suspended send can resume.
+                        await gate?.release()
                         if Task.isCancelled { break }
                     }
                     // Downstream drained or cancelled: wake a parked producer
@@ -192,8 +260,9 @@ extension Flow {
 }
 
 /// Maps a capacity and overflow policy to an `AsyncStream` buffering policy.
-/// `.suspend` degrades to unbounded because a non-suspending `trySend` cannot
-/// apply producer backpressure (see `channelFlow`'s docs).
+/// `.suspend` maps to unbounded storage: the `SendGate` is what enforces the
+/// capacity, by suspending `send` — a bounded stream policy here would
+/// silently drop values instead of backpressuring.
 private func channelBufferingPolicy<Element>(
     capacity: Int,
     overflow: BufferOverflow
