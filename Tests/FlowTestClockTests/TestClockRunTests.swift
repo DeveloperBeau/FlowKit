@@ -30,8 +30,13 @@ struct TestClockRunTests {
 
         _ = try await (t1, t2, t3)
 
-        let order = await woke.snapshot
-        #expect(order == [1, 3, 5])
+        // No ordering assertion here: run() resumes sleepers in deadline
+        // order, but which woken task reaches the collector first is up to
+        // the scheduler under load. Deadline-order observation is covered
+        // deterministically by the incremental-advance test, which awaits
+        // each task between advances.
+        let woken = await woke.snapshot
+        #expect(Set(woken) == [1, 3, 5])
         #expect(clock.now.offset == .seconds(5))
     }
 
