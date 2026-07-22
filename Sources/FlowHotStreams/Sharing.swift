@@ -6,12 +6,17 @@ extension Flow where Element: Equatable {
     /// Converts this cold flow into a hot `StateFlow` with the given initial
     /// value and sharing strategy.
     ///
+    /// The default strategy is `.whileSubscribed()` with a zero stop timeout,
+    /// matching Kotlin's `WhileSubscribed()`: the upstream stops as soon as
+    /// the last subscriber leaves. Pass an explicit
+    /// `stopTimeout` (e.g. `.seconds(5)`) to survive brief resubscribe gaps.
+    ///
     /// - Parameter clock: The clock the sharing strategy times its stop delay
     ///   against. Injectable so a test can drive `whileSubscribed`'s timeout
     ///   with virtual time.
     public func asStateFlow(
         initialValue: Element,
-        strategy: SharingStrategy = .whileSubscribed(stopTimeout: .seconds(5)),
+        strategy: SharingStrategy = .whileSubscribed(),
         clock: any Clock<Duration> = ContinuousClock()
     ) -> any StateFlow<Element> {
         let state = MutableStateFlow(initialValue)
@@ -50,12 +55,17 @@ extension Flow {
     /// Converts this cold flow into a hot `SharedFlow` with the given replay
     /// buffer size and sharing strategy.
     ///
+    /// The default strategy is `.whileSubscribed()` with a zero stop timeout,
+    /// matching Kotlin's `WhileSubscribed()`: the upstream stops as soon as
+    /// the last subscriber leaves. Pass an explicit
+    /// `stopTimeout` (e.g. `.seconds(5)`) to survive brief resubscribe gaps.
+    ///
     /// - Parameter clock: The clock the sharing strategy times its stop delay
     ///   against. Injectable so a test can drive `whileSubscribed`'s timeout
     ///   with virtual time.
     public func asSharedFlow(
         replay: Int = 0,
-        strategy: SharingStrategy = .whileSubscribed(stopTimeout: .seconds(5)),
+        strategy: SharingStrategy = .whileSubscribed(),
         clock: any Clock<Duration> = ContinuousClock()
     ) -> any SharedFlow<Element> {
         let shared = MutableSharedFlow<Element>(replay: replay)
