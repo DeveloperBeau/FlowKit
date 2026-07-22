@@ -1,7 +1,15 @@
 import Testing
 import Foundation
 import FlowCore
+import FlowSharedModels
 @testable import FlowTestingCore
+
+/// True when the issue's message contains `fragment`. Used as a
+/// `withKnownIssue` matcher so an unrelated failure recorded inside the block
+/// still fails the test instead of being silently absorbed as the known issue.
+private func issueContains(_ issue: Issue, _ fragment: String) -> Bool {
+    issue.comments.contains { $0.rawValue.contains(fragment) }
+}
 
 @Suite("FlowTester")
 struct FlowTesterTests {
@@ -63,22 +71,30 @@ struct FlowTesterTests {
     func awaitValueOnCompletion() async throws {
         let tester = FlowTester<Int>()
         Task { await tester.recordCompletion() }
-        await withKnownIssue {
+        let thrown = Mutex<FlowTestError?>(nil)
+        try await withKnownIssue {
             do {
                 _ = try await tester.awaitValue(within: .seconds(1))
-            } catch {}
-        }
+            } catch let error as FlowTestError {
+                thrown.withLock { $0 = error }
+            }
+        } matching: { issueContains($0, "expected value but flow completed") }
+        #expect(thrown.withLock { $0 } == .unexpectedCompletion)
     }
 
     @Test("expectCompletion throws unexpectedValue when value arrives")
     func expectCompletionGetsValue() async throws {
         let tester = FlowTester<Int>()
         Task { await tester.recordValue(99) }
-        await withKnownIssue {
+        let thrown = Mutex<FlowTestError?>(nil)
+        try await withKnownIssue {
             do {
                 try await tester.expectCompletion(within: .seconds(1))
-            } catch {}
-        }
+            } catch let error as FlowTestError {
+                thrown.withLock { $0 = error }
+            }
+        } matching: { issueContains($0, "expected completion but received value 99") }
+        #expect(thrown.withLock { $0 } == .unexpectedValue)
     }
 
     @Test("expectNoValue records issue when value arrives")
@@ -87,6 +103,6 @@ struct FlowTesterTests {
         await tester.recordValue(1)
         await withKnownIssue {
             await tester.expectNoValue(within: .seconds(1))
-        }
+        } matching: { issueContains($0, "expected no value within") }
     }
 }
