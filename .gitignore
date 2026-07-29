@@ -30,3 +30,9 @@ DerivedData/
 graphy-out/
 
 CLAUDE.local.md
+
+# Agent tooling / local-only
+.claude/
+.claire/
+skills-lock.json
+.agents/
