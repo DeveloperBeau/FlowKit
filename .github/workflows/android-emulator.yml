@@ -46,12 +46,20 @@ jobs:
           swift-version: '6.3.3'
           ndk-version: 'r27d'
           android-api-level: 28
-          swift-configuration: release
+          # debug, not release: `swift build --build-tests -c release` fails outright
+          # on this package (module not compiled for testing), and forcing testability
+          # in release with `-Xswiftc -enable-testing` segfaults the Apple toolchain's
+          # SIL optimizer instead — a pre-existing project bug, unrelated to Android,
+          # not something this job works around. debug is the config that demonstrably
+          # builds. See the changes file for the full finding and reproduction.
+          swift-configuration: debug
           free-disk-space: true
           # FLOWKIT_TIMEOUT_SCALE widens FlowTesting's wall-clock HANG DETECTORS.
           # It is not a performance assertion: a passing test never waits out a
-          # timeout, so a too-large value costs nothing on green runs. 12 is a
-          # starting guess, not a measurement — see the spec's tuning note.
+          # timeout, so a too-large value costs nothing on green runs. 12 was already
+          # a guess against a release build; debug is slower at runtime than release
+          # would have been, so this guess is now less certain, not more. Do not raise
+          # it without a measurement — the first scheduled runs are the measurement.
           test-env: 'FLOWKIT_TIMEOUT_SCALE=12'
           # Same eight suites as the linux job in ci.yml, so that a red Android
           # run against a green Linux run isolates the platform rather than the
