@@ -12,6 +12,14 @@ Full API documentation: <https://developerbeau.github.io/FlowKit/documentation/f
 
 FlowKit brings the Kotlin Flow mental model to Swift: cold asynchronous streams (`Flow`, `ThrowingFlow`), hot multicast primitives (`StateFlow`, `SharedFlow`), a rich operator library, and built-in testing infrastructure with virtual time.
 
+## Why Swift
+
+FlowKit borrows Kotlin Flow's design, but it exists as a Swift library because of what the compiler checks before any of this code runs.
+
+Every target in this package builds under Swift 6 language mode with strict concurrency enabled. The compiler tracks whether a value crossing a thread or an actor boundary is safe to share, and rejects the build when it isn't. `Mutex` requires its protected value to conform to `Sendable`: instantiating it with a type that doesn't fails to compile, so a lock can't hand out a reference across threads that was never safe to touch from more than one place. Actor isolation works the same way: touching actor-isolated state from the wrong context is a compile error, not a race that shows up under load.
+
+Kotlin's coroutines don't check any of this at compile time. A `Flow` collector or a `StateFlow` update can cross threads with nothing in the type system confirming the value involved is safe to share, so a data race there is a runtime problem, caught by whichever test happens to exercise the right interleaving, or not caught at all. Typed throws and `sending` extend the same idea: a function's error type participates in the signature the compiler checks instead of being erased to a catch-all `Throwable`, and a value moving across an isolation boundary needs the compiler to confirm nothing else still holds onto it. These checks reject code Kotlin would accept without complaint. That's the tradeoff: a class of concurrency bug becomes a compiler error where the code was written, instead of a crash report from wherever it happened to run.
+
 ## Toolchain requirements
 
 | Requirement | Version |
