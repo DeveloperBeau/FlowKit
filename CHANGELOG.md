@@ -1,0 +1,31 @@
+# Changelog
+
+All notable changes to FlowKit are documented here.
+
+## Unreleased
+
+### Breaking
+
+- `Mutex<Value>` now requires `Value: Sendable`. Creating a `Mutex` around a type that
+  isn't `Sendable` no longer compiles. Every payload used internally already satisfied
+  this, but a downstream consumer holding `Mutex<SomeNonSendableType>` will need to make
+  that type `Sendable` (or stop storing it in a `Mutex`) before updating.
+- `Mutex.withLock`'s closure must now return a `Sendable` result. A closure that returns
+  a non-`Sendable` value no longer compiles. Previously this compiled and let a
+  non-`Sendable` value leave the lock's protection with nothing checking it was safe to
+  share elsewhere.
+
+Both changes are compile-time only, and there is no behavior change for code that already
+satisfied them, which is every call site in this package. They only affect consumers
+holding a non-`Sendable` payload in a `Mutex`, or returning one from a `withLock`
+closure.
+
+### Changed
+
+- `Mutex`'s locking implementation changed on both supported platforms. On Darwin it
+  now uses `OSAllocatedUnfairLock` instead of a hand-rolled `os_unfair_lock` wrapper.
+  Everywhere else it now uses the standard library's `Synchronization.Mutex` instead of
+  a hand-rolled `pthread_mutex_t` wrapper. `Mutex`'s public API and behavior are
+  unaffected; this is an internal implementation change riding along with the
+  constraints above.
+
