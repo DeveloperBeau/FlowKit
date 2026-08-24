@@ -24,7 +24,7 @@ public enum ChannelSendResult: Sendable, Equatable {
 /// down.
 public struct ProducerScope<Element: Sendable>: Sendable {
     @usableFromInline
-    internal struct CloseState {
+    internal struct CloseState: Sendable {
         var isClosed = false
         var awaitCloseInvoked = false
         var waiter: CheckedContinuation<Void, Never>?
