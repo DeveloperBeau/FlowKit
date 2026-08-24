@@ -27,10 +27,11 @@ internal import Synchronization
 /// Everywhere else, the standard library's `Mutex` is available
 /// unconditionally at this toolchain, so we use it directly.
 ///
-/// `Value` must be `Sendable`. That's what makes the lock itself safe to
-/// share across tasks unconditionally: nothing that comes out of `withLock`,
-/// or goes into it, can be a value that was only safe to touch from one
-/// place.
+/// `Value` must be `Sendable`, and so must whatever `withLock`'s closure
+/// returns. Together those two constraints are what make the lock safe to
+/// share across tasks unconditionally: nothing that goes into it, and
+/// nothing that comes out of it, can be a value that was only safe to touch
+/// from one place.
 ///
 /// ## Why the lock needs help finding a stable address
 ///
@@ -52,7 +53,7 @@ internal import Synchronization
 /// `body` cannot `await`, so the lock can never be held across a
 /// suspension point. That's what makes `withLock` safe to call from async
 /// code without worrying about starving other tasks on the same executor.
-public final class Mutex<Value: Sendable>: @unchecked Sendable {
+public final class Mutex<Value: Sendable>: Sendable {
     #if canImport(Darwin)
     private let lock: OSAllocatedUnfairLock<Value>
     #else
