@@ -105,6 +105,52 @@ struct MutexTests {
             #expect(mutex.withLock { $0 } == 500_500)
         }
     }
+
+    @Test("holds a reference-type value")
+    func holdsReferenceTypeValue() {
+        let mutex = Mutex<RefBox?>(nil)
+        mutex.withLock { $0 = RefBox(7) }
+        #expect(mutex.withLock { $0?.value } == 7)
+
+        // Take-and-clear: the shape real call sites (a stored continuation
+        // or task handle) actually use.
+        let taken = mutex.withLock { slot -> RefBox? in
+            let box = slot
+            slot = nil
+            return box
+        }
+        #expect(taken?.value == 7)
+        #expect(mutex.withLock { $0 } == nil)
+    }
+
+    @Test("a mutation made before a throw is kept, not rolled back")
+    func mutationBeforeThrowIsCommitted() {
+        let mutex = Mutex(1)
+        do {
+            try mutex.withLock { value in
+                value = 99
+                throw FlowTestError.timeout
+            }
+            Issue.record("expected withLock to rethrow")
+        } catch let error as FlowTestError {
+            #expect(error == .timeout)
+        } catch {
+            Issue.record("expected FlowTestError, got \(error)")
+        }
+
+        // Swift commits inout writes on the way out of a function whether it
+        // returns or throws, so the write from inside the closure above
+        // stuck even though the closure never returned normally.
+        #expect(mutex.withLock { $0 } == 99)
+    }
+}
+
+/// A plain reference type with no mutable state, so it's Sendable for free
+/// and stands in for the shape real call sites use (a stored continuation or
+/// task handle held behind a Mutex).
+private final class RefBox: Sendable {
+    let value: Int
+    init(_ value: Int) { self.value = value }
 }
 
 /// A small deterministic generator so the fuzzed shuffle order is

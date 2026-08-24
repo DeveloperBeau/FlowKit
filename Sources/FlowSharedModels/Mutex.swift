@@ -68,10 +68,23 @@ public final class Mutex<Value: Sendable>: @unchecked Sendable {
     }
 
     /// Executes `body` while holding the lock. The lock is released even if
-    /// `body` throws. Returns whatever `body` returns.
+    /// `body` throws, and a mutation `body` makes before throwing is kept:
+    /// Swift commits `inout` writes on the way out either way, so a throw
+    /// doesn't roll anything back. Returns whatever `body` returns.
+    ///
+    /// `R` must be `Sendable` for the same reason `Value` is: whatever comes
+    /// out of the closure is about to leave the lock's protection and go
+    /// wherever the caller takes it, so it has to already be safe to share.
     @discardableResult
-    public func withLock<R>(_ body: (inout Value) throws -> R) rethrows -> R {
+    public func withLock<R: Sendable>(_ body: (inout Value) throws -> R) rethrows -> R {
         #if canImport(Darwin)
+        // OSAllocatedUnfairLock.withLock (the checked variant) also requires
+        // body itself to be @Sendable, which ours isn't: body's captured
+        // context is whatever local, non-Sendable state the caller closed
+        // over, and that's the normal, expected shape for this API. R being
+        // Sendable is enforced above, on our own signature, so
+        // withLockUnchecked isn't reopening the hole this pass closed, it's
+        // just the one entry point that accepts a plain closure.
         return try lock.withLockUnchecked(body)
         #else
         return try lock.withLock { value in try body(&value) }
