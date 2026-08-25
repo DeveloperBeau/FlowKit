@@ -109,7 +109,21 @@ jobs:
           swift sdk list
       - name: Install and configure Android NDK
         run: |
-          cd "$HOME/.swiftpm/swift-sdks/swift-${SWIFT_VERSION}-RELEASE_android.artifactbundle/swift-android"
+          set -euo pipefail
+          # SwiftPM's data directory is host-specific: ~/.swiftpm on macOS, the
+          # XDG data path on Linux. `swift sdk install` has no flag to pin it
+          # and no command reports it back, so probe both roots rather than
+          # hardcode one and rediscover this the next time a runner changes.
+          BUNDLE="swift-${SWIFT_VERSION}-RELEASE_android.artifactbundle/swift-android"
+          for root in "$HOME/.swiftpm/swift-sdks" \
+                      "${XDG_DATA_HOME:-$HOME/.local/share}/org.swift.swiftpm/swift-sdks"; do
+            if [ -d "$root/$BUNDLE" ]; then SDK_DIR="$root/$BUNDLE"; break; fi
+          done
+          [ -n "${SDK_DIR:-}" ] || {
+            echo "::error::installed Android SDK bundle not found under any known SwiftPM data directory"
+            exit 1
+          }
+          cd "$SDK_DIR"
           curl -fSL --retry 3 --retry-all-errors -o ndk.zip \
             "https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip"
           unzip -qo ndk.zip
