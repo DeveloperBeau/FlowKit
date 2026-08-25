@@ -2,16 +2,7 @@
 
 All notable changes to FlowKit are documented here.
 
-## Unreleased
-
-### Added
-
-- The `Flow` and `FlowTesting` products cross-compile for Android (`aarch64` and `x86_64`,
-  API 28) with the Swift SDK for Android. Every pull request is gated on that build.
-- A nightly, non-blocking job runs the eight non-UI test suites on an x86_64 Android
-  emulator. It is the only place FlowKit is executed on Android, and it is not a required
-  check — the Android build is guaranteed, Android runtime behaviour is monitored.
-  `FlowUI` remains Apple-only.
+## 2.0.0 — 2026-08-25
 
 ### Breaking
 
@@ -28,6 +19,22 @@ Both changes are compile-time only, and there is no behavior change for code tha
 satisfied them, which is every call site in this package. They only affect consumers
 holding a non-`Sendable` payload in a `Mutex`, or returning one from a `withLock`
 closure.
+
+#### Upgrading from 1.x
+
+Most consumers need no changes: if your code compiles against 1.2.2 without storing a
+non-`Sendable` value in a `Mutex`, it compiles here unchanged. If it doesn't, the compiler
+points at the exact declaration — make the stored type `Sendable`, or move it out of the
+`Mutex`. There is no runtime behaviour change to account for either way.
+
+### Added
+
+- The `Flow` and `FlowTesting` products cross-compile for Android (`aarch64` and `x86_64`,
+  API 28) with the Swift SDK for Android. Every pull request is gated on that build.
+- A nightly, non-blocking job runs the eight non-UI test suites on an x86_64 Android
+  emulator. It is the only place FlowKit is executed on Android, and it is not a required
+  check — the Android build is guaranteed, Android runtime behaviour is monitored.
+  `FlowUI` remains Apple-only.
 
 ### Changed
 
