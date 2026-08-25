@@ -83,6 +83,7 @@ jobs:
       ANDROID_SDK_URL: 'https://download.swift.org/swift-6.3.3-release/android-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_android.artifactbundle.tar.gz'
       ANDROID_SDK_CHECKSUM: 'd160cc3206dd1886dae3fef2337af5e25ec034692cd0ec225721c56cc69da7f5'
       NDK_VERSION: 'r27d'
+      SWIFT_SDKS_PATH: '${{ runner.temp }}/swift-sdks'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
@@ -103,27 +104,31 @@ jobs:
             swift --version
             exit 1
           }
+      # Extracted to a directory this workflow owns rather than installed with
+      # `swift sdk install`. SwiftPM's data directory is host-specific and has
+      # no flag to pin it and no command to report it back, so the previous
+      # approach meant guessing a path that differs per OS and per SwiftPM
+      # version. `swift build --swift-sdks-path` reads whatever directory it is
+      # given, which makes the location ours to decide instead.
       - name: Install Swift SDK for Android
         run: |
-          swift sdk install "$ANDROID_SDK_URL" --checksum "$ANDROID_SDK_CHECKSUM"
-          swift sdk list
+          set -euo pipefail
+          mkdir -p "$SWIFT_SDKS_PATH"
+          curl -fSL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/android-sdk.tar.gz" \
+            "$ANDROID_SDK_URL"
+          echo "${ANDROID_SDK_CHECKSUM}  $RUNNER_TEMP/android-sdk.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/android-sdk.tar.gz" -C "$SWIFT_SDKS_PATH"
       - name: Install and configure Android NDK
         run: |
           set -euo pipefail
-          # SwiftPM's data directory is host-specific: ~/.swiftpm on macOS, the
-          # XDG data path on Linux. `swift sdk install` has no flag to pin it
-          # and no command reports it back, so probe both roots rather than
-          # hardcode one and rediscover this the next time a runner changes.
-          BUNDLE="swift-${SWIFT_VERSION}-RELEASE_android.artifactbundle/swift-android"
-          for root in "$HOME/.swiftpm/swift-sdks" \
-                      "${XDG_DATA_HOME:-$HOME/.local/share}/org.swift.swiftpm/swift-sdks"; do
-            if [ -d "$root/$BUNDLE" ]; then SDK_DIR="$root/$BUNDLE"; break; fi
-          done
-          [ -n "${SDK_DIR:-}" ] || {
-            echo "::error::installed Android SDK bundle not found under any known SwiftPM data directory"
+          # Derived from the directory we extracted into, not from the bundle's
+          # name, so a rename in a future SDK release doesn't silently break it.
+          BUNDLE="$(find "$SWIFT_SDKS_PATH" -maxdepth 1 -name '*.artifactbundle' -print -quit)"
+          [ -n "$BUNDLE" ] || {
+            echo "::error::no .artifactbundle found under $SWIFT_SDKS_PATH after extraction"
             exit 1
           }
-          cd "$SDK_DIR"
+          cd "$BUNDLE/swift-android"
           curl -fSL --retry 3 --retry-all-errors -o ndk.zip \
             "https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip"
           unzip -qo ndk.zip
@@ -137,7 +142,8 @@ jobs:
           check() {
             triple="$1"; expected="$2"
             echo "::group::$triple"
-            swift build -j 2 -c release --swift-sdk "$triple" --target Flow --target FlowTesting
+            swift build -j 2 -c release --swift-sdk "$triple" \
+              --swift-sdks-path "$SWIFT_SDKS_PATH" --target Flow --target FlowTesting
             obj="$(find ".build/$triple/release" -name '*.o' -print -quit)"
             [ -n "$obj" ] || { echo "::error::no objects under .build/$triple/release — did --swift-sdk apply?"; exit 1; }
             echo "$obj"
