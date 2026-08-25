@@ -64,6 +64,103 @@ jobs:
             --filter FlowPublicAPITests \
             --filter FlowTestingPublicAPITests
 
+  # Cross-compiles only. A cross-compiled Android binary cannot execute on the
+  # Linux host and there is no emulator here, so this job proves the package
+  # BUILDS for Android — it does not run a single FlowKit test on Android. The
+  # nightly android-emulator.yml workflow is what exercises the runtime, and it
+  # deliberately does not gate merges.
+  #
+  # The Swift SDK for Android requires an open-source host toolchain whose
+  # version matches the SDK bundle EXACTLY. resolve-swift short-circuits on a
+  # prefix match, so '6.3' could leave a 6.3.1 image toolchain in place against
+  # a 6.3.3 bundle; the pin below is exact and the next step asserts it, because
+  # the mismatch surfaces as an unrelated-looking module-format error.
+  android:
+    name: Android (cross-compile)
+    runs-on: ubuntu-latest
+    env:
+      SWIFT_VERSION: '6.3.3'
+      ANDROID_SDK_URL: 'https://download.swift.org/swift-6.3.3-release/android-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_android.artifactbundle.tar.gz'
+      ANDROID_SDK_CHECKSUM: 'd160cc3206dd1886dae3fef2337af5e25ec034692cd0ec225721c56cc69da7f5'
+      NDK_VERSION: 'r27d'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: DeveloperBeau/resolve-swift@95dd7376c9df6efd1252713de2edbc4ae6df0663  # v1
+        with:
+          swift-version: '6.3.3'
+      - name: Show Swift version
+        run: swift --version
+      # Substring match anchored on the literal "Swift version " prefix. Safe
+      # while the pin is 6.3.3, which is not a prefix of any other release; if
+      # the pin ever becomes one that is (e.g. 6.4 vs 6.4.1), add a trailing
+      # space inside the quotes.
+      - name: Require exact toolchain match
+        run: |
+          swift --version 2>&1 | grep -q "Swift version ${SWIFT_VERSION}" || {
+            echo "::error::Swift SDK for Android ${SWIFT_VERSION} needs host toolchain ${SWIFT_VERSION}"
+            swift --version
+            exit 1
+          }
+      # Extracted to a directory this workflow owns rather than installed with
+      # `swift sdk install`. SwiftPM's data directory is host-specific and has
+      # no flag to pin it and no command to report it back, so the previous
+      # approach meant guessing a path that differs per OS and per SwiftPM
+      # version. `swift build --swift-sdks-path` reads whatever directory it is
+      # given, which makes the location ours to decide instead.
+      - name: Install Swift SDK for Android
+        run: |
+          set -euo pipefail
+          # RUNNER_TEMP is an environment variable at step runtime; the matching
+          # `runner` context is not available in job-level env, so the path is
+          # published here for the later steps instead of declared up top.
+          SWIFT_SDKS_PATH="$RUNNER_TEMP/swift-sdks"
+          echo "SWIFT_SDKS_PATH=$SWIFT_SDKS_PATH" >> "$GITHUB_ENV"
+          mkdir -p "$SWIFT_SDKS_PATH"
+          curl -fSL --retry 3 --retry-all-errors -o "$RUNNER_TEMP/android-sdk.tar.gz" \
+            "$ANDROID_SDK_URL"
+          echo "${ANDROID_SDK_CHECKSUM}  $RUNNER_TEMP/android-sdk.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/android-sdk.tar.gz" -C "$SWIFT_SDKS_PATH"
+      - name: Install and configure Android NDK
+        run: |
+          set -euo pipefail
+          # Derived from the directory we extracted into, not from the bundle's
+          # name, so a rename in a future SDK release doesn't silently break it.
+          BUNDLE="$(find "$SWIFT_SDKS_PATH" -maxdepth 1 -name '*.artifactbundle' -print -quit)"
+          [ -n "$BUNDLE" ] || {
+            echo "::error::no .artifactbundle found under $SWIFT_SDKS_PATH after extraction"
+            exit 1
+          }
+          cd "$BUNDLE/swift-android"
+          curl -fSL --retry 3 --retry-all-errors -o ndk.zip \
+            "https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip"
+          unzip -qo ndk.zip
+          ANDROID_NDK_HOME="$PWD/android-ndk-${NDK_VERSION}" ./scripts/setup-android-sdk.sh
+      - name: Cross-compile non-UI targets (release config)
+        run: |
+          set -euo pipefail
+          # The arch strings are what `file` prints for an Android ELF object,
+          # written out here by hand so the check has a source independent of the
+          # build that produced the object.
+          check() {
+            triple="$1"; expected="$2"
+            echo "::group::$triple"
+            swift build -j 2 -c release --swift-sdk "$triple" \
+              --swift-sdks-path "$SWIFT_SDKS_PATH" --target Flow --target FlowTesting
+            obj="$(find ".build/$triple/release" -name '*.o' -print -quit)"
+            [ -n "$obj" ] || { echo "::error::no objects under .build/$triple/release — did --swift-sdk apply?"; exit 1; }
+            echo "$obj"
+            file "$obj"
+            file "$obj" | grep -q "$expected" || {
+              echo "::error::$obj is not $expected — built for the wrong architecture"
+              exit 1
+            }
+            echo "::endgroup::"
+          }
+          check aarch64-unknown-linux-android28 'ARM aarch64'
+          check x86_64-unknown-linux-android28 'x86-64'
+
   # The only simulator that runs the tests. The other Apple platforms share
   # this exact simulator runtime environment (same host kernel, same Swift
   # runtime), so running the suite on each adds sim-boot flakiness and runner

@@ -34,6 +34,33 @@ Kotlin's coroutines don't check any of this at compile time. A `Flow` collector 
 
 > **Note on older Xcode:** FlowKit uses Swift 6.2 and 6.3 language features (`@concurrent`, `@specialize`, isolated deinit, `Observations` async sequence). If you're on Xcode 17–26.3, install the Swift 6.3 toolchain from [swift.org/install](https://www.swift.org/install/) and select it in Xcode's **Toolchains** menu.
 
+### Android
+
+FlowKit's non-UI targets — the `Flow` and `FlowTesting` products — cross-compile for
+Android with [the Swift SDK for Android](https://www.swift.org/documentation/articles/swift-sdk-for-android-getting-started.html):
+
+```sh
+swift build --swift-sdk aarch64-unknown-linux-android28 --target Flow --target FlowTesting
+```
+
+Two different things are checked, and they are not the same guarantee:
+
+- **Every pull request** cross-compiles both products for `aarch64` and `x86_64` at API
+  level 28. This is a required check: a change that breaks the Android build cannot merge.
+  It is a build gate — nothing is executed.
+- **Nightly, and not required to pass**, the eight non-UI test suites run on an x86_64
+  Android emulator. This is where FlowKit's runtime behaviour on Android is actually
+  exercised. Because the suite is wall-clock-timing-sensitive and an emulator on a shared
+  runner is not, a red night does not block anything and is not by itself a bug report.
+
+So: **the Android build is guaranteed; Android runtime behaviour is monitored, not gated.**
+If you are shipping FlowKit on Android, treat the nightly emulator run as supporting
+evidence rather than a support commitment, and test on your own devices.
+
+The `FlowUI` product is Apple-only. It compiles on Android — `canImport(SwiftUI)` and
+`canImport(UIKit)` are simply false there — so a green build of it would mean empty modules,
+not a working UI layer.
+
 ## Installation
 
 Add FlowKit to your `Package.swift` dependencies:

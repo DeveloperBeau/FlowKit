@@ -4,6 +4,15 @@ All notable changes to FlowKit are documented here.
 
 ## Unreleased
 
+### Added
+
+- The `Flow` and `FlowTesting` products cross-compile for Android (`aarch64` and `x86_64`,
+  API 28) with the Swift SDK for Android. Every pull request is gated on that build.
+- A nightly, non-blocking job runs the eight non-UI test suites on an x86_64 Android
+  emulator. It is the only place FlowKit is executed on Android, and it is not a required
+  check — the Android build is guaranteed, Android runtime behaviour is monitored.
+  `FlowUI` remains Apple-only.
+
 ### Breaking
 
 - `Mutex<Value>` now requires `Value: Sendable`. Creating a `Mutex` around a type that
