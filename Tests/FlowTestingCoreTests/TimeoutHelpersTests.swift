@@ -17,7 +17,9 @@ struct TimeoutHelpersTests {
     func timeoutThrows() async {
         do {
             _ = try await withThrowingTimeout(.milliseconds(50)) {
-                try await Task.sleep(for: .seconds(0.5))
+                // Scale with the timeout so the body always loses the race,
+                // whatever FLOWKIT_TIMEOUT_SCALE the runner sets.
+                try await Task.sleep(for: scaledTimeout(.seconds(0.5)))
                 return 0
             }
             Issue.record("expected timeout error")
