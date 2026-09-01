@@ -44,7 +44,12 @@ jobs:
       - uses: skiptools/swift-android-action@2044b79660f201ccef8cbce62877e4ec5409f9c8  # v2.9.5
         with:
           swift-version: '6.3.3'
-          ndk-version: 'r27d'
+          # Must be the NDK's numeric directory version, not its release name:
+          # the action resolves it with `ls $ANDROID_NDK_HOME/../<value>*`, and the
+          # runner installs NDKs under numeric names. 'r27d' matched nothing, which
+          # left ANDROID_NDK_HOME empty and failed the SDK setup script. '27' is
+          # r27d (27.3.13750724) on the current image and tolerates a patch bump.
+          ndk-version: '27'
           android-api-level: 28
           # debug, not release: `swift build --build-tests -c release` fails outright
           # on this package (module not compiled for testing), and forcing testability
