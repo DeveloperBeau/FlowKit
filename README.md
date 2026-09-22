@@ -234,7 +234,7 @@ func articleFeedEmitsCachedThenFresh() async throws {
 
 ## Contributing
 
-If your change touches anything in `Sources/Flow/Documentation.docc/`, regenerate the static site before opening a PR:
+If your change touches anything in `Sources/Core/Flow/Documentation.docc/`, regenerate the static site before opening a PR:
 
 ```bash
 rm -rf docs
