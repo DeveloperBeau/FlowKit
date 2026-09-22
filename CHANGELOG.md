@@ -2,6 +2,22 @@
 
 All notable changes to FlowKit are documented here.
 
+## 2.1.0 — 2026-09-22
+
+### Changed
+
+- Reorganized `Sources/` and `Tests/` from a flat list of target directories into
+  layer-based groups — `Shared/`, `Core/`, `UI/`, `Testing/` — mirroring the `Flow`,
+  `FlowTesting`, and `FlowUI` products, and split the largest targets' flat file lists
+  into subfolders by responsibility (e.g. `FlowCore` into `Flow`/`ThrowingFlow`,
+  `FlowOperatorsTests` into per-operator-category folders). This is a pure internal
+  reorganization: target names, the public product surface, and every API are unchanged.
+- Updated pinned dependencies: `swift-async-algorithms` 1.1.3 → 1.1.5, `swift-docc-plugin`
+  1.4.6 → 1.5.0, `swift-crypto` 4.5.1 → 5.0.0. The crypto major bump is additive and
+  internal-visibility cleanup on Apple's side; nothing FlowKit calls was removed, and
+  `swift-crypto` is scoped to a test target, so it never reaches consumers of `Flow`,
+  `FlowTesting`, or `FlowUI`.
+
 ## 2.0.0 — 2026-08-25
 
 ### Breaking
