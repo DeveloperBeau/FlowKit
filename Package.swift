@@ -28,15 +28,15 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/apple/swift-async-algorithms",
-            exact: "1.1.3"
+            exact: "1.1.5"
         ),
         .package(
             url: "https://github.com/apple/swift-docc-plugin",
-            exact: "1.4.6"
+            exact: "1.5.0"
         ),
         .package(
             url: "https://github.com/apple/swift-crypto",
-            exact: "4.5.1"
+            exact: "5.0.0"
         )
     ],
     targets: [
