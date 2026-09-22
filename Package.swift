@@ -45,6 +45,7 @@ let package = Package(
         .target(
             name: "FlowSharedModels",
             dependencies: [],
+            path: "Sources/Shared/FlowSharedModels",
             swiftSettings: strictSettings
         ),
 
@@ -53,6 +54,7 @@ let package = Package(
         .target(
             name: "FlowCore",
             dependencies: ["FlowSharedModels"],
+            path: "Sources/Core/FlowCore",
             swiftSettings: strictSettings
         ),
         .target(
@@ -61,11 +63,13 @@ let package = Package(
                 "FlowCore",
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms")
             ],
+            path: "Sources/Core/FlowOperators",
             swiftSettings: strictSettings
         ),
         .target(
             name: "FlowHotStreams",
             dependencies: ["FlowSharedModels", "FlowCore", "FlowOperators"],
+            path: "Sources/Core/FlowHotStreams",
             swiftSettings: strictSettings
         ),
         .target(
@@ -76,6 +80,7 @@ let package = Package(
                 "FlowOperators",
                 "FlowHotStreams"
             ],
+            path: "Sources/Core/Flow",
             swiftSettings: strictSettings
         ),
 
@@ -84,16 +89,19 @@ let package = Package(
         .target(
             name: "FlowSwiftUI",
             dependencies: ["FlowSharedModels", "FlowCore", "FlowHotStreams", "Flow"],
+            path: "Sources/UI/FlowSwiftUI",
             swiftSettings: strictSettings
         ),
         .target(
             name: "FlowUIKitBridge",
             dependencies: ["FlowCore", "FlowHotStreams"],
+            path: "Sources/UI/FlowUIKitBridge",
             swiftSettings: strictSettings
         ),
         .target(
             name: "FlowUI",
             dependencies: ["FlowSwiftUI", "FlowUIKitBridge", "Flow"],
+            path: "Sources/UI/FlowUI",
             swiftSettings: strictSettings
         ),
 
@@ -102,16 +110,19 @@ let package = Package(
         .target(
             name: "FlowTestClock",
             dependencies: ["FlowSharedModels"],
+            path: "Sources/Testing/FlowTestClock",
             swiftSettings: strictSettings
         ),
         .target(
             name: "FlowTestingCore",
             dependencies: ["Flow", "FlowTestClock"],
+            path: "Sources/Testing/FlowTestingCore",
             swiftSettings: strictSettings
         ),
         .target(
             name: "FlowTesting",
             dependencies: ["FlowTestClock", "FlowTestingCore"],
+            path: "Sources/Testing/FlowTesting",
             swiftSettings: strictSettings
         ),
 
@@ -120,31 +131,37 @@ let package = Package(
         .testTarget(
             name: "FlowSharedModelsTests",
             dependencies: ["FlowSharedModels"],
+            path: "Tests/Shared/FlowSharedModelsTests",
             swiftSettings: strictSettings
         ),
         .testTarget(
             name: "FlowCoreTests",
             dependencies: ["FlowCore", "FlowTesting"],
+            path: "Tests/Core/FlowCoreTests",
             swiftSettings: strictSettings
         ),
         .testTarget(
             name: "FlowOperatorsTests",
             dependencies: ["FlowOperators", "FlowHotStreams", "FlowTesting", "FlowTestClock"],
+            path: "Tests/Core/FlowOperatorsTests",
             swiftSettings: strictSettings
         ),
         .testTarget(
             name: "FlowHotStreamsTests",
             dependencies: ["FlowHotStreams", "FlowTesting"],
+            path: "Tests/Core/FlowHotStreamsTests",
             swiftSettings: strictSettings
         ),
         .testTarget(
             name: "FlowTestClockTests",
             dependencies: ["FlowTestClock", "FlowTestingCore"],
+            path: "Tests/Testing/FlowTestClockTests",
             swiftSettings: strictSettings
         ),
         .testTarget(
             name: "FlowTestingCoreTests",
             dependencies: ["FlowTestingCore"],
+            path: "Tests/Testing/FlowTestingCoreTests",
             swiftSettings: strictSettings
         ),
 
@@ -155,6 +172,7 @@ let package = Package(
                 "FlowTesting",
                 .product(name: "Crypto", package: "swift-crypto")
             ],
+            path: "Tests/Core/FlowSimulationTests",
             swiftSettings: strictSettings
         ),
 
@@ -163,16 +181,19 @@ let package = Package(
         .testTarget(
             name: "FlowPublicAPITests",
             dependencies: ["Flow"],
+            path: "Tests/Core/FlowPublicAPITests",
             swiftSettings: strictSettings
         ),
         .testTarget(
             name: "FlowTestingPublicAPITests",
             dependencies: ["FlowTesting"],
+            path: "Tests/Testing/FlowTestingPublicAPITests",
             swiftSettings: strictSettings
         ),
         .testTarget(
             name: "FlowUITests",
             dependencies: ["FlowUI", "FlowTesting"],
+            path: "Tests/UI/FlowUITests",
             swiftSettings: strictSettings
         )
     ]
