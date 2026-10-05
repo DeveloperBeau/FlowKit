@@ -2,7 +2,7 @@
 
 All notable changes to FlowKit are documented here.
 
-## 2.3.0 (unreleased)
+## 2.3.0 — 2026-10-05
 
 ### Added
 
