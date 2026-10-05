@@ -26,7 +26,7 @@ struct TestClockRunTests {
             await woke.append(3)
         }()
 
-        try await clock.waitForSleepers(3)
+        try #require(await clock.registersSleepers(3), "the sleepers never registered")
         await clock.run()
 
         _ = try await (t1, t2, t3)

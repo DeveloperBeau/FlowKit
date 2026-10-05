@@ -10,6 +10,9 @@ package struct TimeoutRun {
     package let error: (any Error)?
 }
 
+/// Thrown by ``driveTimeout(on:deadline:_:)`` when the timer's sleeper never registered.
+package struct TimerNeverRegistered: Error {}
+
 /// Runs `operation`, which must register exactly one sleep on `clock` (its
 /// timeout) and then block, and walks the clock up to `deadline` by hand.
 ///
@@ -27,7 +30,7 @@ package func driveTimeout(
         defer { finished.fire() }
         try await operation()
     }
-    try await clock.waitForSleepers(1)
+    guard await clock.registersSleepers(1) else { throw TimerNeverRegistered() }
     await clock.advance(by: deadline - .milliseconds(1))
     let wasRunning = !finished.hasFired
     await clock.advance(by: .milliseconds(1))

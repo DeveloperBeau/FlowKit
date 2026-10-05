@@ -30,7 +30,7 @@ struct ThrottleTests {
             await upstream.emit(3)
             // Wait until throttle has processed the burst before the window expires.
             try await probe.waitForValue { $0 == 3 }
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(3) // latest at boundary
         }
@@ -57,7 +57,7 @@ struct ThrottleTests {
             await upstream.emit(3)   // within window, replaces 2
             // Wait until throttle has processed the burst before the window expires.
             try await probe.waitForValue { $0 == 3 }
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             await clock.advance(by: .seconds(1))
             // With latest=false, the FIRST value after the window started (2) is emitted
             try await tester.expectValue(2)

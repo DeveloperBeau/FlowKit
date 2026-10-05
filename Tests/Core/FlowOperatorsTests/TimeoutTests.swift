@@ -22,20 +22,20 @@ struct TimeoutTests {
         try await ProbeScope.run { scope in
             let tester = scope.probe(flow)
             try await upstream.waitForSubscribers(1)
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
 
             await upstream.emit(1)
             try await tester.expectValue(1)
 
             // Halfway through the window a new value resets the deadline.
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             await clock.advance(by: .seconds(5))
             await upstream.emit(2)
             try await probe.waitForValue { $0 == 2 }
             try await tester.expectValue(2)
 
             // Silence for a full window from the last value.
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             await clock.advance(by: .seconds(10))
             try await tester.expectError(FlowTimeoutError())
         }
@@ -50,7 +50,7 @@ struct TimeoutTests {
         try await ProbeScope.run { scope in
             let tester = scope.probe(flow)
             try await upstream.waitForSubscribers(1)
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             await clock.advance(by: .seconds(3))
             try await tester.expectError(FlowTimeoutError())
         }

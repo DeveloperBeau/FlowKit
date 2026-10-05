@@ -108,7 +108,7 @@ struct SimulationTests {
         try await ProbeScope.run { scope in
             let tester = scope.probe(pipeline)
             try await gps.waitForSubscribers(1)
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
 
             // Burst 1: 200 fixes inside the first window.
             for tick in 0..<200 {
@@ -124,7 +124,7 @@ struct SimulationTests {
             #expect(firstFix.tick == 199) // only the latest fix survives sampling
 
             // Burst 2: a quieter window.
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             for tick in 200..<220 {
                 await gps.emit(LocationFix(latitude: 51.6, longitude: -0.12, tick: tick))
             }

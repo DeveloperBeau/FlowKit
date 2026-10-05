@@ -38,7 +38,7 @@ struct DebounceTests {
 
             // Not enough silence yet: debounce is parked on its window timer
             // holding "hel", so it cannot have emitted.
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
 
             // Advance past the debounce window
             await clock.advance(by: .milliseconds(300))
@@ -64,7 +64,7 @@ struct DebounceTests {
             // Wait until debounce has registered the value and its clock sleep
             // before advancing, instead of racing them with a real sleep.
             try await probe.waitForValue { $0 == 42 }
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }

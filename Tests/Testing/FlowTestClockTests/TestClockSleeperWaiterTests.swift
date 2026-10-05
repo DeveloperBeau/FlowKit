@@ -15,8 +15,11 @@ struct TestClockSleeperWaiterTests {
         let clock = TestClock()
         let first = sleeper(on: clock, seconds: 1)
         let second = sleeper(on: clock, seconds: 2)
-        try await clock.waitForSleepers(1)
-        try await clock.waitForSleepers(2)
+        #expect(await clock.registersSleepers(2), "the sleepers never registered")
+
+        // Both sleepers are registered now, so each of these is already satisfied.
+        #expect(await clock.registersSleepers(1), "wait for 1 parked with 2 sleepers registered")
+        #expect(await clock.registersSleepers(2), "wait for 2 parked with 2 sleepers registered")
         await clock.run()
         try await first.value
         try await second.value
@@ -25,8 +28,8 @@ struct TestClockSleeperWaiterTests {
     @Test("A count of zero or less returns with no sleepers")
     func zeroReturnsImmediately() async throws {
         let clock = TestClock()
-        try await clock.waitForSleepers(0)
-        try await clock.waitForSleepers(-1)
+        #expect(await clock.registersSleepers(0), "wait for 0 parked on an empty clock")
+        #expect(await clock.registersSleepers(-1), "wait for -1 parked on an empty clock")
     }
 
     @Test("Suspends until the requested number of sleepers has registered")
@@ -151,7 +154,7 @@ struct TestClockSleeperWaiterTests {
         let clock = TestClock()
         let first = sleeper(on: clock, seconds: 1)
         let second = sleeper(on: clock, seconds: 2)
-        try await clock.waitForSleepers(2)
+        #expect(await clock.registersSleepers(2), "the sleepers never registered")
 
         let none = startWaiter { try await clock.waitForNoSleepers() }
         let atMostOne = startWaiter { try await clock.waitForSleepers(atMost: 1) }

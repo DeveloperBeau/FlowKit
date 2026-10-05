@@ -27,14 +27,14 @@ struct SampleTests {
             await upstream.emit(3)
             // Wait until sample has stored the burst before advancing.
             try await probe.waitForValue { $0 == 3 }
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
 
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(3) // most recent at sample point
 
             await upstream.emit(10)
             try await probe.waitForValue { $0 == 10 }
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(10)
         }
@@ -54,7 +54,7 @@ struct SampleTests {
             try await upstream.waitForSubscribers(1)
             // Wait until sample has registered its interval sleep before
             // advancing, rather than racing that registration.
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
 
             // No values emitted. Advance two intervals.
             await clock.advance(by: .seconds(2))
@@ -64,7 +64,7 @@ struct SampleTests {
             // Now emit and advance
             await upstream.emit(42)
             try await probe.waitForValue { $0 == 42 }
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }

@@ -16,7 +16,7 @@ private func settle() async {
 /// Yields until the delayed-stop sleep is registered on the clock, so advancing
 /// the clock deterministically wakes it rather than firing before it exists.
 private func waitForSleeper(_ clock: TestClock) async throws {
-    try await clock.waitForSleepers(1)
+    try #require(await clock.registersSleepers(1), "the sleepers never registered")
 }
 
 /// Yields until the clock has no sleepers, i.e. a cancelled stop's sleep has

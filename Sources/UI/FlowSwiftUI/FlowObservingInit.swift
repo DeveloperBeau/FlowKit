@@ -94,7 +94,7 @@ private func _awaitChange<Root: Observable & AnyObject & Sendable, Value: Equata
         waiter?.resume()
     }
     await withTaskCancellationHandler {
-        await withCheckedContinuation(isolation: isolation) { continuation in
+        await withCheckedContinuation { continuation in
             box.withLock { $0 = continuation }
             if Task.isCancelled {
                 resumeOnce()
