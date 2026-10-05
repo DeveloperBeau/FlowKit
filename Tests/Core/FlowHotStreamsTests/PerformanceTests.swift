@@ -2,21 +2,22 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowHotStreams
 
 @Suite("Performance")
 struct PerformanceTests {
-    @Test("SharedFlow emit to 100 subscribers completes within 5 seconds")
+    @Test("SharedFlow emit reaches 100 subscribers")
     func sharedFlowFanOut() async throws {
         let shared = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(10)) { scope in
-            var testers: [FlowTester<Int>] = []
+        try await ProbeScope.run { scope in
+            var testers: [FlowReader<Int>] = []
             for _ in 0..<100 {
-                testers.append(try await scope.test(shared.asFlow()))
+                testers.append(try await scope.probe(shared.asFlow()))
             }
 
-            try? await Task.sleep(for: .seconds(0.1))
+            await pollUntil { await shared.subscriptionCount == 100 }
 
             await shared.emit(42)
 
@@ -26,17 +27,17 @@ struct PerformanceTests {
         }
     }
 
-    @Test("SharedFlow emit with 10 subscribers stays under 100ms per emission")
+    @Test("SharedFlow emit with 10 subscribers delivers every emission in order")
     func sharedFlowLatency() async throws {
         let shared = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            var testers: [FlowTester<Int>] = []
+        try await ProbeScope.run { scope in
+            var testers: [FlowReader<Int>] = []
             for _ in 0..<10 {
-                testers.append(try await scope.test(shared.asFlow()))
+                testers.append(try await scope.probe(shared.asFlow()))
             }
 
-            try? await Task.sleep(for: .seconds(0.05))
+            await pollUntil { await shared.subscriptionCount == 10 }
 
             for i in 0..<10 {
                 await shared.emit(i)

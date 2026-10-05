@@ -3,6 +3,7 @@ import FlowCore
 import FlowSharedModels
 import FlowHotStreams
 import FlowTesting
+import FlowTestSupport
 import FlowOperators
 
 @Suite("AsyncSequence interop")
@@ -30,8 +31,8 @@ struct AsyncSequenceInteropTests {
         continuation.yield(2)
         continuation.finish(throwing: Broken())
 
-        try await TestScope.run { scope in
-            let tester = try await scope.test(stream.asThrowingFlow())
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(stream.asThrowingFlow())
             try await tester.expectValue(1)
             try await tester.expectValue(2)
             try await tester.expectError(Broken())
@@ -46,12 +47,12 @@ struct AsyncSequenceInteropTests {
         continuation.yield(1)
         // Never finished: only cancellation can end the iteration.
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(stream.asThrowingFlow())
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(stream.asThrowingFlow())
             try await tester.expectValue(1)
         }
         // TestScope cancelled the collection; the stream must see termination.
-        await waitUntil { terminated.withLock { $0 } }
+        await pollUntil { terminated.withLock { $0 } }
         #expect(terminated.withLock { $0 })
     }
 
@@ -134,11 +135,11 @@ struct AsyncSequenceInteropTests {
             return first
         }
 
-        await waitUntil { await emitting.subscriptionCount >= 1 }
+        await pollUntil { await emitting.subscriptionCount >= 1 }
         await emitting.emit(7)
         let first = await consumer.value
         #expect(first == 7)
-        await waitUntil { await emitting.subscriptionCount == 0 }
+        await pollUntil { await emitting.subscriptionCount == 0 }
         #expect(await emitting.subscriptionCount == 0)
     }
 

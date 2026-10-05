@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowHotStreams
 
 /// A value written by one identified writer; used to check that concurrent
@@ -31,7 +32,7 @@ struct StateFlowSyncValueTests {
     @Test("collectors observe values set synchronously, ending with the latest")
     func collectorsSeeLatest() async throws {
         let state = MutableStateFlow(0)
-        try await state.asFlow().test { tester in
+        try await state.asFlow().probing { tester in
             try await tester.expectValue(0)
             state.value = 1
             try await tester.expectValue(1)
@@ -44,12 +45,12 @@ struct StateFlowSyncValueTests {
     @Test("setting an equal value is a no-op (deduplication preserved)")
     func equalSetIsNoOp() async throws {
         let state = MutableStateFlow(5)
-        try await state.asFlow().test { tester in
+        try await state.asFlow().probing { tester in
             try await tester.expectValue(5)
             state.value = 5
-            await tester.expectNoValue(within: .milliseconds(100))
+            // The duplicate must not arrive ahead of the next distinct value.
             state.value = 6
-            try await tester.expectValue(6)
+            try await tester.expectNextValue(6)
         }
     }
 
@@ -84,9 +85,9 @@ struct StateFlowSyncValueTests {
 
         // Only set after the collector has replayed the initial value, so the
         // observed sequence is fully determined.
-        await waitUntil { !observed.withLock { $0 }.isEmpty }
+        await pollUntil { !observed.withLock { $0 }.isEmpty }
         state.value = 1
-        await waitUntil { observed.withLock { $0 }.contains(2) }
+        await pollUntil { observed.withLock { $0 }.contains(2) }
         #expect(observed.withLock { $0 } == [0, 1, 2], "the re-entrant set is delivered after the current one")
         #expect(state.value == 2)
         collector.cancel()
@@ -107,7 +108,7 @@ struct StateFlowSyncValueTests {
                 observed.withLock { $0.append(value) }
             }
         }
-        await waitUntil { !observed.withLock { $0 }.isEmpty }
+        await pollUntil { !observed.withLock { $0 }.isEmpty }
 
         // Concurrent writers hammer the value from multiple threads; reader
         // tasks pull the sync getter the whole time.
@@ -138,7 +139,7 @@ struct StateFlowSyncValueTests {
         // Deterministic convergence point after the storm.
         let final = WriterStamp(writer: 99, iteration: 1)
         state.value = final
-        await waitUntil { observed.withLock { $0 }.last == final }
+        await pollUntil { observed.withLock { $0 }.last == final }
         #expect(state.value == final)
         #expect(observed.withLock { $0 }.last == final, "collectors converge on the final value")
 

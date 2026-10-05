@@ -1,4 +1,5 @@
 import Testing
+import FlowTestSupport
 import FlowCore
 import FlowSharedModels
 import FlowTestClock
@@ -35,13 +36,13 @@ struct WhileSubscribedDefaultTests {
         let subscriber = Task {
             await shared.asFlow().collect { _ in }
         }
-        await waitUntil { upstream.started.withLock { $0 } }
+        await pollUntil { upstream.started.withLock { $0 } }
         #expect(upstream.started.withLock { $0 })
 
         subscriber.cancel()
         // With a zero default stop timeout the upstream must be cancelled
         // without any clock advancement.
-        await waitUntil { upstream.stopped.withLock { $0 } }
+        await pollUntil { upstream.stopped.withLock { $0 } }
         #expect(upstream.stopped.withLock { $0 })
         #expect(clock.sleeperCount == 0, "a zero stop timeout must never register a sleeper")
     }
@@ -55,11 +56,11 @@ struct WhileSubscribedDefaultTests {
         let subscriber = Task {
             await state.asFlow().collect { _ in }
         }
-        await waitUntil { upstream.started.withLock { $0 } }
+        await pollUntil { upstream.started.withLock { $0 } }
         #expect(upstream.started.withLock { $0 })
 
         subscriber.cancel()
-        await waitUntil { upstream.stopped.withLock { $0 } }
+        await pollUntil { upstream.stopped.withLock { $0 } }
         #expect(upstream.stopped.withLock { $0 })
         #expect(clock.sleeperCount == 0, "a zero stop timeout must never register a sleeper")
     }
@@ -76,16 +77,16 @@ struct WhileSubscribedDefaultTests {
         let subscriber = Task {
             await shared.asFlow().collect { _ in }
         }
-        await waitUntil { upstream.started.withLock { $0 } }
+        await pollUntil { upstream.started.withLock { $0 } }
 
         subscriber.cancel()
         // The delayed stop registers its sleep on the strategy clock instead
         // of stopping synchronously.
-        await waitUntil { clock.sleeperCount >= 1 }
+        await pollUntil { clock.sleeperCount >= 1 }
         #expect(!upstream.stopped.withLock { $0 }, "the stop must wait for the timeout")
 
         await clock.advance(by: .seconds(5))
-        await waitUntil { upstream.stopped.withLock { $0 } }
+        await pollUntil { upstream.stopped.withLock { $0 } }
         #expect(upstream.stopped.withLock { $0 })
     }
 }

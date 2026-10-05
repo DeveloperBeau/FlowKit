@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowOperators
 @testable import FlowHotStreams
 
@@ -18,7 +19,7 @@ struct FlatMapLatestTests {
         let upstream = Flow<Int> { collector in
             for value in 1...3 {
                 await collector.emit(value)
-                await waitUntil { delivered.withLock { $0 } >= value }
+                await pollUntil { delivered.withLock { $0 } >= value }
             }
         }
 
@@ -26,14 +27,14 @@ struct FlatMapLatestTests {
             Flow<String> { collector in
                 await collector.emit("from-\(value)")
             }
-        }.test { tester in
-            try await tester.expectValue("from-1", within: .seconds(5))
+        }.probing { tester in
+            try await tester.expectValue("from-1")
             delivered.withLock { $0 = 1 }
-            try await tester.expectValue("from-2", within: .seconds(5))
+            try await tester.expectValue("from-2")
             delivered.withLock { $0 = 2 }
-            try await tester.expectValue("from-3", within: .seconds(5))
+            try await tester.expectValue("from-3")
             delivered.withLock { $0 = 3 }
-            try await tester.expectCompletion(within: .seconds(5))
+            try await tester.expectCompletion()
         }
     }
 
@@ -97,7 +98,7 @@ struct FlatMapLatestTests {
         // body (30s): if the scope cliff comes first, a loaded runner tears
         // down the collection mid-wait and the test fails as a flake instead
         // of converging.
-        try await TestScope.run(timeout: .seconds(90)) { scope in
+        try await ProbeScope.run { scope in
             // Observe cancellation by exiting the spin, not via
             // withTaskCancellationHandler: a cancel that races the handler's
             // registration can be missed by the runtime, whereas the
@@ -112,18 +113,18 @@ struct FlatMapLatestTests {
                 }
             }
 
-            _ = try await scope.test(resultFlow)
+            _ = try await scope.probe(resultFlow)
 
             // Wait until the subscriber count reaches 1 so we know the
             // tester has actually subscribed before we start emitting.
-            await waitUntil { await upstream.subscriptionCount >= 1 }
+            await pollUntil { await upstream.subscriptionCount >= 1 }
 
             // Emit 1, 2, 3 in sequence; after each emit, poll until the
             // previous inner flow has observed its cancellation. Bounded
             // generously so a loaded runner converges but a genuine
             // regression still fails instead of hanging.
             func waitForCancellation(of value: Int) async {
-                await waitUntil { cancelled.withLock { $0 }.contains(value) }
+                await pollUntil { cancelled.withLock { $0 }.contains(value) }
             }
 
             await upstream.emit(1)
@@ -141,7 +142,7 @@ struct FlatMapLatestTests {
     @Test("flatMapLatest on empty upstream produces empty flow")
     func emptyUpstream() async throws {
         let flow = Flow<Int>.empty
-        try await flow.flatMapLatest { Flow(of: $0) }.test { tester in
+        try await flow.flatMapLatest { Flow(of: $0) }.probing { tester in
             try await tester.expectCompletion()
         }
     }
@@ -152,7 +153,7 @@ struct FlatMapLatestTests {
         let flow = ThrowingFlow(of: "query")
         try await flow.flatMapLatest { _ -> ThrowingFlow<String> in
             ThrowingFlow<String> { _ in throw SearchError() }
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectError(SearchError())
         }
     }
@@ -179,12 +180,12 @@ struct FlatMapLatestCancellationTests {
                 }
             }.collect { _ in }
         }
-        await waitUntil { await upstream.subscriptionCount >= 1 }
+        await pollUntil { await upstream.subscriptionCount >= 1 }
         await upstream.emit(1)
-        await waitUntil { innerStarted.withLock { $0 } }
+        await pollUntil { innerStarted.withLock { $0 } }
 
         collector.cancel()
-        await waitUntil { innerCancelled.withLock { $0 } }
+        await pollUntil { innerCancelled.withLock { $0 } }
         #expect(innerCancelled.withLock { $0 }, "downstream cancellation must reach the active inner flow")
         // The collection task itself must unwind instead of hanging in the
         // operator's completion wait. Guarded so a regression fails above
@@ -216,10 +217,10 @@ struct FlatMapLatestCancellationTests {
                 }
             }.collect { _ in }
         }
-        await waitUntil { innerStarted.withLock { $0 } }
+        await pollUntil { innerStarted.withLock { $0 } }
 
         collector.cancel()
-        await waitUntil { innerCancelled.withLock { $0 } }
+        await pollUntil { innerCancelled.withLock { $0 } }
         #expect(innerCancelled.withLock { $0 }, "downstream cancellation must reach the active inner flow")
         if innerCancelled.withLock({ $0 }) { await collector.value }
     }

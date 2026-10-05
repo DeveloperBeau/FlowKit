@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowHotStreams
 import FlowTesting
+import FlowTestSupport
 @testable import FlowOperators
 
 @Suite("combineLatest operator")
@@ -11,20 +12,21 @@ struct CombineLatestTests {
         let flow1 = MutableSharedFlow<Int>(replay: 0)
         let flow2 = MutableSharedFlow<String>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(
                 flow1.asFlow().combineLatest(flow2.asFlow())
             )
 
             // combineLatest subscribes to both sources; wait until it has
             // before emitting, since replay:0 drops anything sent before the
             // subscription is live. A fixed sleep races this on a slow runner.
-            await waitUntil { await flow1.subscriptionCount >= 1 }
-            await waitUntil { await flow2.subscriptionCount >= 1 }
+            await pollUntil { await flow1.subscriptionCount >= 1 }
+            await pollUntil { await flow2.subscriptionCount >= 1 }
 
             // First pair emitted only after both flows have emitted
+            // flow2 has not emitted, so the first read below must already
+            // carry "a"; a pair emitted early would fail that assertion.
             await flow1.emit(1)
-            await tester.expectNoValue(within: .milliseconds(50))
 
             await flow2.emit("a")
             let v1 = try await tester.awaitValue()
@@ -46,7 +48,7 @@ struct CombineLatestTests {
     func withTransform() async throws {
         let flow1 = Flow(of: 1, 2)
         let flow2 = Flow(of: 10, 20)
-        try await flow1.combineLatest(flow2) { $0 + $1 }.test { tester in
+        try await flow1.combineLatest(flow2) { $0 + $1 }.probing { tester in
             // At least the first combined pair should arrive
             let first = try await tester.awaitValue()
             #expect(first >= 11) // 1+10 or later combinations
@@ -57,7 +59,7 @@ struct CombineLatestTests {
     func emptyFlow() async throws {
         let flow1 = Flow(of: 1, 2, 3)
         let flow2 = Flow<String>.empty
-        try await flow1.combineLatest(flow2).test { tester in
+        try await flow1.combineLatest(flow2).probing { tester in
             try await tester.expectCompletion()
         }
     }

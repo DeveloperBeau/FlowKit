@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowOperators
 
 @Suite("Flow.asAsyncStream bridge")
@@ -50,14 +51,14 @@ struct AsyncStreamBridgeTests {
         }
 
         // Wait until the flow is actually collecting before cancelling.
-        await waitUntil { started.withLock { $0 } }
+        await pollUntil { started.withLock { $0 } }
         task.cancel()
         await task.value
 
         // The outer iteration task can finish before the flow's collection
         // task observes its cancellation; give it a bounded convergence
         // window so a genuine regression fails instead of hanging the suite.
-        await waitUntil { wasCancelled.withLock { $0 } }
+        await pollUntil { wasCancelled.withLock { $0 } }
         #expect(wasCancelled.withLock { $0 })
     }
 
@@ -118,14 +119,14 @@ struct AsyncStreamBridgeTests {
         }
 
         // Wait until the flow is actually collecting before cancelling.
-        await waitUntil { started.withLock { $0 } }
+        await pollUntil { started.withLock { $0 } }
         task.cancel()
         await task.value
 
         // The outer iteration task can finish before the flow's collection
         // task observes its cancellation; give it a bounded convergence
         // window so a genuine regression fails instead of hanging the suite.
-        await waitUntil { wasCancelled.withLock { $0 } }
+        await pollUntil { wasCancelled.withLock { $0 } }
         #expect(wasCancelled.withLock { $0 })
     }
 }

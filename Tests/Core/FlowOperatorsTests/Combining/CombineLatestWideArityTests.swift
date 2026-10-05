@@ -3,6 +3,7 @@ import FlowCore
 import FlowSharedModels
 import FlowHotStreams
 import FlowTesting
+import FlowTestSupport
 import FlowOperators
 
 @Suite("combineLatest wide arity (4/5/6)")
@@ -20,17 +21,18 @@ struct CombineLatestWideArityTests {
             sources[5].asFlow()
         ) { a, b, c, d, e, f in a + b + c + d + e + f }
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined)
             for source in sources {
-                await waitUntil { await source.subscriptionCount >= 1 }
+                await pollUntil { await source.subscriptionCount >= 1 }
             }
 
             // Five of six emitted: still silent.
             for (index, source) in sources.dropLast().enumerated() {
                 await source.emit(1 << index)
             }
-            await tester.expectNoValue(within: .milliseconds(50))
+            // The first read below is the sixth source's pairing, so a value
+            // emitted early would fail it.
 
             await sources[5].emit(32)
             try await tester.expectValue(63)
@@ -71,18 +73,21 @@ struct CombineLatestWideArityTests {
             never.asFlow()
         ) { a, b, c, d, e, f in a + b + c + d + e + f }
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined)
             for source in sources {
-                await waitUntil { await source.subscriptionCount >= 1 }
+                await pollUntil { await source.subscriptionCount >= 1 }
             }
-            await waitUntil { await never.subscriptionCount >= 1 }
+            await pollUntil { await never.subscriptionCount >= 1 }
 
             for source in sources {
                 await source.emit(1)
                 await source.emit(2)
             }
-            await tester.expectNoValue(within: .milliseconds(50))
+            // Nothing yet: the first value is the one the late source unlocks.
+            // Each of the five emitted 2 last, so the sum is 10 plus 100.
+            await never.emit(100)
+            try await tester.expectNextValue(110)
         }
     }
 
@@ -96,8 +101,8 @@ struct CombineLatestWideArityTests {
             live.asFlow(), live.asFlow(), live.asFlow(), live.asFlow(), empty
         ) { a, b, c, d, e, f in a + b + c + d + e + f }
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined)
             try await tester.expectCompletion()
         }
     }
@@ -114,10 +119,10 @@ struct CombineLatestWideArityTests {
             sources[4].asFlow()
         ) { a, b, c, d, e, f in a + b + c + d + e + f }
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined)
             for source in sources {
-                await waitUntil { await source.subscriptionCount >= 1 }
+                await pollUntil { await source.subscriptionCount >= 1 }
             }
             for source in sources {
                 await source.emit(1)
@@ -150,7 +155,7 @@ struct CombineLatestWideArityTests {
             }
         }
         for source in sources {
-            await waitUntil { await source.subscriptionCount >= 1 }
+            await pollUntil { await source.subscriptionCount >= 1 }
         }
 
         // Each source is hammered by its own task; the last value per source
@@ -167,7 +172,7 @@ struct CombineLatestWideArityTests {
         }
 
         let expected = Array(repeating: perSourceFinal, count: 6)
-        await waitUntil { latest.withLock { $0 } == expected }
+        await pollUntil { latest.withLock { $0 } == expected }
         #expect(latest.withLock { $0 } == expected, "the last emission of every source must survive the storm")
 
         // No duplicate emissions after quiescence.
@@ -187,8 +192,8 @@ struct CombineLatestWideArityTests {
             ThrowingFlow(of: 4),
             ThrowingFlow(of: 8)
         ) { a, b, c, d in a + b + c + d }
-        try await TestScope.run { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined)
             try await tester.expectValue(15)
         }
     }
@@ -201,8 +206,8 @@ struct CombineLatestWideArityTests {
             ThrowingFlow(of: 4),
             ThrowingFlow(of: 5)
         )
-        try await TestScope.run { scope in
-            let tester = try await scope.test(combined.map { [$0.0, $0.1, $0.2, $0.3, $0.4] })
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined.map { [$0.0, $0.1, $0.2, $0.3, $0.4] })
             try await tester.expectValue([1, 2, 3, 4, 5])
         }
     }
@@ -219,8 +224,8 @@ struct CombineLatestWideArityTests {
         let combined: ThrowingFlow<Int> = first.combineLatest(second, third, fourth, fifth, failing) {
             (a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) in a + b + c + d + e + f
         }
-        try await TestScope.run { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined)
             try await tester.expectError(Bad())
         }
     }
@@ -236,8 +241,8 @@ struct CombineLatestWideArityTests {
         let combined: ThrowingFlow<Int> = first.combineLatest(second, third, fourth, fifth, sixth) {
             (a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) in a + b + c + d + e + f
         }
-        try await TestScope.run { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined)
             try await tester.expectValue(63)
         }
     }

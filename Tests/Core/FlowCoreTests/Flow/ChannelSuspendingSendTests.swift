@@ -1,6 +1,7 @@
 import Testing
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowCore
 
 /// Yields a bounded number of times so a "did not happen" assertion gives the
@@ -40,12 +41,12 @@ struct ChannelSuspendingSendTests {
         let collector = Task {
             await flow.collect { value in
                 // Hold each value until the test releases it.
-                await waitUntil { allowed.withLock { $0 } >= value }
+                await pollUntil { allowed.withLock { $0 } >= value }
                 log.withLock { $0.append("consumed-\(value)") }
             }
         }
 
-        await waitUntil { log.withLock { $0 }.contains("sent-1:enqueued") }
+        await pollUntil { log.withLock { $0 }.contains("sent-1:enqueued") }
         await settle()
         #expect(
             !log.withLock { $0 }.contains { $0.hasPrefix("sent-2") },
@@ -53,7 +54,7 @@ struct ChannelSuspendingSendTests {
         )
 
         allowed.withLock { $0 = 1 }
-        await waitUntil { log.withLock { $0 }.contains { $0.hasPrefix("sent-2") } }
+        await pollUntil { log.withLock { $0 }.contains { $0.hasPrefix("sent-2") } }
         let entries = log.withLock { $0 }
         let consumedFirst = entries.firstIndex(of: "consumed-1")
         let sentSecond = entries.firstIndex(of: "sent-2:enqueued")
@@ -102,7 +103,7 @@ struct ChannelSuspendingSendTests {
         }
         let received = await collectAll(flow)
         #expect(received == [1])
-        await waitUntil { afterCloseResult.withLock { $0 } != nil }
+        await pollUntil { afterCloseResult.withLock { $0 } != nil }
         #expect(afterCloseResult.withLock { $0 } == .closed, "send after close is rejected, not buffered")
     }
 
@@ -129,16 +130,16 @@ struct ChannelSuspendingSendTests {
                 if value == 1 {
                     firstDelivered.withLock { $0 = true }
                     // Park the consumer until cancellation tears it down.
-                    while !Task.isCancelled { await waitUntil { Task.isCancelled } }
+                    while !Task.isCancelled { await pollUntil { Task.isCancelled } }
                 } else {
                     deliveredAfterTermination.withLock { $0 = true }
                 }
             }
         }
-        await waitUntil { firstDelivered.withLock { $0 } }
+        await pollUntil { firstDelivered.withLock { $0 } }
 
         collector.cancel()
-        await waitUntil { producerExited.withLock { $0 } }
+        await pollUntil { producerExited.withLock { $0 } }
         #expect(producerExited.withLock { $0 }, "cancellation must unblock the suspended producer")
         #expect(suspendedResult.withLock { $0 } == .closed, "a send interrupted by teardown reports .closed")
 
@@ -168,14 +169,14 @@ struct ChannelSuspendingSendTests {
                     received.withLock { $0 += 1 }
                 }
             }
-            await waitUntil { received.withLock { $0 } >= 1 }
+            await pollUntil { received.withLock { $0 } >= 1 }
             collector.cancel()
             await collector.value
 
             // The producer must always exit: either it finished its sends or
             // a send observed the closed channel; a leaked continuation would
             // hang here and trip the waitUntil timeout.
-            await waitUntil { producerExited.withLock { $0 } }
+            await pollUntil { producerExited.withLock { $0 } }
             #expect(producerExited.withLock { $0 }, "producer must exit exactly once per teardown")
 
             let countAtTermination = received.withLock { $0 }

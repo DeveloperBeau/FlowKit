@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowHotStreams
 import FlowTesting
+import FlowTestSupport
 import FlowTestClock
 @testable import FlowOperators
 
@@ -15,8 +16,8 @@ struct ThrowingFlowRateLimitingTests {
         let upstream = MutableSharedFlow<Int>(replay: 0)
         let probe = FlowProbe<Int>()
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {
                         try await collector.emit(value)
@@ -30,8 +31,8 @@ struct ThrowingFlowRateLimitingTests {
             }
             await upstream.emit(42)
             // Wait until debounce has registered the value before advancing.
-            await waitUntil { await probe.last == 42 }
-            await waitUntil { clock.sleeperCount >= 1 }
+            await pollUntil { await probe.last == 42 }
+            await pollUntil { clock.sleeperCount >= 1 }
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }
@@ -42,7 +43,7 @@ struct ThrowingFlowRateLimitingTests {
         struct DebounceError: Error, Equatable {}
         let flow = ThrowingFlow<Int> { _ in throw DebounceError() }
         let clock = TestClock()
-        try await flow.debounce(for: .seconds(1), clock: clock).test { tester in
+        try await flow.debounce(for: .seconds(1), clock: clock).probing { tester in
             try await tester.expectError(DebounceError())
         }
     }
@@ -54,8 +55,8 @@ struct ThrowingFlowRateLimitingTests {
         let clock = TestClock()
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {
                         try await collector.emit(value)
@@ -77,7 +78,7 @@ struct ThrowingFlowRateLimitingTests {
         struct ThrottleError: Error, Equatable {}
         let flow = ThrowingFlow<Int> { _ in throw ThrottleError() }
         let clock = TestClock()
-        try await flow.throttle(for: .seconds(1), clock: clock).test { tester in
+        try await flow.throttle(for: .seconds(1), clock: clock).probing { tester in
             try await tester.expectError(ThrottleError())
         }
     }
@@ -87,7 +88,7 @@ struct ThrowingFlowRateLimitingTests {
     @Test("ThrowingFlow.removeDuplicates drops consecutive equals")
     func removeDuplicatesDrops() async throws {
         let flow = ThrowingFlow(of: 1, 1, 2, 2, 3)
-        try await flow.removeDuplicates().test { tester in
+        try await flow.removeDuplicates().probing { tester in
             try await tester.expectValue(1)
             try await tester.expectValue(2)
             try await tester.expectValue(3)
@@ -98,7 +99,7 @@ struct ThrowingFlowRateLimitingTests {
     @Test("ThrowingFlow.removeDuplicates with predicate")
     func removeDuplicatesByPredicate() async throws {
         let flow = ThrowingFlow(of: "Hello", "HELLO", "World")
-        try await flow.removeDuplicates(by: { $0.lowercased() == $1.lowercased() }).test { tester in
+        try await flow.removeDuplicates(by: { $0.lowercased() == $1.lowercased() }).probing { tester in
             try await tester.expectValue("Hello")
             try await tester.expectValue("World")
             try await tester.expectCompletion()
@@ -112,7 +113,7 @@ struct ThrowingFlowRateLimitingTests {
             try await collector.emit(1)
             throw DedupError()
         }
-        try await flow.removeDuplicates().test { tester in
+        try await flow.removeDuplicates().probing { tester in
             try await tester.expectValue(1)
             try await tester.expectError(DedupError())
         }
@@ -126,8 +127,8 @@ struct ThrowingFlowRateLimitingTests {
         let upstream = MutableSharedFlow<Int>(replay: 0)
         let probe = FlowProbe<Int>()
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {
                         try await collector.emit(value)
@@ -142,8 +143,8 @@ struct ThrowingFlowRateLimitingTests {
             await upstream.emit(1)
             await upstream.emit(2)
             // Wait until sample has stored the burst before advancing.
-            await waitUntil { await probe.last == 2 }
-            await waitUntil { clock.sleeperCount >= 1 }
+            await pollUntil { await probe.last == 2 }
+            await pollUntil { clock.sleeperCount >= 1 }
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(2)
         }
@@ -154,7 +155,7 @@ struct ThrowingFlowRateLimitingTests {
         struct SampleError: Error, Equatable {}
         let flow = ThrowingFlow<Int> { _ in throw SampleError() }
         let clock = TestClock()
-        try await flow.sample(every: .seconds(1), clock: clock).test { tester in
+        try await flow.sample(every: .seconds(1), clock: clock).probing { tester in
             try await tester.expectError(SampleError())
         }
     }

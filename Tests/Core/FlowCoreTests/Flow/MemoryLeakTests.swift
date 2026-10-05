@@ -1,4 +1,5 @@
 import Testing
+import FlowTestSupport
 import Foundation
 import FlowSharedModels
 import FlowTestingCore
@@ -42,11 +43,11 @@ struct MemoryLeakTests {
                 ranToCompletion.withLock { $0 = true }
             }
             // Ensure the task is running before the scope deinits.
-            await waitUntil { started.withLock { $0 } }
+            await pollUntil { started.withLock { $0 } }
         }
         // Converge on the cancelled body running to completion, bounded so a
         // genuine regression fails instead of hanging the suite.
-        await waitUntil { ranToCompletion.withLock { $0 } }
+        await pollUntil { ranToCompletion.withLock { $0 } }
         #expect(ranToCompletion.withLock { $0 })
     }
 

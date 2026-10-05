@@ -1,4 +1,5 @@
 import Testing
+import FlowTestSupport
 import Foundation
 import FlowSharedModels
 import FlowTestingCore
@@ -36,7 +37,7 @@ struct FlowScopeTests {
 
         // Wait until the task is actually running before cancelling, rather than
         // racing a fixed sleep against it.
-        await waitUntil { started.withLock { $0 } }
+        await pollUntil { started.withLock { $0 } }
 
         scope.cancel()
         await task.value
@@ -91,12 +92,12 @@ struct FlowScopeTests {
                 wasCancelled.withLock { $0 = true }
             }
             // Ensure the task is running before the scope deinits.
-            await waitUntil { started.withLock { $0 } }
+            await pollUntil { started.withLock { $0 } }
         }
 
         // Converge on deinit's cancellation reaching the task, bounded so a
         // genuine regression fails instead of hanging the suite.
-        await waitUntil { wasCancelled.withLock { $0 } }
+        await pollUntil { wasCancelled.withLock { $0 } }
         #expect(wasCancelled.withLock { $0 })
     }
 }

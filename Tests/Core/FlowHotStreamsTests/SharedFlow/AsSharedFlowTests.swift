@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowHotStreams
 
 @Suite("Flow.asSharedFlow")
@@ -19,7 +20,7 @@ struct AsSharedFlowTests {
             strategy: .lazy
         )
 
-        try await shared.asFlow().test { tester in
+        try await shared.asFlow().probing { tester in
             try await tester.expectValue("first")
             try await tester.expectValue("second")
         }

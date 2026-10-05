@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 import FlowOperators
 
 /// Yields a bounded number of times so a "did not happen" assertion gives the
@@ -27,7 +28,7 @@ struct UnboundedBufferTests {
             if value == 0 {
                 // Hold the first value until the producer has finished its
                 // whole burst, so everything else must sit in the buffer.
-                await waitUntil { produced.withLock { $0 } }
+                await pollUntil { produced.withLock { $0 } }
             }
             received.withLock { $0.append(value) }
         }
@@ -51,7 +52,7 @@ struct UnboundedBufferTests {
                 // The upstream completes while the consumer holds the first
                 // value; the four still-buffered values must follow before
                 // collect returns.
-                await waitUntil { produced.withLock { $0 } }
+                await pollUntil { produced.withLock { $0 } }
             }
             received.withLock { $0.append(value) }
         }
@@ -72,10 +73,10 @@ struct UnboundedBufferTests {
             await source.bufferUnbounded().collect { _ in
                 received.withLock { $0 += 1 }
                 // Slow the drain so cancellation lands mid-buffer.
-                await waitUntil { stopConsuming.withLock { $0 } || received.withLock { $0 } < 3 }
+                await pollUntil { stopConsuming.withLock { $0 } || received.withLock { $0 } < 3 }
             }
         }
-        await waitUntil { received.withLock { $0 } >= 3 }
+        await pollUntil { received.withLock { $0 } >= 3 }
         collector.cancel()
         stopConsuming.withLock { $0 = true }
         await collector.value

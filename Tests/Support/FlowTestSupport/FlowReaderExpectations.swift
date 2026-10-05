@@ -11,4 +11,15 @@ extension FlowReader {
             ($0 as? E) == expected
         }
     }
+
+    /// Reads until a value equal to `target` arrives, discarding earlier ones.
+    ///
+    /// For a flow that may pass through intermediate values on the way to the
+    /// one a test cares about. The flow ending first fails the read.
+    package func awaitValue(
+        equalTo target: Element,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async throws where Element: Equatable {
+        while try await awaitValue(sourceLocation: sourceLocation) != target {}
+    }
 }

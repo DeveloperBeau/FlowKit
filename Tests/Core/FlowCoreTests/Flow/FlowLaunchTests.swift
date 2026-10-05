@@ -1,4 +1,5 @@
 import Testing
+import FlowTestSupport
 import FlowSharedModels
 import FlowTestingCore
 @testable import FlowCore
@@ -62,7 +63,7 @@ struct FlowLaunchTests {
 
         let task = flow.launch(in: scope)
         // Cancel a running task, not a not-yet-started one.
-        await waitUntil { started.withLock { $0 } }
+        await pollUntil { started.withLock { $0 } }
         scope.cancel()
         await task.value
 

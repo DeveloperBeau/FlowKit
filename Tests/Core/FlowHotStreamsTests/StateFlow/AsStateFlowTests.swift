@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowHotStreams
 
 @Suite("Flow.asStateFlow")
@@ -18,7 +19,7 @@ struct AsStateFlowTests {
             strategy: .lazy
         )
 
-        try await stateFlow.asFlow().test { tester in
+        try await stateFlow.asFlow().probing { tester in
             try await tester.expectValue(0)
             try await tester.expectValue(42)
         }

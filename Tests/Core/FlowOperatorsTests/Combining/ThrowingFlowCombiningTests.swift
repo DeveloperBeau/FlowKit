@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowHotStreams
 import FlowTesting
+import FlowTestSupport
 @testable import FlowOperators
 
 @Suite("ThrowingFlow combining operators")
@@ -12,7 +13,7 @@ struct ThrowingFlowCombiningTests {
     func zipPairs() async throws {
         let flow1 = ThrowingFlow(of: 1, 2, 3)
         let flow2 = ThrowingFlow(of: "a", "b", "c")
-        try await flow1.zip(flow2).test { tester in
+        try await flow1.zip(flow2).probing { tester in
             let v1 = try await tester.awaitValue()
             #expect(v1.0 == 1 && v1.1 == "a")
             let v2 = try await tester.awaitValue()
@@ -31,7 +32,7 @@ struct ThrowingFlowCombiningTests {
             throw ZipError()
         }
         let flow2 = ThrowingFlow(of: "a", "b", "c")
-        try await flow1.zip(flow2).test { tester in
+        try await flow1.zip(flow2).probing { tester in
             _ = try await tester.awaitValue()
             try await tester.expectError(ZipError())
         }
@@ -43,7 +44,7 @@ struct ThrowingFlowCombiningTests {
     func combineLatestPairs() async throws {
         let flow1 = ThrowingFlow(of: 1, 2)
         let flow2 = ThrowingFlow(of: 10, 20)
-        try await flow1.combineLatest(flow2).test { tester in
+        try await flow1.combineLatest(flow2).probing { tester in
             let first = try await tester.awaitValue()
             #expect(first.0 >= 1 && first.1 >= 10)
         }
@@ -54,7 +55,7 @@ struct ThrowingFlowCombiningTests {
         struct CombineError: Error, Equatable {}
         let flow1 = ThrowingFlow<Int> { _ in throw CombineError() }
         let flow2 = ThrowingFlow(of: 1, 2, 3)
-        try await flow1.combineLatest(flow2).test { tester in
+        try await flow1.combineLatest(flow2).probing { tester in
             try await tester.expectError(CombineError())
         }
     }
@@ -65,7 +66,7 @@ struct ThrowingFlowCombiningTests {
     func mergeInterleaves() async throws {
         let flow1 = ThrowingFlow(of: 1, 2, 3)
         let flow2 = ThrowingFlow(of: 10, 20, 30)
-        try await ThrowingFlow.merge(flow1, flow2).test { tester in
+        try await ThrowingFlow.merge(flow1, flow2).probing { tester in
             var received: [Int] = []
             for _ in 0..<6 {
                 received.append(try await tester.awaitValue())
@@ -85,7 +86,7 @@ struct ThrowingFlowCombiningTests {
         let flow2 = ThrowingFlow<Int> { _ in
             // Never emits. Just waits so merge stays alive until error fires.
         }
-        try await ThrowingFlow.merge(flow1, flow2).test { tester in
+        try await ThrowingFlow.merge(flow1, flow2).probing { tester in
             _ = try await tester.awaitValue()  // the 1 from flow1
             try await tester.expectError(MergeError())
         }
@@ -94,7 +95,7 @@ struct ThrowingFlowCombiningTests {
     @Test("ThrowingFlow.merge with array completes when all complete")
     func mergeArrayCompletes() async throws {
         let flows: [ThrowingFlow<Int>] = [ThrowingFlow(of: 1), ThrowingFlow(of: 2)]
-        try await ThrowingFlow.merge(flows).test { tester in
+        try await ThrowingFlow.merge(flows).probing { tester in
             var received: [Int] = []
             for _ in 0..<2 {
                 received.append(try await tester.awaitValue())

@@ -3,6 +3,7 @@ import FlowCore
 import FlowSharedModels
 import FlowHotStreams
 import FlowTesting
+import FlowTestSupport
 import FlowOperators
 
 @Suite("combineLatest higher arity")
@@ -17,11 +18,11 @@ struct CombineLatestArityTests {
             "\(x)-\(y)-\(z)"
         }
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(combined)
-            await waitUntil { await a.subscriptionCount >= 1 }
-            await waitUntil { await b.subscriptionCount >= 1 }
-            await waitUntil { await c.subscriptionCount >= 1 }
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined)
+            await pollUntil { await a.subscriptionCount >= 1 }
+            await pollUntil { await b.subscriptionCount >= 1 }
+            await pollUntil { await c.subscriptionCount >= 1 }
 
             await a.emit(1)
             await b.emit("x")
@@ -56,16 +57,17 @@ struct CombineLatestArityTests {
             w + x + y + z
         }
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined)
             for source in [a, b, c, d] {
-                await waitUntil { await source.subscriptionCount >= 1 }
+                await pollUntil { await source.subscriptionCount >= 1 }
             }
 
             await a.emit(1)
             await b.emit(2)
             await c.emit(4)
-            await tester.expectNoValue(within: .milliseconds(50)) // still missing d
+            // Still missing d: the first read below is d's pairing, so a
+            // value emitted early would fail it.
             await d.emit(8)
             try await tester.expectValue(15)
 
@@ -84,10 +86,10 @@ struct CombineLatestArityTests {
             sources[4].asFlow()
         ) { a, b, c, d, e in a + b + c + d + e }
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined)
             for source in sources {
-                await waitUntil { await source.subscriptionCount >= 1 }
+                await pollUntil { await source.subscriptionCount >= 1 }
             }
             for (index, source) in sources.enumerated() {
                 await source.emit(1 << index)
@@ -106,8 +108,8 @@ struct CombineLatestArityTests {
         let failing = ThrowingFlow<Int> { _ in throw Bad() }
 
         let combined = healthy.combineLatest(ThrowingFlow(of: 2), failing) { a, b, c in a + b + c }
-        try await TestScope.run { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(combined)
             try await tester.expectError(Bad())
         }
     }

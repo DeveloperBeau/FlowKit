@@ -1,4 +1,5 @@
 import Testing
+import FlowTestSupport
 import Foundation
 import FlowCore
 import FlowSharedModels
@@ -10,7 +11,7 @@ import FlowTestingCore
 /// after the clock wakes its sleeper, so this converges on that instead of
 /// racing it with a real sleep.
 private func waitUntilTrue(_ flag: Mutex<Bool>) async {
-    await waitUntil { flag.withLock { $0 } }
+    await pollUntil { flag.withLock { $0 } }
 }
 
 /// Yields a bounded number of times so a "did not happen" assertion gives the
@@ -22,13 +23,13 @@ private func settle() async {
 /// Yields until the delayed-stop sleep is registered on the clock, so advancing
 /// the clock deterministically wakes it rather than firing before it exists.
 private func waitForSleeper(_ clock: TestClock) async {
-    await waitUntil { clock.sleeperCount >= 1 }
+    await pollUntil { clock.sleeperCount >= 1 }
 }
 
 /// Yields until the clock has no sleepers, i.e. a cancelled stop's sleep has
 /// been torn down before the next one is scheduled.
 private func waitForNoSleepers(_ clock: TestClock) async {
-    await waitUntil { clock.sleeperCount == 0 }
+    await pollUntil { clock.sleeperCount == 0 }
 }
 
 @Suite("SharingCoordinator")

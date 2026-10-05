@@ -1,6 +1,7 @@
 import Crypto
 import Flow
 import FlowTesting
+import FlowTestSupport
 import Foundation
 import Testing
 
@@ -104,10 +105,10 @@ struct SimulationTests {
                 return blob
             }
 
-        try await TestScope.run(timeout: .seconds(30)) { scope in
-            let tester = try await scope.test(pipeline)
-            await waitUntil { await gps.subscriptionCount >= 1 }
-            await waitUntil { clock.sleeperCount >= 1 }
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(pipeline)
+            await pollUntil { await gps.subscriptionCount >= 1 }
+            await pollUntil { clock.sleeperCount >= 1 }
 
             // Burst 1: 200 fixes inside the first window.
             for tick in 0..<200 {
@@ -115,7 +116,7 @@ struct SimulationTests {
                     LocationFix(latitude: 51.5 + Double(tick) / 10_000, longitude: -0.12, tick: tick)
                 )
             }
-            await waitUntil { await delivered.last?.tick == 199 }
+            await pollUntil { await delivered.last?.tick == 199 }
             await clock.advance(by: .seconds(30))
 
             let firstUpload = try await tester.awaitValue()
@@ -123,11 +124,11 @@ struct SimulationTests {
             #expect(firstFix.tick == 199) // only the latest fix survives sampling
 
             // Burst 2: a quieter window.
-            await waitUntil { clock.sleeperCount >= 1 }
+            await pollUntil { clock.sleeperCount >= 1 }
             for tick in 200..<220 {
                 await gps.emit(LocationFix(latitude: 51.6, longitude: -0.12, tick: tick))
             }
-            await waitUntil { await delivered.last?.tick == 219 }
+            await pollUntil { await delivered.last?.tick == 219 }
             await clock.advance(by: .seconds(30))
 
             let secondUpload = try await tester.awaitValue()
@@ -158,8 +159,8 @@ struct SimulationTests {
         }
         .retry(3, shouldRetry: { $0 is MockBackend.Unavailable })
 
-        try await TestScope.run { scope in
-            let tester = try await scope.test(sync)
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(sync)
             for reading in stored {
                 try await tester.expectValue(reading)
             }
@@ -207,21 +208,22 @@ struct SimulationTests {
                 }
             }
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(results)
-            await waitUntil { await keystrokes.subscriptionCount >= 1 }
+        try await ProbeScope.run { scope in
+            let tester = try await scope.probe(results)
+            await pollUntil { await keystrokes.subscriptionCount >= 1 }
 
             await keystrokes.emit("f")
-            await waitUntil { await typed.last == "f" }
+            await pollUntil { await typed.last == "f" }
             await clock.advance(by: .milliseconds(100))
             await keystrokes.emit("fl")
-            await waitUntil { await typed.last == "fl" }
+            await pollUntil { await typed.last == "fl" }
             await clock.advance(by: .milliseconds(100))
             await keystrokes.emit("flow")
-            await waitUntil { await typed.last == "flow" }
+            await pollUntil { await typed.last == "flow" }
 
-            // Still typing: nothing has reached the backend.
-            await tester.expectNoValue(within: .milliseconds(50))
+            // Still typing: nothing has reached the backend. The next read is
+            // the settled query's result, so an earlier result would fail it.
+            #expect(await service.queries.isEmpty)
 
             await clock.advance(by: .milliseconds(300))
             try await tester.expectValue(["flow-result-1", "flow-result-2"])
@@ -245,13 +247,13 @@ struct SimulationTests {
             }
             .asSharedFlow(replay: 1)
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let screenA = try await scope.test(dashboard.asFlow())
-            let screenB = try await scope.test(dashboard.asFlow())
+        try await ProbeScope.run { scope in
+            let screenA = try await scope.probe(dashboard.asFlow())
+            let screenB = try await scope.probe(dashboard.asFlow())
 
             let initial = DashboardSnapshot(latitude: 51.5, uploadCount: 0)
-            await waitUntil { await screenA.receivedValues().contains(initial) }
-            await waitUntil { await screenB.receivedValues().contains(initial) }
+            try await screenA.awaitValue(equalTo: initial)
+            try await screenB.awaitValue(equalTo: initial)
 
             location.update { fix in
                 var fix = fix
@@ -262,8 +264,8 @@ struct SimulationTests {
             uploadCount.send(1)
 
             let final = DashboardSnapshot(latitude: 52.0, uploadCount: 1)
-            await waitUntil { await screenA.receivedValues().contains(final) }
-            await waitUntil { await screenB.receivedValues().contains(final) }
+            try await screenA.awaitValue(equalTo: final)
+            try await screenB.awaitValue(equalTo: final)
         }
 
         // Both screens observed the same pipeline; the upstream ran once.
