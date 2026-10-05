@@ -195,15 +195,37 @@ struct ObservedStateFlowDeinitTests {
     @Test("deinit cancels collection task")
     func deinitCancels() async {
         guard #available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *) else { return }
-        let source = MutableStateFlow(1)
+        let probe = CancellationProbe()
         do {
-            let observed = ObservedStateFlow(source, initialValue: 0)
+            let observed = ObservedStateFlow(probe, initialValue: 0)
             observed.start()
-            await poll { observed.value == 1 }
-            // observed goes out of scope here, so isolated deinit fires
+            await poll { probe.isCollecting }
+            #expect(probe.isCollecting)
+            // observed goes out of scope here, so releasing it must cancel the task
         }
-        await settle()
-        // No assertion. Just verify the deinit path runs without crash.
+        await poll { probe.wasCancelled }
+        #expect(probe.wasCancelled)
+    }
+}
+
+/// A state flow whose collection blocks until cancelled, recording both ends.
+private final class CancellationProbe: StateFlow, @unchecked Sendable {
+    private let lock = NSLock()
+    private var collecting = false
+    private var cancelled = false
+    var value: Int { 0 }
+    var isCollecting: Bool { lock.withLock { collecting } }
+    var wasCancelled: Bool { lock.withLock { cancelled } }
+
+    func asFlow() -> Flow<Int> {
+        Flow { _ in
+            self.lock.withLock { self.collecting = true }
+            await withTaskCancellationHandler {
+                while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(1)) }
+            } onCancel: {
+                self.lock.withLock { self.cancelled = true }
+            }
+        }
     }
 }
 #endif

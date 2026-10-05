@@ -8,8 +8,10 @@ public import FlowHotStreams
 /// on the main actor and updates `value` whenever the flow emits. Used
 /// internally by `@CollectedState`.
 ///
-/// Uses Swift 6.2's `isolated deinit` to guarantee the collection task
-/// is cancelled on the main actor.
+/// The collection task is held in a `CancellingTask`, whose own `deinit`
+/// cancels it, so releasing the observer cancels the collection. This avoids
+/// an `isolated deinit` on the class, which crashes the Swift 6.3 optimizer
+/// in release builds.
 @available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *)
 @Observable
 @MainActor
@@ -20,7 +22,7 @@ public final class ObservedStateFlow<Element: Sendable & Equatable> {
     private let updatePolicy: UpdatePolicy
 
     @ObservationIgnored
-    private var collectionTask: Task<Void, Never>?
+    private var collectionTask: CancellingTask?
 
     /// Whether updates should be applied. `stop()` clears it on the main actor
     /// and `applyUpdate` also runs on the main actor and checks it, so a value
@@ -47,17 +49,19 @@ public final class ObservedStateFlow<Element: Sendable & Equatable> {
     public func start() {
         guard collectionTask == nil else { return }
         isActive = true
-        collectionTask = Task { [weak self] in
-            guard let self else { return }
-            await self.source.asFlow().collect { [weak self] newValue in
+        // Capture the source, not `self`: a strong `self` held across the
+        // collection would keep the observer alive and its deinit unreachable.
+        let source = source
+        collectionTask = CancellingTask(Task { [weak self] in
+            await source.asFlow().collect { [weak self] newValue in
                 await self?.applyUpdate(newValue)
             }
-        }
+        })
     }
 
     public func stop() {
         isActive = false
-        collectionTask?.cancel()
+        collectionTask?.task.cancel()
         collectionTask = nil
     }
 
@@ -72,9 +76,20 @@ public final class ObservedStateFlow<Element: Sendable & Equatable> {
             withTransaction(factory()) { value = newValue }
         }
     }
+}
 
-    isolated deinit {
-        collectionTask?.cancel()
+/// Cancels its task when released. Being a separate nonisolated class, its
+/// `deinit` runs wherever the last reference drops, and `Task.cancel()` is
+/// safe from any thread.
+private final class CancellingTask: Sendable {
+    let task: Task<Void, Never>
+
+    init(_ task: Task<Void, Never>) {
+        self.task = task
+    }
+
+    deinit {
+        task.cancel()
     }
 }
 #endif
