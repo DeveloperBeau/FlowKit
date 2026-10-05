@@ -2,6 +2,20 @@
 
 All notable changes to FlowKit are documented here.
 
+## 2.2.0 — 2026-10-05
+
+### Added
+
+- `FlowReader` and `Flow.probing(_:)` / `ThrowingFlow.probing(_:)` in `FlowTesting`: read a
+  flow with no deadline. `awaitValue()`, `expectValue(_:)`, `expectError(_:matching:)`,
+  `expectCompletion()` and `cancelAndIgnoreRemaining()` suspend on the flow's own next
+  emission, completion or failure, so a loaded machine cannot fail a correct test. A flow that
+  ends before an expected value records a failure and every later read fails the same way.
+  `expectNextValue(_:)` replaces `expectNoValue(within:)` for clock-free "nothing arrived
+  before this" checks. A producer that stays open and never emits again cannot be told from a
+  slow one without a clock; use `test(timeout:_:)` when that bound matters. Existing testing
+  APIs are unchanged.
+
 ## 2.1.0 — 2026-09-22
 
 ### Changed
