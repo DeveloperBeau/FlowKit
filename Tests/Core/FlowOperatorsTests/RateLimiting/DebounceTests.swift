@@ -28,17 +28,17 @@ struct DebounceTests {
             // After each emit, wait until debounce has registered the value
             // before advancing, so the clock never outruns delivery.
             await upstream.emit("h")
-            await pollUntil { await probe.last == "h" }
+            try await probe.waitForValue { $0 == "h" }
             await clock.advance(by: .milliseconds(100))
             await upstream.emit("he")
-            await pollUntil { await probe.last == "he" }
+            try await probe.waitForValue { $0 == "he" }
             await clock.advance(by: .milliseconds(100))
             await upstream.emit("hel")
-            await pollUntil { await probe.last == "hel" }
+            try await probe.waitForValue { $0 == "hel" }
 
             // Not enough silence yet: debounce is parked on its window timer
             // holding "hel", so it cannot have emitted.
-            await pollUntil { clock.sleeperCount >= 1 }
+            try await clock.waitForSleepers(1)
 
             // Advance past the debounce window
             await clock.advance(by: .milliseconds(300))
@@ -63,8 +63,8 @@ struct DebounceTests {
             await upstream.emit(42)
             // Wait until debounce has registered the value and its clock sleep
             // before advancing, instead of racing them with a real sleep.
-            await pollUntil { await probe.last == 42 }
-            await pollUntil { clock.sleeperCount >= 1 }
+            try await probe.waitForValue { $0 == 42 }
+            try await clock.waitForSleepers(1)
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }

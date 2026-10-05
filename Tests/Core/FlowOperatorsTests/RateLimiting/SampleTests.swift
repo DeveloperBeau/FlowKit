@@ -26,15 +26,15 @@ struct SampleTests {
             await upstream.emit(2)
             await upstream.emit(3)
             // Wait until sample has stored the burst before advancing.
-            await pollUntil { await probe.last == 3 }
-            await pollUntil { clock.sleeperCount >= 1 }
+            try await probe.waitForValue { $0 == 3 }
+            try await clock.waitForSleepers(1)
 
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(3) // most recent at sample point
 
             await upstream.emit(10)
-            await pollUntil { await probe.last == 10 }
-            await pollUntil { clock.sleeperCount >= 1 }
+            try await probe.waitForValue { $0 == 10 }
+            try await clock.waitForSleepers(1)
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(10)
         }
@@ -54,7 +54,7 @@ struct SampleTests {
             await pollUntil { await upstream.subscriptionCount >= 1 }
             // Wait until sample has registered its interval sleep before
             // advancing, rather than racing that registration.
-            await pollUntil { clock.sleeperCount >= 1 }
+            try await clock.waitForSleepers(1)
 
             // No values emitted. Advance two intervals.
             await clock.advance(by: .seconds(2))
@@ -63,8 +63,8 @@ struct SampleTests {
 
             // Now emit and advance
             await upstream.emit(42)
-            await pollUntil { await probe.last == 42 }
-            await pollUntil { clock.sleeperCount >= 1 }
+            try await probe.waitForValue { $0 == 42 }
+            try await clock.waitForSleepers(1)
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }

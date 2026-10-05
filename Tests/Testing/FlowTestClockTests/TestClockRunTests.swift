@@ -26,7 +26,7 @@ struct TestClockRunTests {
             await woke.append(3)
         }()
 
-        await pollUntil { clock.sleeperCount >= 3 }
+        try await clock.waitForSleepers(3)
         await clock.run()
 
         _ = try await (t1, t2, t3)

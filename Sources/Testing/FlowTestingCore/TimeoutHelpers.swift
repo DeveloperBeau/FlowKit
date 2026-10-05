@@ -33,12 +33,28 @@ public func withThrowingTimeout<R: Sendable>(
     _ duration: Duration,
     _ body: @escaping @Sendable () async throws -> R
 ) async throws -> R {
+    try await withThrowingTimeout(scaledTimeout(duration), clock: ContinuousClock(), body)
+}
+
+/// Runs `body` with a timeout measured on `clock`. Throws
+/// `FlowTestError.timeout` if `body` does not complete before `clock` has
+/// advanced by `duration`.
+///
+/// Pass a `TestClock` to drive the deadline by hand: the timeout fires when the
+/// test advances the clock past `duration`, never because real time passed.
+/// `duration` is used as given, without ``flowTestTimeoutScale``, because a
+/// virtual clock cannot be stretched by a loaded machine.
+public func withThrowingTimeout<R: Sendable, C: Clock>(
+    _ duration: Duration,
+    clock: C,
+    _ body: @escaping @Sendable () async throws -> R
+) async throws -> R where C.Duration == Duration {
     try await withThrowingTaskGroup(of: R?.self) { group in
         group.addTask {
             try await body()
         }
         group.addTask {
-            try await Task.sleep(for: scaledTimeout(duration))
+            try await clock.sleep(for: duration)
             return nil
         }
 

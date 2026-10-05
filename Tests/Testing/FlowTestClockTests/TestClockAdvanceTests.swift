@@ -28,7 +28,7 @@ struct TestClockAdvanceTests {
             await flag.set(true)
         }
 
-        await pollUntil { clock.sleeperCount >= 1 }
+        try await clock.waitForSleepers(1)
         let beforeAdvance = await flag.value
         #expect(!beforeAdvance)
 
@@ -60,7 +60,7 @@ struct TestClockAdvanceTests {
         }
 
         // Wait for all sleepers to register
-        await pollUntil { clock.sleeperCount >= 3 }
+        try await clock.waitForSleepers(3)
 
         // Advance incrementally so each sleeper wakes and appends before
         // the next one is resumed.
@@ -81,7 +81,7 @@ struct TestClockAdvanceTests {
         let task = Task {
             try await clock.sleep(until: TestClock.Instant(offset: .seconds(10)), tolerance: nil)
         }
-        await pollUntil { clock.sleeperCount >= 1 }
+        try await clock.waitForSleepers(1)
         task.cancel()
         do {
             try await task.value

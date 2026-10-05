@@ -108,7 +108,7 @@ struct SimulationTests {
         try await ProbeScope.run { scope in
             let tester = scope.probe(pipeline)
             await pollUntil { await gps.subscriptionCount >= 1 }
-            await pollUntil { clock.sleeperCount >= 1 }
+            try await clock.waitForSleepers(1)
 
             // Burst 1: 200 fixes inside the first window.
             for tick in 0..<200 {
@@ -116,7 +116,7 @@ struct SimulationTests {
                     LocationFix(latitude: 51.5 + Double(tick) / 10_000, longitude: -0.12, tick: tick)
                 )
             }
-            await pollUntil { await delivered.last?.tick == 199 }
+            try await delivered.waitForValue { $0.tick == 199 }
             await clock.advance(by: .seconds(30))
 
             let firstUpload = try await tester.awaitValue()
@@ -124,11 +124,11 @@ struct SimulationTests {
             #expect(firstFix.tick == 199) // only the latest fix survives sampling
 
             // Burst 2: a quieter window.
-            await pollUntil { clock.sleeperCount >= 1 }
+            try await clock.waitForSleepers(1)
             for tick in 200..<220 {
                 await gps.emit(LocationFix(latitude: 51.6, longitude: -0.12, tick: tick))
             }
-            await pollUntil { await delivered.last?.tick == 219 }
+            try await delivered.waitForValue { $0.tick == 219 }
             await clock.advance(by: .seconds(30))
 
             let secondUpload = try await tester.awaitValue()
@@ -213,13 +213,13 @@ struct SimulationTests {
             await pollUntil { await keystrokes.subscriptionCount >= 1 }
 
             await keystrokes.emit("f")
-            await pollUntil { await typed.last == "f" }
+            try await typed.waitForValue { $0 == "f" }
             await clock.advance(by: .milliseconds(100))
             await keystrokes.emit("fl")
-            await pollUntil { await typed.last == "fl" }
+            try await typed.waitForValue { $0 == "fl" }
             await clock.advance(by: .milliseconds(100))
             await keystrokes.emit("flow")
-            await pollUntil { await typed.last == "flow" }
+            try await typed.waitForValue { $0 == "flow" }
 
             // Still typing: nothing has reached the backend. The next read is
             // the settled query's result, so an earlier result would fail it.
