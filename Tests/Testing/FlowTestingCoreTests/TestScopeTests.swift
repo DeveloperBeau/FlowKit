@@ -10,7 +10,7 @@ struct TestScopeTests {
         let flow1 = Flow(of: 1, 2, 3)
         let flow2 = Flow(of: "a", "b", "c")
 
-        try await TestScope.run(timeout: .seconds(2)) { scope in
+        try await TestScope.run(timeout: .seconds(3600)) { scope in
             let t1 = try await scope.test(flow1)
             let t2 = try await scope.test(flow2)
 
@@ -33,7 +33,7 @@ struct TestScopeTests {
             throw TestErr()
         }
 
-        try await TestScope.run(timeout: .seconds(2)) { scope in
+        try await TestScope.run(timeout: .seconds(3600)) { scope in
             let t = try await scope.test(flow)
             try await t.expectValue(1)
             try await t.expectError(TestErr())

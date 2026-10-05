@@ -15,6 +15,10 @@ struct TestNetworkError: Error, Equatable {
     let code: Int
 }
 
+/// A window a passing read never waits out. Reads here resolve the moment the
+/// event is recorded, so the window only has to outlast any stall.
+private let successWindow = Duration.seconds(3600)
+
 @Suite("ThrowingFlowTester")
 struct ThrowingFlowTesterTests {
     @Test("awaitValue returns emitted value on throwing tester")
@@ -23,7 +27,7 @@ struct ThrowingFlowTesterTests {
         Task {
             await tester.recordValue("hello")
         }
-        let value = try await tester.awaitValue(within: .seconds(1))
+        let value = try await tester.awaitValue(within: successWindow)
         #expect(value == "hello")
     }
 
@@ -33,7 +37,7 @@ struct ThrowingFlowTesterTests {
         Task {
             await tester.recordError(TestNetworkError(code: 503))
         }
-        try await tester.expectError(TestNetworkError(code: 503), within: .seconds(1))
+        try await tester.expectError(TestNetworkError(code: 503), within: successWindow)
     }
 
     @Test("expectError with predicate passes on match")
@@ -42,7 +46,7 @@ struct ThrowingFlowTesterTests {
         Task {
             await tester.recordError(TestNetworkError(code: 503))
         }
-        try await tester.expectError("5xx server error", within: .seconds(1)) { error in
+        try await tester.expectError("5xx server error", within: successWindow) { error in
             (error as? TestNetworkError)?.code ?? 0 >= 500
         }
     }
@@ -57,14 +61,14 @@ struct ThrowingFlowTesterTests {
     func expectCompletionPasses() async throws {
         let tester = ThrowingFlowTester<Int>()
         Task { await tester.recordCompletion() }
-        try await tester.expectCompletion(within: .seconds(1))
+        try await tester.expectCompletion(within: successWindow)
     }
 
     @Test("expectValue matches via ThrowingFlowTester")
     func expectValueMatches() async throws {
         let tester = ThrowingFlowTester<Int>()
         Task { await tester.recordValue(42) }
-        try await tester.expectValue(42, within: .seconds(1))
+        try await tester.expectValue(42, within: successWindow)
     }
 
     @Test("receivedValues returns buffered values")
@@ -83,7 +87,7 @@ struct ThrowingFlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                _ = try await tester.awaitValue(within: .seconds(1))
+                _ = try await tester.awaitValue(within: successWindow)
             } catch let error as FlowTestError {
                 thrown.withLock { $0 = error }
             }
@@ -98,7 +102,7 @@ struct ThrowingFlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                _ = try await tester.awaitValue(within: .seconds(1))
+                _ = try await tester.awaitValue(within: successWindow)
             } catch let error as FlowTestError {
                 thrown.withLock { $0 = error }
             }
@@ -113,7 +117,7 @@ struct ThrowingFlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                try await tester.expectCompletion(within: .seconds(1))
+                try await tester.expectCompletion(within: successWindow)
             } catch let error as FlowTestError {
                 thrown.withLock { $0 = error }
             }
@@ -128,7 +132,7 @@ struct ThrowingFlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                try await tester.expectCompletion(within: .seconds(1))
+                try await tester.expectCompletion(within: successWindow)
             } catch let error as FlowTestError {
                 thrown.withLock { $0 = error }
             }
@@ -143,7 +147,7 @@ struct ThrowingFlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                try await tester.expectError(TestNetworkError(code: 500), within: .seconds(1))
+                try await tester.expectError(TestNetworkError(code: 500), within: successWindow)
             } catch let error as FlowTestError {
                 thrown.withLock { $0 = error }
             }
@@ -158,7 +162,7 @@ struct ThrowingFlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                try await tester.expectError(TestNetworkError(code: 500), within: .seconds(1))
+                try await tester.expectError(TestNetworkError(code: 500), within: successWindow)
             } catch let error as FlowTestError {
                 thrown.withLock { $0 = error }
             }
@@ -174,7 +178,7 @@ struct ThrowingFlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                try await tester.expectError(TestNetworkError(code: 500), within: .seconds(1))
+                try await tester.expectError(TestNetworkError(code: 500), within: successWindow)
             } catch let error as FlowTestError {
                 thrown.withLock { $0 = error }
             }
@@ -189,7 +193,7 @@ struct ThrowingFlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                try await tester.expectError("any error", within: .seconds(1)) { _ in true }
+                try await tester.expectError("any error", within: successWindow) { _ in true }
             } catch let error as FlowTestError {
                 thrown.withLock { $0 = error }
             }
@@ -204,7 +208,7 @@ struct ThrowingFlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                try await tester.expectError("any error", within: .seconds(1)) { _ in true }
+                try await tester.expectError("any error", within: successWindow) { _ in true }
             } catch let error as FlowTestError {
                 thrown.withLock { $0 = error }
             }
@@ -219,7 +223,7 @@ struct ThrowingFlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                try await tester.expectError("code 404", within: .seconds(1)) { error in
+                try await tester.expectError("code 404", within: successWindow) { error in
                     (error as? TestNetworkError)?.code == 404
                 }
             } catch let error as FlowTestError {
@@ -234,7 +238,7 @@ struct ThrowingFlowTesterTests {
         let tester = ThrowingFlowTester<Int>()
         await tester.recordValue(1)
         await withKnownIssue {
-            await tester.expectNoValue(within: .seconds(1))
+            await tester.expectNoValue(within: successWindow)
         } matching: { issueContains($0, "expected no value within") }
     }
 

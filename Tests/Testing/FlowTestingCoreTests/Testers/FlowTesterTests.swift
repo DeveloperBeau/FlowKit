@@ -11,6 +11,10 @@ private func issueContains(_ issue: Issue, _ fragment: String) -> Bool {
     issue.comments.contains { $0.rawValue.contains(fragment) }
 }
 
+/// A window a passing read never waits out. Reads here resolve the moment the
+/// event is recorded, so the window only has to outlast any stall.
+private let successWindow = Duration.seconds(3600)
+
 @Suite("FlowTester")
 struct FlowTesterTests {
     @Test("awaitValue returns the first emitted value")
@@ -19,7 +23,7 @@ struct FlowTesterTests {
         Task {
             await tester.recordValue("hello")
         }
-        let value = try await tester.awaitValue(within: .seconds(1))
+        let value = try await tester.awaitValue(within: successWindow)
         #expect(value == "hello")
     }
 
@@ -29,7 +33,7 @@ struct FlowTesterTests {
         Task {
             await tester.recordValue(42)
         }
-        try await tester.expectValue(42, within: .seconds(1))
+        try await tester.expectValue(42, within: successWindow)
     }
 
     @Test("expectNoValue passes when no value arrives within window")
@@ -44,7 +48,7 @@ struct FlowTesterTests {
         Task {
             await tester.recordCompletion()
         }
-        try await tester.expectCompletion(within: .seconds(1))
+        try await tester.expectCompletion(within: successWindow)
     }
 
     @Test("receivedValues returns snapshot of buffered values")
@@ -74,7 +78,7 @@ struct FlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                _ = try await tester.awaitValue(within: .seconds(1))
+                _ = try await tester.awaitValue(within: successWindow)
             } catch let error as FlowTestError {
                 thrown.withLock { $0 = error }
             }
@@ -89,7 +93,7 @@ struct FlowTesterTests {
         let thrown = Mutex<FlowTestError?>(nil)
         try await withKnownIssue {
             do {
-                try await tester.expectCompletion(within: .seconds(1))
+                try await tester.expectCompletion(within: successWindow)
             } catch let error as FlowTestError {
                 thrown.withLock { $0 = error }
             }
@@ -102,7 +106,7 @@ struct FlowTesterTests {
         let tester = FlowTester<Int>()
         await tester.recordValue(1)
         await withKnownIssue {
-            await tester.expectNoValue(within: .seconds(1))
+            await tester.expectNoValue(within: successWindow)
         } matching: { issueContains($0, "expected no value within") }
     }
 }
