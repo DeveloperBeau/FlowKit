@@ -5,6 +5,7 @@ import Foundation
 import FlowCore
 import FlowHotStreams
 import FlowTesting
+import FlowTestSupport
 @testable import FlowSwiftUI
 
 private let isSupported = {
@@ -237,15 +238,35 @@ struct ObservedStateFlowDeinitTests {
     @Test("deinit cancels collection task")
     func deinitCancels() async {
         guard #available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *) else { return }
-        let source = MutableStateFlow(1)
+        let probe = CancellationProbe()
         do {
-            let observed = ObservedStateFlow(source, initialValue: 0)
+            let observed = ObservedStateFlow(probe, initialValue: 0)
             observed.start()
-            await awaitValue(1, of: { observed.value })
-            // observed goes out of scope here, so isolated deinit fires
+            await probe.started.wait()
+            #expect(probe.started.hasFired)
+            // observed goes out of scope here, so releasing it must cancel the task
         }
-        await settle()
-        // No assertion. Just verify the deinit path runs without crash.
+        await probe.cancelled.wait()
+        #expect(probe.cancelled.hasFired)
+    }
+}
+
+/// A state flow whose collection parks until cancelled, signalling when it
+/// starts and when it is cancelled.
+private final class CancellationProbe: StateFlow, Sendable {
+    let started = Signal()
+    let cancelled = Signal()
+    var value: Int { 0 }
+
+    func asFlow() -> Flow<Int> {
+        Flow { _ in
+            self.started.fire()
+            await withTaskCancellationHandler {
+                await parkUntilCancelled()
+            } onCancel: {
+                self.cancelled.fire()
+            }
+        }
     }
 }
 #endif

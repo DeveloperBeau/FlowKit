@@ -30,13 +30,19 @@ jobs:
         run: swift test -j 2 --enable-code-coverage
       - name: Coverage report
         run: |
-          BIN=$(find .build -name "FlowKitPackageTests.xctest" -type d | head -1)
-          PROF=$(find .build -name "default.profdata" | head -1)
-          if [ -n "$BIN" ] && [ -n "$PROF" ]; then
+          # The coverage run is the debug build; read its own bundle and profile.
+          DEBUG_BIN="$(swift build --show-bin-path)"
+          BIN="$DEBUG_BIN/FlowKitPackageTests.xctest"
+          PROF=$(find "$DEBUG_BIN" -name "default.profdata" | head -1)
+          if [ -d "$BIN" ] && [ -n "$PROF" ]; then
             xcrun llvm-cov report "$BIN/Contents/MacOS/FlowKitPackageTests" \
               -instr-profile="$PROF" \
               -ignore-filename-regex='Tests/|.build/'
           fi
+      # Release links differently from debug (opaque type descriptors, inlining),
+      # so UI targets get their own pass here; the Linux job cannot build them.
+      - name: Test all targets (release config)
+        run: swift test -j 2 -c release
 
   linux:
     name: Linux
