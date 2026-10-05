@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowOperators
 
 @Suite("retry operators")
@@ -18,7 +19,7 @@ struct RetryTests {
             try await collector.emit(attempt)
         }
 
-        try await flow.retry(3).test { tester in
+        try await flow.retry(3).probing { tester in
             // Attempt 1: emits 1, then throws
             try await tester.expectValue(1)
             // Attempt 2: emits 2, then throws
@@ -36,7 +37,7 @@ struct RetryTests {
             throw PermanentError()
         }
 
-        try await flow.retry(2).test { tester in
+        try await flow.retry(2).probing { tester in
             try await tester.expectError(PermanentError())
         }
     }
@@ -53,7 +54,7 @@ struct RetryTests {
             throw RetryableError()
         }
 
-        try await flow.retry(5, shouldRetry: { $0 is RetryableError }).test { tester in
+        try await flow.retry(5, shouldRetry: { $0 is RetryableError }).probing { tester in
             // First attempt throws FatalError which doesn't match predicate
             try await tester.expectError(FatalError())
         }
@@ -72,7 +73,7 @@ struct RetryTests {
 
         try await flow.retryWhen { _, attempt in
             attempt < 3  // allow up to 2 retries
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue("success")
             try await tester.expectCompletion()
         }
@@ -87,7 +88,7 @@ struct RetryTests {
 
         try await flow.retryWhen { _, attempt in
             attempt < 2
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectError(StopError())
         }
     }

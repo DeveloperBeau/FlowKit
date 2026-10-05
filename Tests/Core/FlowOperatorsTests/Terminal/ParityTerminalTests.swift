@@ -3,6 +3,7 @@ import FlowCore
 import FlowSharedModels
 import FlowHotStreams
 import FlowTesting
+import FlowTestSupport
 import FlowOperators
 
 @Suite("last / count / contains / allSatisfy terminals")
@@ -63,8 +64,8 @@ struct OnEmptyTests {
         let invoked = Mutex(false)
         let flow = ThrowingFlow<Int> { _ in throw Bad() }
             .onEmpty { _ in invoked.withLock { $0 = true } }
-        try await TestScope.run { scope in
-            let tester = try await scope.test(flow)
+        try await ProbeScope.run { scope in
+            let tester = scope.probe(flow)
             try await tester.expectError(Bad())
         }
         #expect(!invoked.withLock { $0 })
@@ -93,8 +94,8 @@ struct EmitAllTests {
                 throw Bad()
             })
         }
-        try await TestScope.run { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = scope.probe(combined)
             try await tester.expectValue(0)
             try await tester.expectValue(1)
             try await tester.expectError(Bad())
@@ -118,8 +119,8 @@ struct EmitAllTests {
             try await collector.emitAll(ThrowingFlow<Int> { _ in })
             try await collector.emit(1)
         }
-        try await TestScope.run { scope in
-            let tester = try await scope.test(combined)
+        try await ProbeScope.run { scope in
+            let tester = scope.probe(combined)
             try await tester.expectValue(0)
             try await tester.expectValue(1)
             try await tester.expectCompletion()
@@ -129,30 +130,30 @@ struct EmitAllTests {
     @Test("cancellation mid-emitAll stops the inner collection promptly")
     func cancellationStopsInnerCollection() async {
         let inner = MutableSharedFlow<Int>(replay: 0)
-        let received = Mutex<[Int]>([])
+        let received = Recorder<Int>()
 
         let outer = Flow<Int> { collector in
             await collector.emitAll(inner.asFlow())
         }
         let subscriber = Task {
             await outer.collect { value in
-                received.withLock { $0.append(value) }
+                received.record(value)
             }
         }
-        await waitUntil { await inner.subscriptionCount >= 1 }
+        await pollUntil { await inner.subscriptionCount >= 1 }
 
         await inner.emit(1)
         await inner.emit(2)
-        await waitUntil { received.withLock { $0.count } >= 2 }
+        await received.wait(atLeast: 2)
 
         subscriber.cancel()
         // The cancelled subscriber must detach from the inner flow; emissions
         // after that must not be delivered.
-        await waitUntil { await inner.subscriptionCount == 0 }
+        await pollUntil { await inner.subscriptionCount == 0 }
         #expect(await inner.subscriptionCount == 0, "cancellation must tear down the inner subscription")
 
         await inner.emit(3)
         for _ in 0..<100 { await Task.yield() }
-        #expect(received.withLock { $0 } == [1, 2], "no delivery after cancellation")
+        #expect(received.elements == [1, 2], "no delivery after cancellation")
     }
 }

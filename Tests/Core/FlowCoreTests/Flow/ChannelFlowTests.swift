@@ -1,5 +1,6 @@
 import Testing
 import FlowSharedModels
+import FlowTestSupport
 @testable import FlowCore
 
 /// A one-shot gate: `wait()` suspends until `open()` is called once, after
@@ -20,11 +21,6 @@ private actor Gate {
         if opened { return }
         await withCheckedContinuation { waiters.append($0) }
     }
-}
-
-/// Spins until `flag` is set, yielding between checks. Convergent, not timed.
-private func waitUntil(_ flag: Mutex<Bool>) async {
-    while !flag.withLock({ $0 }) { await Task.yield() }
 }
 
 @Suite("channelFlow / callbackFlow builders")
@@ -73,16 +69,16 @@ struct ChannelFlowTests {
     @Test("awaitClose teardown runs when the collecting task is cancelled")
     func awaitCloseRunsOnCancellation() async {
         let tornDown = Mutex(false)
-        let started = Mutex(false)
+        let started = Signal()
         let flow = Flow<Int>.callbackFlow { scope in
             scope.trySend(1)
-            started.withLock { $0 = true }
+            started.fire()
             await scope.awaitClose { tornDown.withLock { $0 = true } }
         }
         let task = Task {
             await flow.collect { _ in }
         }
-        await waitUntil(started)
+        await started.wait()
         task.cancel()
         await task.value
         #expect(tornDown.withLock { $0 })
@@ -93,13 +89,13 @@ struct ChannelFlowTests {
     @Test("dropOldest keeps the newest value: the last delivered is always the last sent")
     func dropOldestConflates() async {
         let gate = Gate()
-        let burstDone = Mutex(false)
+        let burstDone = Signal()
         let received = Mutex<[Int]>([])
 
         let flow = Flow<Int>.channelFlow(bufferCapacity: 1, onBufferOverflow: .dropOldest) { scope in
             for index in 1...1000 { scope.trySend(index) }
             scope.close()
-            burstDone.withLock { $0 = true }
+            burstDone.fire()
         }
 
         // The collector's first emit parks on the gate. Open it only after the
@@ -110,7 +106,7 @@ struct ChannelFlowTests {
                 received.withLock { $0.append(value) }
             }
         }
-        await waitUntil(burstDone)
+        await burstDone.wait()
         await gate.open()
         await collecting.value
 
@@ -124,7 +120,7 @@ struct ChannelFlowTests {
     func dropLatestKeepsOldest() async {
         let gate = Gate()
         let received = Mutex<[Int]>([])
-        let opened = Mutex(false)
+        let opened = Signal()
 
         let flow = Flow<Int>.channelFlow(bufferCapacity: 1, onBufferOverflow: .dropLatest) { scope in
             // First lands in the buffer; the rest arrive while the cap-1
@@ -132,7 +128,7 @@ struct ChannelFlowTests {
             scope.trySend(1)
             for index in 2...1000 { scope.trySend(index) }
             scope.close()
-            opened.withLock { $0 = true }
+            opened.fire()
         }
 
         let collecting = Task {
@@ -141,7 +137,7 @@ struct ChannelFlowTests {
                 received.withLock { $0.append(value) }
             }
         }
-        await waitUntil(opened)
+        await opened.wait()
         await gate.open()
         await collecting.value
 
@@ -222,17 +218,17 @@ struct ChannelFlowTests {
     @Test("Teardown runs exactly once no matter how many close paths fire")
     func teardownRunsExactlyOnce() async {
         let teardowns = Mutex(0)
-        let started = Mutex(false)
+        let started = Signal()
         let flow = Flow<Int>.callbackFlow { scope in
             scope.trySend(1)
-            started.withLock { $0 = true }
+            started.fire()
             // Also close from inside, racing the collector cancellation and the
             // stream termination — all three call markClosed.
             scope.close()
             await scope.awaitClose { teardowns.withLock { $0 += 1 } }
         }
         let task = Task { await flow.collect { _ in } }
-        await waitUntil(started)
+        await started.wait()
         task.cancel()
         await task.value
         #expect(teardowns.withLock { $0 } == 1, "onClose must run exactly once, never per close path")

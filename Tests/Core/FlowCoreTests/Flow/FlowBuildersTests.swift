@@ -42,7 +42,8 @@ struct FlowBuildersTests {
                 Issue.record("never should not emit")
             }
         }
-        try? await Task.sleep(for: .seconds(0.01))
+        // Give the collection every scheduling chance to wrongly return or emit.
+        for _ in 0..<100 { await Task.yield() }
         task.cancel()
         await task.value
     }

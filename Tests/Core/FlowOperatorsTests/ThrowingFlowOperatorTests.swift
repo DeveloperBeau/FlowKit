@@ -1,6 +1,7 @@
 import Testing
 import FlowCore
 import FlowTesting
+import FlowTestSupport
 import FlowSharedModels
 @testable import FlowOperators
 
@@ -11,7 +12,7 @@ struct ThrowingFlowOperatorTests {
     @Test("ThrowingFlow.map transforms each value")
     func map() async throws {
         let flow = ThrowingFlow(of: 1, 2, 3)
-        try await flow.map { $0 * 10 }.test { tester in
+        try await flow.map { $0 * 10 }.probing { tester in
             try await tester.expectValue(10)
             try await tester.expectValue(20)
             try await tester.expectValue(30)
@@ -26,7 +27,7 @@ struct ThrowingFlowOperatorTests {
         try await flow.map { s -> Int in
             guard let i = Int(s) else { throw ParseError() }
             return i
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue(1)
             try await tester.expectError(ParseError())
         }
@@ -35,7 +36,7 @@ struct ThrowingFlowOperatorTests {
     @Test("ThrowingFlow.compactMap drops nil values")
     func compactMap() async throws {
         let flow = ThrowingFlow(of: "1", "two", "3")
-        try await flow.compactMap { Int($0) }.test { tester in
+        try await flow.compactMap { Int($0) }.probing { tester in
             try await tester.expectValue(1)
             try await tester.expectValue(3)
             try await tester.expectCompletion()
@@ -45,7 +46,7 @@ struct ThrowingFlowOperatorTests {
     @Test("ThrowingFlow.filter emits only matching values")
     func filter() async throws {
         let flow = ThrowingFlow(of: 1, 2, 3, 4, 5, 6)
-        try await flow.filter { $0.isMultiple(of: 2) }.test { tester in
+        try await flow.filter { $0.isMultiple(of: 2) }.probing { tester in
             try await tester.expectValue(2)
             try await tester.expectValue(4)
             try await tester.expectValue(6)
@@ -59,7 +60,7 @@ struct ThrowingFlowOperatorTests {
         try await flow.transform { value, collector in
             try await collector.emit("\(value)a")
             try await collector.emit("\(value)b")
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue("1a")
             try await tester.expectValue("1b")
             try await tester.expectValue("2a")
@@ -71,7 +72,7 @@ struct ThrowingFlowOperatorTests {
     @Test("ThrowingFlow.prefix takes first N")
     func prefix() async throws {
         let flow = ThrowingFlow(of: 1, 2, 3, 4, 5)
-        try await flow.prefix(2).test { tester in
+        try await flow.prefix(2).probing { tester in
             try await tester.expectValue(1)
             try await tester.expectValue(2)
             try await tester.expectCompletion()
@@ -81,7 +82,7 @@ struct ThrowingFlowOperatorTests {
     @Test("ThrowingFlow.dropFirst skips first N")
     func dropFirst() async throws {
         let flow = ThrowingFlow(of: 1, 2, 3, 4, 5)
-        try await flow.dropFirst(3).test { tester in
+        try await flow.dropFirst(3).probing { tester in
             try await tester.expectValue(4)
             try await tester.expectValue(5)
             try await tester.expectCompletion()
@@ -91,7 +92,7 @@ struct ThrowingFlowOperatorTests {
     @Test("ThrowingFlow.scan accumulates")
     func scan() async throws {
         let flow = ThrowingFlow(of: 1, 2, 3)
-        try await flow.scan(0) { $0 + $1 }.test { tester in
+        try await flow.scan(0) { $0 + $1 }.probing { tester in
             try await tester.expectValue(1)
             try await tester.expectValue(3)
             try await tester.expectValue(6)
@@ -110,7 +111,7 @@ struct ThrowingFlowOperatorTests {
         }
         try await flow.onStart {
             log.withLock { $0.append("onStart") }
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue(1)
             try await tester.expectCompletion()
         }
@@ -123,7 +124,7 @@ struct ThrowingFlowOperatorTests {
         let flow = ThrowingFlow(of: 10, 20)
         try await flow.onEach { value in
             observed.withLock { $0.append(value) }
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue(10)
             try await tester.expectValue(20)
             try await tester.expectCompletion()
@@ -137,7 +138,7 @@ struct ThrowingFlowOperatorTests {
         let flow = ThrowingFlow(of: 1)
         try await flow.onCompletion { error in
             captured.withLock { $0 = (error == nil) }
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue(1)
             try await tester.expectCompletion()
         }
@@ -151,7 +152,7 @@ struct ThrowingFlowOperatorTests {
         let flow = ThrowingFlow<Int> { _ in throw Boom() }
         try await flow.onCompletion { error in
             captured.withLock { $0 = (error != nil) }
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectError(Boom())
         }
         #expect(captured.withLock { $0 } == true)

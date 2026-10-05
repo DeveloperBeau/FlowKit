@@ -1,6 +1,7 @@
 import Testing
 import FlowCore
 import FlowTesting
+import FlowTestSupport
 @testable import FlowOperators
 
 @Suite("zip operator")
@@ -9,7 +10,7 @@ struct ZipTests {
     func pairsPositionally() async throws {
         let flow1 = Flow(of: 1, 2, 3)
         let flow2 = Flow(of: "a", "b", "c")
-        try await flow1.zip(flow2).test { tester in
+        try await flow1.zip(flow2).probing { tester in
             let v1 = try await tester.awaitValue()
             #expect(v1.0 == 1 && v1.1 == "a")
             let v2 = try await tester.awaitValue()
@@ -24,7 +25,7 @@ struct ZipTests {
     func completesOnShorter() async throws {
         let flow1 = Flow(of: 1, 2, 3, 4, 5)
         let flow2 = Flow(of: "a", "b")
-        try await flow1.zip(flow2).test { tester in
+        try await flow1.zip(flow2).probing { tester in
             _ = try await tester.awaitValue()
             _ = try await tester.awaitValue()
             try await tester.expectCompletion()
@@ -35,7 +36,7 @@ struct ZipTests {
     func withTransform() async throws {
         let flow1 = Flow(of: 1, 2, 3)
         let flow2 = Flow(of: 10, 20, 30)
-        try await flow1.zip(flow2) { $0 + $1 }.test { tester in
+        try await flow1.zip(flow2) { $0 + $1 }.probing { tester in
             try await tester.expectValue(11)
             try await tester.expectValue(22)
             try await tester.expectValue(33)
@@ -47,7 +48,7 @@ struct ZipTests {
     func emptyFlow() async throws {
         let flow1 = Flow(of: 1, 2, 3)
         let flow2 = Flow<String>.empty
-        try await flow1.zip(flow2).test { tester in
+        try await flow1.zip(flow2).probing { tester in
             try await tester.expectCompletion()
         }
     }

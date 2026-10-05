@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowOperators
 
 @Suite("catch operator")
@@ -15,7 +16,7 @@ struct CatchTests {
         }
         try await flow.catch { error, collector in
             await collector.emit("fallback")
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue("first")
             try await tester.expectValue("fallback")
             try await tester.expectCompletion()
@@ -29,7 +30,7 @@ struct CatchTests {
         try await flow.catch { _, collector in
             await collector.emit(-1)
             await collector.emit(-2)
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue(-1)
             try await tester.expectValue(-2)
             try await tester.expectCompletion()
@@ -45,7 +46,7 @@ struct CatchTests {
         }
         try await flow.catch { _, _ in
             // Emit nothing. Just swallow the error.
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue(1)
             try await tester.expectCompletion()
         }
@@ -57,7 +58,7 @@ struct CatchTests {
         let flow = ThrowingFlow(of: 1, 2, 3)
         try await flow.catch { _, _ in
             catchCalled.withLock { $0 = true }
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue(1)
             try await tester.expectValue(2)
             try await tester.expectValue(3)

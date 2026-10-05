@@ -2,14 +2,17 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowHotStreams
 
 @Suite("Flow.asStateFlow")
 struct AsStateFlowTests {
     @Test("asStateFlow exposes initial value before upstream emits")
     func initialValueVisible() async throws {
+        let sawInitial = Signal()
         let upstream = Flow<Int> { collector in
-            try? await Task.sleep(for: .seconds(0.1))
+            // Held back until the test has read the initial value.
+            await sawInitial.wait()
             await collector.emit(42)
         }
 
@@ -18,8 +21,9 @@ struct AsStateFlowTests {
             strategy: .lazy
         )
 
-        try await stateFlow.asFlow().test { tester in
+        try await stateFlow.asFlow().probing { tester in
             try await tester.expectValue(0)
+            sawInitial.fire()
             try await tester.expectValue(42)
         }
     }
@@ -34,12 +38,7 @@ struct AsStateFlowTests {
             strategy: .eager
         )
 
-        // Poll instead of a fixed sleep; Linux CI under release config
-        // can take >50ms for the eager upstream task to land.
-        for _ in 0..<40 {
-            if stateFlow.value == "eager-emit" { break }
-            try? await Task.sleep(for: .seconds(0.05))
-        }
+        await pollUntil { stateFlow.value == "eager-emit" }
         #expect(stateFlow.value == "eager-emit")
     }
 }

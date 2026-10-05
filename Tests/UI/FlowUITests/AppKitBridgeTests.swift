@@ -29,7 +29,7 @@ struct AppKitBridgeTests {
         let vc = NSViewController()
         let state = MutableStateFlow(0)
         vc.collect(state) { _ in }
-        try? await Task.sleep(for: .seconds(0.02))
+        // collect registers its task in the scope before returning.
         #expect(vc.flowScope.activeTaskCount >= 1)
         vc.flowScope.cancel()
     }
@@ -39,7 +39,6 @@ struct AppKitBridgeTests {
         let vc = NSViewController()
         let flow = Flow(of: 1, 2, 3)
         vc.collect(flow) { _ in }
-        try? await Task.sleep(for: .seconds(0.03))
         vc.flowScope.cancel()
     }
 }

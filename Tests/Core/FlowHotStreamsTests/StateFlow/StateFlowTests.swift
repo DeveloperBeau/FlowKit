@@ -1,6 +1,7 @@
 import Testing
 import FlowCore
 import FlowTesting
+import FlowTestSupport
 import FlowSharedModels
 @testable import FlowHotStreams
 
@@ -22,12 +23,12 @@ struct MutableStateFlowTests {
     @Test("send with equal value is a no-op (deduplication)")
     func sendEqualDeduplicates() async throws {
         let state = MutableStateFlow(5)
-        try await state.asFlow().test { tester in
+        try await state.asFlow().probing { tester in
             try await tester.expectValue(5)
             state.send(5)
-            await tester.expectNoValue(within: .milliseconds(100))
+            // The duplicate must not arrive ahead of the next distinct value.
             state.send(10)
-            try await tester.expectValue(10)
+            try await tester.expectNextValue(10)
         }
     }
 
@@ -42,7 +43,7 @@ struct MutableStateFlowTests {
     func replayCurrentValue() async throws {
         let state = MutableStateFlow("initial")
         state.send("updated")
-        try await state.asFlow().test { tester in
+        try await state.asFlow().probing { tester in
             try await tester.expectValue("updated")
         }
     }
@@ -50,9 +51,9 @@ struct MutableStateFlowTests {
     @Test("multiple subscribers all receive updates")
     func multipleSubscribers() async throws {
         let state = MutableStateFlow(0)
-        try await TestScope.run { scope in
-            let t1 = try await scope.test(state.asFlow())
-            let t2 = try await scope.test(state.asFlow())
+        try await ProbeScope.run { scope in
+            let t1 = scope.probe(state.asFlow())
+            let t2 = scope.probe(state.asFlow())
 
             try await t1.expectValue(0)
             try await t2.expectValue(0)

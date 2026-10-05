@@ -1,6 +1,7 @@
 import Testing
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowCore
 
 /// Yields a bounded number of times so a "did not happen" assertion gives the
@@ -26,43 +27,44 @@ struct ChannelSuspendingSendTests {
         // Orderable event log: the producer records after each send returns,
         // the consumer records as it processes. With capacity 1 the second
         // send may only return after the consumer has processed the first value.
-        let log = Mutex<[String]>([])
-        let allowed = Mutex(0)
+        let log = Recorder<String>()
+        let releaseFirst = Signal()
+        let releaseSecond = Signal()
 
         let flow = Flow<Int>.channelFlow(bufferCapacity: 1, onBufferOverflow: .suspend) { scope in
             let first = await scope.send(1)
-            log.withLock { $0.append("sent-1:\(first)") }
+            log.record("sent-1:\(first)")
             let second = await scope.send(2)
-            log.withLock { $0.append("sent-2:\(second)") }
+            log.record("sent-2:\(second)")
             scope.close()
         }
 
         let collector = Task {
             await flow.collect { value in
                 // Hold each value until the test releases it.
-                await waitUntil { allowed.withLock { $0 } >= value }
-                log.withLock { $0.append("consumed-\(value)") }
+                if value == 1 { await releaseFirst.wait() } else { await releaseSecond.wait() }
+                log.record("consumed-\(value)")
             }
         }
 
-        await waitUntil { log.withLock { $0 }.contains("sent-1:enqueued") }
+        await log.wait { $0.contains("sent-1:enqueued") }
         await settle()
         #expect(
-            !log.withLock { $0 }.contains { $0.hasPrefix("sent-2") },
+            !log.elements.contains { $0.hasPrefix("sent-2") },
             "with capacity 1 and an unconsumed value, the second send must stay suspended"
         )
 
-        allowed.withLock { $0 = 1 }
-        await waitUntil { log.withLock { $0 }.contains { $0.hasPrefix("sent-2") } }
-        let entries = log.withLock { $0 }
+        releaseFirst.fire()
+        await log.wait { $0.contains { $0.hasPrefix("sent-2") } }
+        let entries = log.elements
         let consumedFirst = entries.firstIndex(of: "consumed-1")
         let sentSecond = entries.firstIndex(of: "sent-2:enqueued")
         #expect(consumedFirst != nil && sentSecond != nil && consumedFirst! < sentSecond!,
                 "the suspended send may only resume after the consumer processes the first value")
 
-        allowed.withLock { $0 = 2 }
+        releaseSecond.fire()
         await collector.value
-        #expect(log.withLock { $0 }.contains("consumed-2"), "all values delivered in order")
+        #expect(log.elements.contains("consumed-2"), "all values delivered in order")
     }
 
     @Test("send does not suspend under dropping policies or an unbounded channel")
@@ -93,26 +95,26 @@ struct ChannelSuspendingSendTests {
 
     @Test("send after close returns .closed and delivers nothing")
     func sendAfterClose() async {
-        let afterCloseResult = Mutex<ChannelSendResult?>(nil)
+        let afterCloseResult = Recorder<ChannelSendResult>()
         let flow = Flow<Int>.channelFlow(bufferCapacity: 1, onBufferOverflow: .suspend) { scope in
             await scope.send(1)
             scope.close()
             let result = await scope.send(2)
-            afterCloseResult.withLock { $0 = result }
+            afterCloseResult.record(result)
         }
         let received = await collectAll(flow)
         #expect(received == [1])
-        await waitUntil { afterCloseResult.withLock { $0 } != nil }
-        #expect(afterCloseResult.withLock { $0 } == .closed, "send after close is rejected, not buffered")
+        await afterCloseResult.wait(atLeast: 1)
+        #expect(afterCloseResult.last == .closed, "send after close is rejected, not buffered")
     }
 
     // MARK: - Fuzz / adversarial
 
     @Test("cancellation racing a suspended send unblocks the producer with .closed")
     func cancellationUnblocksSuspendedSend() async {
-        let producerExited = Mutex(false)
+        let producerExited = Signal()
         let suspendedResult = Mutex<ChannelSendResult?>(nil)
-        let firstDelivered = Mutex(false)
+        let firstDelivered = Signal()
 
         let flow = Flow<Int>.channelFlow(bufferCapacity: 1, onBufferOverflow: .suspend) { scope in
             await scope.send(1)
@@ -120,26 +122,26 @@ struct ChannelSuspendingSendTests {
             // collector is cancelled.
             let result = await scope.send(2)
             suspendedResult.withLock { $0 = result }
-            producerExited.withLock { $0 = true }
+            producerExited.fire()
         }
 
         let deliveredAfterTermination = Mutex(false)
         let collector = Task {
             await flow.collect { value in
                 if value == 1 {
-                    firstDelivered.withLock { $0 = true }
+                    firstDelivered.fire()
                     // Park the consumer until cancellation tears it down.
-                    while !Task.isCancelled { await waitUntil { Task.isCancelled } }
+                    await parkUntilCancelled()
                 } else {
                     deliveredAfterTermination.withLock { $0 = true }
                 }
             }
         }
-        await waitUntil { firstDelivered.withLock { $0 } }
+        await firstDelivered.wait()
 
         collector.cancel()
-        await waitUntil { producerExited.withLock { $0 } }
-        #expect(producerExited.withLock { $0 }, "cancellation must unblock the suspended producer")
+        await producerExited.wait()
+        #expect(producerExited.hasFired, "cancellation must unblock the suspended producer")
         #expect(suspendedResult.withLock { $0 } == .closed, "a send interrupted by teardown reports .closed")
 
         await collector.value
@@ -150,8 +152,8 @@ struct ChannelSuspendingSendTests {
     @Test("send storm racing cancellation delivers nothing after termination and never wedges")
     func sendStormRacingCancellation() async {
         for _ in 0..<25 {
-            let producerExited = Mutex(false)
-            let received = Mutex(0)
+            let producerExited = Signal()
+            let received = Recorder<Void>()
 
             let flow = Flow<Int>.channelFlow(bufferCapacity: 2, onBufferOverflow: .suspend) { scope in
                 var sent = 0
@@ -160,27 +162,27 @@ struct ChannelSuspendingSendTests {
                     if result == .closed { break }
                     sent += 1
                 }
-                producerExited.withLock { $0 = true }
+                producerExited.fire()
             }
 
             let collector = Task {
                 await flow.collect { _ in
-                    received.withLock { $0 += 1 }
+                    received.record(())
                 }
             }
-            await waitUntil { received.withLock { $0 } >= 1 }
+            await received.wait(atLeast: 1)
             collector.cancel()
             await collector.value
 
             // The producer must always exit: either it finished its sends or
             // a send observed the closed channel; a leaked continuation would
-            // hang here and trip the waitUntil timeout.
-            await waitUntil { producerExited.withLock { $0 } }
-            #expect(producerExited.withLock { $0 }, "producer must exit exactly once per teardown")
+            // leave this wait parked.
+            await producerExited.wait()
+            #expect(producerExited.hasFired, "producer must exit exactly once per teardown")
 
-            let countAtTermination = received.withLock { $0 }
+            let countAtTermination = received.count
             await settle()
-            #expect(received.withLock { $0 } == countAtTermination, "no delivery after termination")
+            #expect(received.count == countAtTermination, "no delivery after termination")
         }
     }
 }

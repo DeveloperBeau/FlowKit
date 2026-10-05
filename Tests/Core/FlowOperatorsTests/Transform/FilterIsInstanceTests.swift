@@ -1,6 +1,7 @@
 import Testing
 import FlowCore
 import FlowTesting
+import FlowTestSupport
 import FlowOperators
 
 private protocol Event: Sendable {}
@@ -51,8 +52,8 @@ struct FilterIsInstanceTests {
             try await collector.emit(LocationEvent(id: 2))
             throw Bad()
         }
-        try await TestScope.run { scope in
-            let tester = try await scope.test(source.filterIsInstance(LocationEvent.self))
+        try await ProbeScope.run { scope in
+            let tester = scope.probe(source.filterIsInstance(LocationEvent.self))
             try await tester.expectValue(LocationEvent(id: 1))
             try await tester.expectValue(LocationEvent(id: 2))
             try await tester.expectError(Bad())

@@ -1,6 +1,7 @@
 import Testing
 import FlowCore
 import FlowTesting
+import FlowTestSupport
 import FlowSharedModels
 @testable import FlowOperators
 
@@ -13,7 +14,7 @@ struct OnCompletionTests {
         let flow = Flow(of: 1, 2)
         try await flow.onCompletion { error in
             captured.withLock { $0 = (error == nil) }
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue(1)
             try await tester.expectValue(2)
             try await tester.expectCompletion()
@@ -34,7 +35,7 @@ struct OnCompletionTests {
 
         try await flow.onCompletion { error in
             capturedError.withLock { $0 = (error != nil) }
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue(1)
             try await tester.expectError(BoomError())
         }
