@@ -16,6 +16,26 @@ All notable changes to FlowKit are documented here.
   slow one without a clock; use `test(timeout:_:)` when that bound matters. Existing testing
   APIs are unchanged.
 
+### Fixed
+
+- `View.collecting` no longer fails to link in release builds. It returned SwiftUI's `.task`
+  directly, which with current SDKs resolves to the newer `task(name:priority:file:line:_:)`
+  overload; a release build then referenced that overload's opaque type descriptor from the
+  client module, and linking failed on deployment targets below its availability. The task now
+  lives in a private view modifier. The public signature is unchanged.
+- Building `FlowSwiftUI` in release with Swift 6.3 no longer crashes the compiler (signal 11
+  in the inliner, on `ObservedStateFlow`'s `isolated deinit`).
+- A collecting `ObservedStateFlow` can now be deallocated. The collection task captured the
+  observer strongly, so it was never released while collecting and its deinit never cancelled
+  the collection. Releasing the observer now cancels collection.
+
+### Internal
+
+- The test suite no longer depends on wall-clock deadlines: flows are read through `probing`,
+  and callbacks and state through signals and recorders, so a stalled test process cannot fail a
+  correct test.
+- CI tests every target in the release configuration on macOS, including the UI targets.
+
 ## 2.1.0 — 2026-09-22
 
 ### Changed
