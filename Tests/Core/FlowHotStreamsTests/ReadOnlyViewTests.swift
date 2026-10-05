@@ -89,7 +89,7 @@ struct ReadOnlyViewTests {
     }
 
     @Test("shared view exposes the source's subscription count")
-    func sharedViewSubscriptionCount() async {
+    func sharedViewSubscriptionCount() async throws {
         let source = MutableSharedFlow<Int>()
         let view = source.asSharedFlow()
         #expect(await view.subscriptionCount == 0)
@@ -97,12 +97,12 @@ struct ReadOnlyViewTests {
         let subscriber = Task {
             await view.asFlow().collect { _ in }
         }
-        await pollUntil { await view.subscriptionCount == 1 }
+        try await source.waitForSubscribers(1)
         #expect(await view.subscriptionCount == 1)
         #expect(await source.subscriptionCount == 1)
 
         subscriber.cancel()
-        await pollUntil { await view.subscriptionCount == 0 }
+        try await source.waitForSubscribers(atMost: 0)
         #expect(await view.subscriptionCount == 0)
     }
 

@@ -23,22 +23,22 @@ struct DebounceTests {
 
             // Wait for the debounce to subscribe before emitting; replay:0
             // drops anything sent before the subscription is live.
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
 
             // After each emit, wait until debounce has registered the value
             // before advancing, so the clock never outruns delivery.
             await upstream.emit("h")
-            await pollUntil { await probe.last == "h" }
+            try await probe.waitForValue { $0 == "h" }
             await clock.advance(by: .milliseconds(100))
             await upstream.emit("he")
-            await pollUntil { await probe.last == "he" }
+            try await probe.waitForValue { $0 == "he" }
             await clock.advance(by: .milliseconds(100))
             await upstream.emit("hel")
-            await pollUntil { await probe.last == "hel" }
+            try await probe.waitForValue { $0 == "hel" }
 
             // Not enough silence yet: debounce is parked on its window timer
             // holding "hel", so it cannot have emitted.
-            await pollUntil { clock.sleeperCount >= 1 }
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
 
             // Advance past the debounce window
             await clock.advance(by: .milliseconds(300))
@@ -58,13 +58,13 @@ struct DebounceTests {
                     .debounce(for: .seconds(1), clock: clock)
             )
 
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
 
             await upstream.emit(42)
             // Wait until debounce has registered the value and its clock sleep
             // before advancing, instead of racing them with a real sleep.
-            await pollUntil { await probe.last == 42 }
-            await pollUntil { clock.sleeperCount >= 1 }
+            try await probe.waitForValue { $0 == 42 }
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }

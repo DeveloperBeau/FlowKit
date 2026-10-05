@@ -20,8 +20,8 @@ struct CombineLatestTests {
             // combineLatest subscribes to both sources; wait until it has
             // before emitting, since replay:0 drops anything sent before the
             // subscription is live. A fixed sleep races this on a slow runner.
-            await pollUntil { await flow1.subscriptionCount >= 1 }
-            await pollUntil { await flow2.subscriptionCount >= 1 }
+            try await flow1.waitForSubscribers(1)
+            try await flow2.waitForSubscribers(1)
 
             // First pair emitted only after both flows have emitted
             // flow2 has not emitted, so the first read below must already

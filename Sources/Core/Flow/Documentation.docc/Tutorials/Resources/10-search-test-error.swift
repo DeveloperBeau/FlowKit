@@ -45,11 +45,13 @@ func catchConvertsNetworkErrors() async throws {
         .catch { _, collector in
             await collector.emit(.error("Search failed. Please try again."))
         }
-        .test { tester in
-            await queries.send("swift")
+        .probing { reader in
+            try await queries.waitForSubscribers(1)
+            queries.send("swift")
+            try await clock.waitForSleepers(1)
             await clock.advance(by: .milliseconds(400))
 
             // The catch handler converts the thrown NetworkError into .error state
-            try await tester.expectValue(.error("Search failed. Please try again."))
+            try await reader.expectValue(.error("Search failed. Please try again."))
         }
 }

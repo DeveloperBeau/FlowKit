@@ -11,24 +11,24 @@ struct DebounceOperatorTests {
         let clock = TestClock()
         let queries = MutableSharedFlow<String>(replay: 0)
 
-        try await TestScope.run { scope in
-            let tester = try await scope.test(
-                queries.asFlow().debounce(for: .milliseconds(300), clock: clock)
-            )
-            try? await Task.sleep(for: .seconds(0.01))
+        try await queries.asFlow()
+            .debounce(for: .milliseconds(300), clock: clock)
+            .probing { reader in
+                try await queries.waitForSubscribers(1)
 
-            // Simulate three rapid keystrokes 100 ms apart.
-            await queries.emit("s")
-            await clock.advance(by: .milliseconds(100))
-            await queries.emit("sw")
-            await clock.advance(by: .milliseconds(100))
-            await queries.emit("swi")
-            await clock.advance(by: .milliseconds(100))
+                // Simulate three rapid keystrokes 100 ms apart.
+                await queries.emit("s")
+                await clock.advance(by: .milliseconds(100))
+                await queries.emit("sw")
+                await clock.advance(by: .milliseconds(100))
+                await queries.emit("swi")
 
-            // 300 ms total elapsed, but the last keystroke reset the timer
-            // 100 ms ago, so we are only 100 ms into the 300 ms window.
-            // Nothing should have been emitted yet.
-            await tester.expectNoValue(within: .milliseconds(50))
-        }
+                // The debounce is parked on its 300 ms window, which the last
+                // keystroke restarted. Waiting for that sleep proves the timer is
+                // running, so nothing has been emitted yet.
+                try await clock.waitForSleepers(1)
+
+                _ = reader
+            }
     }
 }

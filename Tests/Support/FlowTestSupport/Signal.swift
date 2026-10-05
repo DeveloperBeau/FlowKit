@@ -45,3 +45,19 @@ package final class Signal: Sendable {
         }
     }
 }
+
+extension Signal {
+    /// Whether the signal is fired within a bounded number of scheduler hops.
+    ///
+    /// For asserting that a waiter under test did, or did not, resume. The
+    /// bound is hops, not time, so a loaded machine cannot turn a correct
+    /// waiter into a failure, and a broken waiter fails the assertion by name
+    /// instead of parking the run.
+    package func firesWithinHops(_ hops: Int = 1000) async -> Bool {
+        for _ in 0..<hops {
+            if hasFired { return true }
+            await Task.yield()
+        }
+        return hasFired
+    }
+}

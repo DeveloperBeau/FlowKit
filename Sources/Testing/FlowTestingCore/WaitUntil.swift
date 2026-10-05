@@ -16,16 +16,45 @@
 /// (a descheduled simulator, a blocked main thread), the stall is added to the
 /// deadline: otherwise the first check after a long stall finds the deadline
 /// passed before the work queued behind it has had a single turn.
+@available(*, deprecated, message: "Read the flow with probing(_:) and suspend on its emissions, or use TestClock.waitForSleepers(_:) and FlowProbe.waitForValue(where:). For a deadline, pass a TestClock through waitUntil(timeout:clock:_:).")
 public func waitUntil(
     timeout: Duration = .seconds(30),
     _ condition: @Sendable () async -> Bool
 ) async {
-    var deadline = ContinuousClock.now.advanced(by: scaledTimeout(timeout))
-    var lastPass = ContinuousClock.now
+    await waitUntil(scaledTimeout(timeout), clock: ContinuousClock(), compensatingStalls: true, condition)
+}
+
+/// Polls `condition` until it returns true or `clock` has advanced by
+/// `timeout`.
+///
+/// The deadline is measured on `clock`, so a `TestClock` expires it only when
+/// the test advances the clock past `timeout`. The condition is still polled
+/// on a real cadence (yields, then 1ms sleeps), but real elapsed time never
+/// decides the outcome. `timeout` is used as given, without
+/// ``flowTestTimeoutScale``, and no stall allowance applies: a virtual clock
+/// moves only when the test moves it.
+public func waitUntil<C: Clock>(
+    timeout: Duration = .seconds(30),
+    clock: C,
+    _ condition: @Sendable () async -> Bool
+) async where C.Duration == Duration {
+    await waitUntil(timeout, clock: clock, compensatingStalls: false, condition)
+}
+
+private func waitUntil<C: Clock>(
+    _ timeout: Duration,
+    clock: C,
+    compensatingStalls: Bool,
+    _ condition: @Sendable () async -> Bool
+) async where C.Duration == Duration {
+    var deadline = clock.now.advanced(by: timeout)
+    var lastPass = clock.now
     var spins = 0
     while !(await condition()) {
-        let now = ContinuousClock.now
-        if now - lastPass > .seconds(1) { deadline = deadline.advanced(by: now - lastPass) }
+        let now = clock.now
+        if compensatingStalls, lastPass.duration(to: now) > .seconds(1) {
+            deadline = deadline.advanced(by: lastPass.duration(to: now))
+        }
         lastPass = now
         if now >= deadline { return }
         spins += 1

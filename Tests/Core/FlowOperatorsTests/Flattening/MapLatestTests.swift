@@ -26,7 +26,7 @@ struct MapLatestTests {
 
         try await ProbeScope.run { scope in
             let tester = scope.probe(results)
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
 
             await upstream.emit(1)
             await firstStarted.wait()

@@ -65,7 +65,7 @@ struct WhileSubscribedDefaultTests {
     }
 
     @Test("explicit stop timeout is still honored with the strategy clock")
-    func explicitStopTimeoutStillHonored() async {
+    func explicitStopTimeoutStillHonored() async throws {
         let clock = TestClock()
         let upstream = ObservableUpstream()
         let shared = upstream.flow().asSharedFlow(
@@ -81,7 +81,7 @@ struct WhileSubscribedDefaultTests {
         subscriber.cancel()
         // The delayed stop registers its sleep on the strategy clock instead
         // of stopping synchronously.
-        await pollUntil { clock.sleeperCount >= 1 }
+        try #require(await clock.registersSleepers(1), "the sleepers never registered")
         #expect(!upstream.stopped.hasFired, "the stop must wait for the timeout")
 
         await clock.advance(by: .seconds(5))

@@ -17,7 +17,7 @@ struct PerformanceTests {
                 testers.append(scope.probe(shared.asFlow()))
             }
 
-            await pollUntil { await shared.subscriptionCount == 100 }
+            try await shared.waitForSubscribers(100)
 
             await shared.emit(42)
 
@@ -37,7 +37,7 @@ struct PerformanceTests {
                 testers.append(scope.probe(shared.asFlow()))
             }
 
-            await pollUntil { await shared.subscriptionCount == 10 }
+            try await shared.waitForSubscribers(10)
 
             for i in 0..<10 {
                 await shared.emit(i)

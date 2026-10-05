@@ -114,8 +114,8 @@
 
     @Section(title: "Test state transitions") {
         @ContentAndMedia {
-            Testing state machines with ``FlowTester`` is straightforward:
-            collect the flow in a `test` block, drive state changes with
+            Testing state machines with ``FlowReader`` is straightforward:
+            collect the flow in a `probing` block, drive state changes with
             `send`, and assert each emission in order with `expectValue`.
             There's no mocking of `SessionManager`. The flow itself is the
             observable contract.
@@ -135,7 +135,8 @@
                 Add a second test that exercises the error-and-recovery path:
                 `.signingIn` → `.error(…)` → `.signedOut`. Verify that no
                 extra emissions arrive after the final state using
-                `expectNoValue`. This guards against accidental extra
+                `expectNextValue`, which fails if anything arrives before the
+                value you expect. This guards against accidental extra
                 `send` calls in the implementation.
 
                 @Code(name: "SessionTests.swift", file: 18-session-test-error.swift)

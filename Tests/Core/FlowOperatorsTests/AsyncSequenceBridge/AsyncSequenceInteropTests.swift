@@ -119,7 +119,7 @@ struct AsyncSequenceInteropTests {
     }
 
     @Test("abandoning the stream cancels the flow's collection")
-    func streamConsumerCancellationStopsFlow() async {
+    func streamConsumerCancellationStopsFlow() async throws {
         let emitting = MutableSharedFlow<Int>(replay: 0)
 
         // The consumer owns the stream: when its task ends, the stream is
@@ -135,11 +135,11 @@ struct AsyncSequenceInteropTests {
             return first
         }
 
-        await pollUntil { await emitting.subscriptionCount >= 1 }
+        try await emitting.waitForSubscribers(1)
         await emitting.emit(7)
         let first = await consumer.value
         #expect(first == 7)
-        await pollUntil { await emitting.subscriptionCount == 0 }
+        try await emitting.waitForSubscribers(atMost: 0)
         #expect(await emitting.subscriptionCount == 0)
     }
 

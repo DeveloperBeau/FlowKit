@@ -139,7 +139,7 @@ private final class CoordinatedStateFlow<Element: Sendable & Equatable>: StateFl
     }
 }
 
-private actor CoordinatedSharedFlow<Element: Sendable>: SharedFlow {
+private actor CoordinatedSharedFlow<Element: Sendable>: SharedFlow, SubscriberCountWaiting {
     private let inner: MutableSharedFlow<Element>
     private let coordinator: SharingCoordinator
     private var activated: Bool = false
@@ -153,6 +153,14 @@ private actor CoordinatedSharedFlow<Element: Sendable>: SharedFlow {
 
     var subscriptionCount: Int {
         get async { await inner.subscriptionCount }
+    }
+
+    func waitForSubscribers(_ count: Int) async throws {
+        try await inner.waitForSubscribers(count)
+    }
+
+    func waitForSubscribers(atMost count: Int) async throws {
+        try await inner.waitForSubscribers(atMost: count)
     }
 
     nonisolated func asFlow() -> Flow<Element> {

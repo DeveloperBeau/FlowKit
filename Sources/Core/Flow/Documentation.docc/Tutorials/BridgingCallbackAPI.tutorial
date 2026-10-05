@@ -178,7 +178,7 @@
             }
 
             @Step {
-                Write the test. Inject the mock, collect the flow in a `.test` closure, call
+                Write the test. Inject the mock, collect the flow in a `probing` closure, call
                 `simulateLocation`, and use `expectValue` to assert the emitted coordinate. Then
                 verify that `stopUpdatingLocation()` is called when the test closes.
 
@@ -186,7 +186,7 @@
             }
 
             @Step {
-                Add a cleanup test. After the `.test` closure exits the collection task is
+                Add a cleanup test. After the `probing` closure exits the collection task is
                 cancelled. Assert that the mock's `stopCalled` flag is `true`, confirming that
                 the `withTaskCancellationHandler` fires and the hardware shuts down.
 

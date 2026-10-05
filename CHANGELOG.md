@@ -2,6 +2,39 @@
 
 All notable changes to FlowKit are documented here.
 
+## 2.3.0 (unreleased)
+
+### Added
+
+- Injectable clocks on the timeout APIs. `withThrowingTimeout(_:clock:_:)`,
+  `Flow.test(timeout:clock:_:)`, `ThrowingFlow.test(timeout:clock:_:)`,
+  `TestScope.run(timeout:clock:_:)` and `waitUntil(timeout:clock:_:)` measure their deadline on
+  any `Clock` whose duration is `Duration`, so a `TestClock` expires them only when the test
+  advances it. A custom clock's timeout is used as given: `FLOWKIT_TIMEOUT_SCALE` and the
+  `waitUntil` stall allowance apply only to the real clock.
+- `TestClock.waitForSleepers(_:)` suspends until at least that many sleepers are registered,
+  and `FlowProbe.waitForValue(where:)` suspends until the probe's latest value satisfies a
+  predicate. Both are cancellation-aware (they throw `CancellationError`) and replace polling
+  `sleeperCount` and `FlowProbe.last`.
+- `TestClock.waitForSleepers(atMost:)` and `TestClock.waitForNoSleepers()` suspend until the
+  sleeper count falls to a bound, for waiting until a woken or cancelled operator has torn its
+  sleep down.
+- `MutableSharedFlow.waitForSubscribers(_:)` and `MutableStateFlow.waitForSubscribers(_:)`
+  suspend until at least that many collectors are attached, and
+  `waitForSubscribers(atMost:)` until at most that many remain. They return at once when the
+  condition already holds, are resumed by the flow's own subscribe and unsubscribe path, and
+  throw `CancellationError` if the waiting task is cancelled. They replace polling
+  `subscriptionCount`; the `SharedFlow` and `StateFlow` protocols gain no requirement.
+
+### Deprecated
+
+- `Flow.test(timeout:_:)`, `ThrowingFlow.test(timeout:_:)`, `TestScope.run(timeout:_:)` and
+  `waitUntil(timeout:_:)` without a clock. Their deadline is real elapsed time; read flows with
+  `probing(_:)` instead, or pass a `TestClock` to the new `clock:` overloads. They keep working
+  unchanged. `FlowTester.expectNoValue(within:)` and `FlowProbe` are not deprecated: there is
+  no clock-free quiet-flow check, and `tap(after:)` is still the only way to know an operator
+  has processed a value.
+
 ## 2.2.0 — 2026-10-05
 
 ### Added

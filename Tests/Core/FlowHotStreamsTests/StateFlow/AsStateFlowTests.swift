@@ -38,7 +38,13 @@ struct AsStateFlowTests {
             strategy: .eager
         )
 
-        await pollUntil { stateFlow.value == "eager-emit" }
+        // Either the initial value then the emission, or the emission alone
+        // when it landed before the subscription: never more than two reads.
+        try await stateFlow.asFlow().probing { reader in
+            var latest = try await reader.awaitValue()
+            if latest != "eager-emit" { latest = try await reader.awaitValue() }
+            #expect(latest == "eager-emit")
+        }
         #expect(stateFlow.value == "eager-emit")
     }
 }

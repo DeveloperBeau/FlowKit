@@ -25,11 +25,11 @@ struct ThrowingFlowRateLimitingTests {
                 }.tap(after: probe).debounce(for: .seconds(1), clock: clock)
             )
 
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
             await upstream.emit(42)
             // Wait until debounce has registered the value before advancing.
-            await pollUntil { await probe.last == 42 }
-            await pollUntil { clock.sleeperCount >= 1 }
+            try await probe.waitForValue { $0 == 42 }
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }
@@ -61,7 +61,7 @@ struct ThrowingFlowRateLimitingTests {
                 }.throttle(for: .seconds(1), clock: clock)
             )
 
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
             await upstream.emit(1)
             try await tester.expectValue(1)
         }
@@ -130,12 +130,12 @@ struct ThrowingFlowRateLimitingTests {
                 }.tap(after: probe).sample(every: .seconds(1), clock: clock)
             )
 
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
             await upstream.emit(1)
             await upstream.emit(2)
             // Wait until sample has stored the burst before advancing.
-            await pollUntil { await probe.last == 2 }
-            await pollUntil { clock.sleeperCount >= 1 }
+            try await probe.waitForValue { $0 == 2 }
+            try #require(await clock.registersSleepers(1), "the sleepers never registered")
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(2)
         }

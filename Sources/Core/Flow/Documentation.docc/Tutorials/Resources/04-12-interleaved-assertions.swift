@@ -11,12 +11,12 @@ struct MultipleFlowsTests {
         let clock = TestClock()
         let queries = MutableSharedFlow<String>(replay: 0)
 
-        try await TestScope.run { scope in
+        try await TestScope.run(clock: clock) { scope in
             let rawTester       = try await scope.test(queries.asFlow())
             let debouncedTester = try await scope.test(
                 queries.asFlow().debounce(for: .milliseconds(300), clock: clock)
             )
-            try? await Task.sleep(for: .seconds(0.01))
+            try await queries.waitForSubscribers(2)
 
             await queries.emit("h")
             await clock.advance(by: .milliseconds(100))
@@ -29,13 +29,14 @@ struct MultipleFlowsTests {
             try await rawTester.expectValue("he")
             try await rawTester.expectValue("hel")
 
-            // The debounced flow emits nothing yet.
-            await debouncedTester.expectNoValue(within: .milliseconds(50))
+            // The debounce is parked on its window, so it has emitted nothing.
+            try await clock.waitForSleepers(1)
 
             // Expire the debounce window.
             await clock.advance(by: .milliseconds(300))
 
-            // The debounced flow emits only the final value.
+            // The debounced flow emits only the final value: an earlier
+            // keystroke would have been read first.
             try await debouncedTester.expectValue("hel")
         }
     }

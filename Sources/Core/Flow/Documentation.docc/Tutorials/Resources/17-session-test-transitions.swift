@@ -20,16 +20,16 @@ enum SessionState: Sendable, Equatable {
 func signInTransitions() async throws {
     let state = MutableStateFlow<SessionState>(.signedOut)
 
-    try await state.asFlow().test { tester in
+    try await state.asFlow().probing { reader in
         // Consume the initial .signedOut emission.
-        try await tester.expectValue(.signedOut)
+        try await reader.expectValue(.signedOut)
 
         // Simulate the sign-in sequence.
         await state.send(.signingIn)
-        try await tester.expectValue(.signingIn)
+        try await reader.expectValue(.signingIn)
 
         let user = User(id: UUID(), name: "Ada", email: "ada@example.com")
         await state.send(.signedIn(user))
-        try await tester.expectValue(.signedIn(user))
+        try await reader.expectValue(.signedIn(user))
     }
 }

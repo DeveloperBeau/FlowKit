@@ -15,9 +15,9 @@ struct SearchViewModelClockTests {
             clock: clock
         )
 
-        try await TestScope.run { scope in
-            let resultsTester = try await scope.test(viewModel.resultsFlow)
-            try? await Task.sleep(for: .seconds(0.01))
+        try await viewModel.resultsFlow.probing { reader in
+            // Wait until the pipeline is collecting the query flow.
+            try await viewModel.queryFlow.waitForSubscribers(1)
 
             // Rapid typing, each keystroke resets the debounce timer.
             await viewModel.updateQuery("S")
@@ -26,12 +26,12 @@ struct SearchViewModelClockTests {
             await clock.advance(by: .milliseconds(100))
             await viewModel.updateQuery("Swift")
 
-            // Still inside the window, so no results yet.
-            await resultsTester.expectNoValue(within: .milliseconds(50))
+            // Still inside the window, so the debounce is parked on its timer.
+            try await clock.waitForSleepers(1)
 
             // Expire the window. The pipeline fires a single search.
             await clock.advance(by: .milliseconds(300))
-            let results = try await resultsTester.awaitValue()
+            let results = try await reader.awaitValue()
             #expect(results.count == 1)
             #expect(results.first?.name == "Swift")
         }

@@ -183,6 +183,8 @@ for await event in navigationCoordinator.eventStream.asFlow() {
 
 ### 4. Testing a flow pipeline
 
+`probing` reads a flow with no timeout. Each read waits for the flow's next emission, completion or failure, so a slow CI machine cannot fail a correct test.
+
 ```swift
 import Testing
 import Flow
@@ -195,27 +197,36 @@ func articleFeedEmitsCachedThenFresh() async throws {
         try await collector.emit([.cached, .fresh])
     }
 
-    try await feed.test { tester in
-        try await tester.expectValue([.cached])
-        try await tester.expectValue([.cached, .fresh])
-        try await tester.expectCompletion()
+    try await feed.probing { reader in
+        try await reader.expectValue([.cached])
+        try await reader.expectValue([.cached, .fresh])
+        try await reader.expectCompletion()
     }
 }
 ```
 
-### 5. Reading a flow without a deadline
+`test(timeout:_:)`, `TestScope.run(timeout:_:)` and `waitUntil(timeout:_:)` measure their deadline in real elapsed time and are deprecated in favour of `probing`. When a test does need a deadline, pass a `TestClock` and move time by hand: `test(timeout:clock:_:)`, `TestScope.run(timeout:clock:_:)`, `withThrowingTimeout(_:clock:_:)` and `waitUntil(timeout:clock:_:)` expire only when the clock is advanced.
 
-`probing` reads a flow with no timeout. Each read waits for the flow's next emission, completion or failure, so a slow CI machine cannot fail a correct test.
+### 5. Waiting on a clock-driven operator
+
+`TestClock.waitForSleepers(_:)` suspends until a time-based operator has registered its sleep, and `FlowProbe.waitForValue(where:)` suspends until a tapped value has passed through the operator. `MutableSharedFlow` and `MutableStateFlow` have `waitForSubscribers(_:)` to wait for a collector to attach. Each has a falling counterpart, `TestClock.waitForSleepers(atMost:)` (and `waitForNoSleepers()`) and `waitForSubscribers(atMost:)`, for waiting until a sleep is torn down or a collector detaches. None polls or uses a deadline, and each throws `CancellationError` if the waiting task is cancelled.
 
 ```swift
-try await feed.probing { reader in
-    try await reader.expectValue([.cached])
-    try await reader.expectValue([.cached, .fresh])
-    try await reader.expectCompletion()
+let clock = TestClock()
+let probe = FlowProbe<Int>()
+let sampled = upstream.asFlow().tap(after: probe).sample(every: .seconds(1), clock: clock)
+
+try await sampled.probing { reader in
+    try await upstream.waitForSubscribers(1)
+    await upstream.emit(3)
+    try await probe.waitForValue { $0 == 3 }
+    try await clock.waitForSleepers(1)
+    await clock.advance(by: .seconds(1))
+    try await reader.expectValue(3)
 }
 ```
 
-To check that nothing else arrived, trigger a known emission and read for it with `expectNextValue(_:)` instead of sleeping. The one limit: a producer that stays open and never emits again cannot be told from a slow one without a clock, so use `test(timeout:)` when you need that bound.
+To check that nothing else arrived, trigger a known emission and read for it with `expectNextValue(_:)` instead of sleeping. The one limit: a producer that stays open and never emits again cannot be told from a slow one without a clock, so use `test(timeout:clock:_:)` with a `TestClock` when you need that bound.
 
 ## What's inside
 
@@ -244,7 +255,7 @@ To check that nothing else arrived, trigger a known emission and read for it wit
 
 ### Testing
 
-`FlowTester`, `ThrowingFlowTester`, and `TestScope` drive assertions against flows. `TestClock` gives deterministic virtual time for rate-limiting and sharing operators. Everything plugs in through the `Flow.test(timeout:_:)` extension. `FlowReader` (via `Flow.probing(_:)`) is the deadline-free alternative.
+`FlowReader` (via `Flow.probing(_:)`) reads a flow with no deadline. `TestClock` gives deterministic virtual time for rate-limiting and sharing operators, and `FlowTester`, `ThrowingFlowTester` and `TestScope` drive several flows at once against a deadline you measure on a `TestClock`.
 
 ## Contributing
 

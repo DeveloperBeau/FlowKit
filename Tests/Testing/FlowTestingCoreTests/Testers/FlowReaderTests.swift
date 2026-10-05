@@ -205,7 +205,7 @@ struct FlowReaderTests {
     func hotSharedFlow() async throws {
         let shared = MutableSharedFlow<Int>()
         try await shared.asFlow().probing { probe in
-            await pollUntil { await shared.subscriptionCount >= 1 }
+            try await shared.waitForSubscribers(1)
             await shared.emit(10)
             await shared.emit(11)
             try await probe.expectValue(10)

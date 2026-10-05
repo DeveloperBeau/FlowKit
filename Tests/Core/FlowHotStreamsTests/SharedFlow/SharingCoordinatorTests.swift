@@ -15,20 +15,20 @@ private func settle() async {
 
 /// Yields until the delayed-stop sleep is registered on the clock, so advancing
 /// the clock deterministically wakes it rather than firing before it exists.
-private func waitForSleeper(_ clock: TestClock) async {
-    await pollUntil { clock.sleeperCount >= 1 }
+private func waitForSleeper(_ clock: TestClock) async throws {
+    try #require(await clock.registersSleepers(1), "the sleepers never registered")
 }
 
 /// Yields until the clock has no sleepers, i.e. a cancelled stop's sleep has
 /// been torn down before the next one is scheduled.
-private func waitForNoSleepers(_ clock: TestClock) async {
-    await pollUntil { clock.sleeperCount == 0 }
+private func waitForNoSleepers(_ clock: TestClock) async throws {
+    try await clock.waitForNoSleepers()
 }
 
 @Suite("SharingCoordinator")
 struct SharingCoordinatorTests {
     @Test("eager starts immediately without subscribers")
-    func eagerStartsImmediately() async {
+    func eagerStartsImmediately() async throws {
         let upstreamStarted = Mutex(false)
         let coordinator = SharingCoordinator(
             strategy: .eager,
@@ -44,7 +44,7 @@ struct SharingCoordinatorTests {
     }
 
     @Test("lazy starts on first subscriber")
-    func lazyStartsOnFirstSubscriber() async {
+    func lazyStartsOnFirstSubscriber() async throws {
         let upstreamStarted = Mutex(false)
         let coordinator = SharingCoordinator(
             strategy: .lazy,
@@ -63,7 +63,7 @@ struct SharingCoordinatorTests {
     }
 
     @Test("whileSubscribed stops after timeout when last subscriber leaves")
-    func whileSubscribedBasic() async {
+    func whileSubscribedBasic() async throws {
         let clock = TestClock()
         let upstreamStopped = Signal()
 
@@ -77,7 +77,7 @@ struct SharingCoordinatorTests {
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidDisappear()
 
-        await waitForSleeper(clock)
+        try await waitForSleeper(clock)
         #expect(!upstreamStopped.hasFired, "the stop must not fire before the timeout elapses")
 
         await clock.advance(by: .seconds(5))
@@ -87,7 +87,7 @@ struct SharingCoordinatorTests {
     }
 
     @Test("whileSubscribed cancels stop when new subscriber arrives")
-    func whileSubscribedRaceCancelsOnReappear() async {
+    func whileSubscribedRaceCancelsOnReappear() async throws {
         let clock = TestClock()
         let upstreamStopped = Signal()
 
@@ -100,7 +100,7 @@ struct SharingCoordinatorTests {
         await coordinator.activate()
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidDisappear()
-        await waitForSleeper(clock)
+        try await waitForSleeper(clock)
 
         await clock.advance(by: .seconds(4))
         await coordinator.subscriberDidAppear() // cancels the pending stop
@@ -112,7 +112,7 @@ struct SharingCoordinatorTests {
     }
 
     @Test("whileSubscribed stop fires correctly after re-appear and re-leave")
-    func whileSubscribedRaceFiresAfterReappearAndReleave() async {
+    func whileSubscribedRaceFiresAfterReappearAndReleave() async throws {
         let clock = TestClock()
         let upstreamStopped = Signal()
 
@@ -126,13 +126,13 @@ struct SharingCoordinatorTests {
 
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidDisappear()
-        await waitForSleeper(clock)
+        try await waitForSleeper(clock)
         await clock.advance(by: .seconds(2))
 
         await coordinator.subscriberDidAppear() // cancels the pending stop
-        await waitForNoSleepers(clock) // the cancelled stop's sleep is torn down
+        try await waitForNoSleepers(clock) // the cancelled stop's sleep is torn down
         await coordinator.subscriberDidDisappear() // schedules a fresh stop
-        await waitForSleeper(clock)
+        try await waitForSleeper(clock)
 
         await clock.advance(by: .seconds(4))
         await settle()
@@ -145,7 +145,7 @@ struct SharingCoordinatorTests {
     }
 
     @Test("activate -> deactivate runs lifecycle correctly")
-    func activateDeactivate() async {
+    func activateDeactivate() async throws {
         let upstreamStarted = Mutex(false)
         let upstreamStopped = Signal()
 
@@ -164,7 +164,7 @@ struct SharingCoordinatorTests {
     }
 
     @Test("whileSubscribed with zero timeout stops immediately")
-    func whileSubscribedZeroTimeout() async {
+    func whileSubscribedZeroTimeout() async throws {
         let upstreamStopped = Signal()
         let coordinator = SharingCoordinator(
             strategy: .whileSubscribed(stopTimeout: .zero),
@@ -181,7 +181,7 @@ struct SharingCoordinatorTests {
     }
 
     @Test("multiple subscribers prevent stop even with whileSubscribed")
-    func multipleSubscribersPreventsStop() async {
+    func multipleSubscribersPreventsStop() async throws {
         let clock = TestClock()
         let upstreamStopped = Signal()
 

@@ -107,7 +107,7 @@ struct FlatMapLatestTests {
 
             // Wait until the subscriber count reaches 1 so we know the
             // tester has actually subscribed before we start emitting.
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
 
             // Emit 1, 2, 3 in sequence; after each emit, wait until the
             // previous inner flow has observed its cancellation.
@@ -150,7 +150,7 @@ struct FlatMapLatestTests {
 @Suite("flatMapLatest cancellation propagation")
 struct FlatMapLatestCancellationTests {
     @Test("cancelling the downstream collection cancels the active inner flow")
-    func downstreamCancellationCancelsInner() async {
+    func downstreamCancellationCancelsInner() async throws {
         let innerStarted = Signal()
         let innerCancelled = Signal()
         let upstream = MutableSharedFlow<Int>(replay: 0)
@@ -166,7 +166,7 @@ struct FlatMapLatestCancellationTests {
                 }
             }.collect { _ in }
         }
-        await pollUntil { await upstream.subscriptionCount >= 1 }
+        try await upstream.waitForSubscribers(1)
         await upstream.emit(1)
         await innerStarted.wait()
 
