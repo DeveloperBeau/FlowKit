@@ -3,6 +3,7 @@ import Foundation
 import FlowCore
 import FlowHotStreams
 import FlowSharedModels
+import FlowTestSupport
 @testable import FlowTestingCore
 
 private struct Boom: Error, Equatable {}
@@ -204,7 +205,7 @@ struct FlowReaderTests {
     func hotSharedFlow() async throws {
         let shared = MutableSharedFlow<Int>()
         try await shared.asFlow().probing { probe in
-            while await shared.subscriptionCount < 1 { await Task.yield() }
+            await pollUntil { await shared.subscriptionCount >= 1 }
             await shared.emit(10)
             await shared.emit(11)
             try await probe.expectValue(10)
