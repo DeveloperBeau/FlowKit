@@ -121,7 +121,7 @@
     @Section(title: "Test the pipeline") {
         @ContentAndMedia {
             ``TestClock`` lets tests advance virtual time instead of sleeping.
-            Combined with the `test { tester in }` helper, you can assert
+            Combined with the `probing { reader in }` helper, you can assert
             exact debounce behaviour, with no `Task.sleep`, no timeouts, and no
             flaky CI.
         }
@@ -137,7 +137,7 @@
 
             @Step {
                 Write a test that sends three rapid keystrokes within the
-                300 ms window, then asserts no value has arrived yet. After
+                300 ms window, then waits for the debounce timer to be running. After
                 `clock.advance(by: .milliseconds(400))` moves past the
                 debounce window, `expectValue` confirms exactly one result
                 set arrived: the last query only.

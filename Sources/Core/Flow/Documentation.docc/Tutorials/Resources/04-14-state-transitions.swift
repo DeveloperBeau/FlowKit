@@ -9,17 +9,15 @@ struct SessionManagerTests {
     func signInTransition() async throws {
         let manager = SessionManager()
 
-        try await TestScope.run { scope in
-            let tester = try await scope.test(manager.stateFlow.asFlow())
-
+        try await manager.stateFlow.asFlow().probing { reader in
             // Initial state replayed immediately.
-            try await tester.expectValue(.loggedOut)
+            try await reader.expectValue(.loggedOut)
 
             // Drive the state machine.
             try await manager.signIn(username: "alice", password: "secret")
 
             // MutableStateFlow emits the new value to all collectors.
-            let state = try await tester.awaitValue()
+            let state = try await reader.awaitValue()
             if case .loggedIn(let user) = state {
                 #expect(user.username == "alice")
             } else {

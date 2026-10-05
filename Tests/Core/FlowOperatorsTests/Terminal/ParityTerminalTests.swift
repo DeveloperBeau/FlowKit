@@ -128,7 +128,7 @@ struct EmitAllTests {
     }
 
     @Test("cancellation mid-emitAll stops the inner collection promptly")
-    func cancellationStopsInnerCollection() async {
+    func cancellationStopsInnerCollection() async throws {
         let inner = MutableSharedFlow<Int>(replay: 0)
         let received = Recorder<Int>()
 
@@ -140,7 +140,7 @@ struct EmitAllTests {
                 received.record(value)
             }
         }
-        await pollUntil { await inner.subscriptionCount >= 1 }
+        try await inner.waitForSubscribers(1)
 
         await inner.emit(1)
         await inner.emit(2)
@@ -149,7 +149,7 @@ struct EmitAllTests {
         subscriber.cancel()
         // The cancelled subscriber must detach from the inner flow; emissions
         // after that must not be delivered.
-        await pollUntil { await inner.subscriptionCount == 0 }
+        try await inner.waitForSubscribers(atMost: 0)
         #expect(await inner.subscriptionCount == 0, "cancellation must tear down the inner subscription")
 
         await inner.emit(3)

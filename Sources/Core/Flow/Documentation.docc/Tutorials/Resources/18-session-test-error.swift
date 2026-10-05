@@ -19,13 +19,13 @@ enum SessionState: Sendable, Equatable {
 func signInTransitions() async throws {
     let state = MutableStateFlow<SessionState>(.signedOut)
 
-    try await state.asFlow().test { tester in
-        try await tester.expectValue(.signedOut)
+    try await state.asFlow().probing { reader in
+        try await reader.expectValue(.signedOut)
         await state.send(.signingIn)
-        try await tester.expectValue(.signingIn)
+        try await reader.expectValue(.signingIn)
         let user = User(id: UUID(), name: "Ada", email: "ada@example.com")
         await state.send(.signedIn(user))
-        try await tester.expectValue(.signedIn(user))
+        try await reader.expectValue(.signedIn(user))
     }
 }
 
@@ -34,22 +34,23 @@ func signInTransitions() async throws {
 func authErrorAndRecovery() async throws {
     let state = MutableStateFlow<SessionState>(.signedOut)
 
-    try await state.asFlow().test { tester in
-        try await tester.expectValue(.signedOut)
+    try await state.asFlow().probing { reader in
+        try await reader.expectValue(.signedOut)
 
         // Auth attempt begins
         await state.send(.signingIn)
-        try await tester.expectValue(.signingIn)
+        try await reader.expectValue(.signingIn)
 
         // Network error during authentication
         await state.send(.error("Invalid credentials. Please try again."))
-        try await tester.expectValue(.error("Invalid credentials. Please try again."))
+        try await reader.expectValue(.error("Invalid credentials. Please try again."))
 
         // User can retry. State resets to .signedOut first
         await state.send(.signedOut)
-        try await tester.expectValue(.signedOut)
+        try await reader.expectValue(.signedOut)
 
-        // No further emissions expected
-        await tester.expectNoValue(within: .milliseconds(50))
+        // Nothing else arrived in between: the next value is the one we send.
+        await state.send(.signingIn)
+        try await reader.expectNextValue(.signingIn)
     }
 }

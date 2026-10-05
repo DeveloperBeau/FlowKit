@@ -21,7 +21,7 @@ struct ThrottleTests {
                     .throttle(for: .seconds(1), latest: true, clock: clock)
             )
 
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
 
             await upstream.emit(1)   // emitted immediately (first value)
             try await tester.expectValue(1)
@@ -48,7 +48,7 @@ struct ThrottleTests {
                     .throttle(for: .seconds(1), latest: false, clock: clock)
             )
 
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
 
             await upstream.emit(1)   // first value, emitted
             try await tester.expectValue(1)

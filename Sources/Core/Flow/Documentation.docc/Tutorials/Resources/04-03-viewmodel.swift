@@ -19,11 +19,11 @@ struct SearchViewModelTests {
         let fakeProducts = [Product(id: 1, name: "Widget"), Product(id: 2, name: "Gadget")]
         let viewModel = SearchViewModel(repository: FakeProductRepository(results: fakeProducts))
 
-        try await viewModel.resultsFlow.test { tester in
+        try await viewModel.resultsFlow.probing { reader in
             // Emit a query to drive the pipeline.
             await viewModel.queryFlow.emit("widget")
 
-            let results = try await tester.awaitValue()
+            let results = try await reader.awaitValue()
             #expect(results.count == 2)
             #expect(results.first?.name == "Widget")
         }

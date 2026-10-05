@@ -16,6 +16,15 @@ All notable changes to FlowKit are documented here.
   and `FlowProbe.waitForValue(where:)` suspends until the probe's latest value satisfies a
   predicate. Both are cancellation-aware (they throw `CancellationError`) and replace polling
   `sleeperCount` and `FlowProbe.last`.
+- `TestClock.waitForSleepers(atMost:)` and `TestClock.waitForNoSleepers()` suspend until the
+  sleeper count falls to a bound, for waiting until a woken or cancelled operator has torn its
+  sleep down.
+- `MutableSharedFlow.waitForSubscribers(_:)` and `MutableStateFlow.waitForSubscribers(_:)`
+  suspend until at least that many collectors are attached, and
+  `waitForSubscribers(atMost:)` until at most that many remain. They return at once when the
+  condition already holds, are resumed by the flow's own subscribe and unsubscribe path, and
+  throw `CancellationError` if the waiting task is cancelled. They replace polling
+  `subscriptionCount`; the `SharedFlow` and `StateFlow` protocols gain no requirement.
 
 ### Deprecated
 

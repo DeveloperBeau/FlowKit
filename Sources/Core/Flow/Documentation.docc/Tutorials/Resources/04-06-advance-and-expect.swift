@@ -11,27 +11,27 @@ struct DebounceOperatorTests {
         let clock = TestClock()
         let queries = MutableSharedFlow<String>(replay: 0)
 
-        try await TestScope.run { scope in
-            let tester = try await scope.test(
-                queries.asFlow().debounce(for: .milliseconds(300), clock: clock)
-            )
-            try? await Task.sleep(for: .seconds(0.01))
+        try await queries.asFlow()
+            .debounce(for: .milliseconds(300), clock: clock)
+            .probing { reader in
+                try await queries.waitForSubscribers(1)
 
-            await queries.emit("s")
-            await clock.advance(by: .milliseconds(100))
-            await queries.emit("sw")
-            await clock.advance(by: .milliseconds(100))
-            await queries.emit("swi")
+                await queries.emit("s")
+                await clock.advance(by: .milliseconds(100))
+                await queries.emit("sw")
+                await clock.advance(by: .milliseconds(100))
+                await queries.emit("swi")
 
-            // Nothing yet. Still inside the 300 ms silence window.
-            await tester.expectNoValue(within: .milliseconds(50))
+                // Still inside the 300 ms silence window.
+                try await clock.waitForSleepers(1)
 
-            // Advance past the debounce window. The clock wakes the sleeping
-            // debounce task, which emits the last value ("swi").
-            await clock.advance(by: .milliseconds(300))
-            try await tester.expectValue("swi")
+                // Advance past the debounce window. The clock wakes the sleeping
+                // debounce task, which emits the last value ("swi").
+                await clock.advance(by: .milliseconds(300))
 
-            // No further values. Intermediate "s" and "sw" were suppressed.
-        }
+                // The first value read is "swi": the intermediate "s" and "sw"
+                // were suppressed, or this read would have returned one of them.
+                try await reader.expectValue("swi")
+            }
     }
 }

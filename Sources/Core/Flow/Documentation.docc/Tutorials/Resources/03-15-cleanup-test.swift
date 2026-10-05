@@ -12,13 +12,13 @@ struct LocationTrackerTests {
         let tracker = LocationTracker(managerFactory: { mock })
         let expected = CLLocation(latitude: 37.3318, longitude: -122.0312)
 
-        try await tracker.locations.asFlow().test { tester in
+        try await tracker.locations.asFlow().probing { reader in
             mock.simulateLocation(expected)
-            let received = try await tester.awaitValue()
+            let received = try await reader.awaitValue()
             #expect(received.coordinate.latitude == expected.coordinate.latitude)
             #expect(received.coordinate.longitude == expected.coordinate.longitude)
         }
-        // .test exits → the collection task is cancelled → withTaskCancellationHandler
+        // probing exits → the collection task is cancelled → withTaskCancellationHandler
         // fires → stop(manager:) is called → stopUpdatingLocation() is invoked.
     }
 
@@ -27,10 +27,10 @@ struct LocationTrackerTests {
         let mock = MockLocationManager()
         let tracker = LocationTracker(managerFactory: { mock })
 
-        try await tracker.locations.asFlow().test { tester in
-            // Don't emit any values. Just let the .test closure return,
+        try await tracker.locations.asFlow().probing { reader in
+            // Don't emit any values. Just let the probing closure return,
             // which cancels the collection task.
-            await tester.cancelAndIgnoreRemaining()
+            await reader.cancelAndIgnoreRemaining()
         }
 
         // The cancellation handler in the bridge must have fired.

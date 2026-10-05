@@ -24,7 +24,7 @@ struct CombineLatestWideArityTests {
         try await ProbeScope.run { scope in
             let tester = scope.probe(combined)
             for source in sources {
-                await pollUntil { await source.subscriptionCount >= 1 }
+                try await source.waitForSubscribers(1)
             }
 
             // Five of six emitted: still silent.
@@ -76,9 +76,9 @@ struct CombineLatestWideArityTests {
         try await ProbeScope.run { scope in
             let tester = scope.probe(combined)
             for source in sources {
-                await pollUntil { await source.subscriptionCount >= 1 }
+                try await source.waitForSubscribers(1)
             }
-            await pollUntil { await never.subscriptionCount >= 1 }
+            try await never.waitForSubscribers(1)
 
             for source in sources {
                 await source.emit(1)
@@ -125,7 +125,7 @@ struct CombineLatestWideArityTests {
         try await ProbeScope.run { scope in
             let tester = scope.probe(combined)
             for source in sources {
-                await pollUntil { await source.subscriptionCount >= 1 }
+                try await source.waitForSubscribers(1)
             }
             for source in sources {
                 await source.emit(1)
@@ -156,7 +156,7 @@ struct CombineLatestWideArityTests {
             }
         }
         for source in sources {
-            await pollUntil { await source.subscriptionCount >= 1 }
+            try await source.waitForSubscribers(1)
         }
 
         // Each source is hammered by its own task; the last value per source

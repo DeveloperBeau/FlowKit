@@ -118,14 +118,14 @@ FlowKit is designed so Kotlin Flow knowledge transfers directly. The mental mode
 
 ## Testing
 
-| Kotlin (Turbine) | FlowKit (FlowTester) |
+| Kotlin (Turbine) | FlowKit (FlowReader) |
 |------------------|----------------------|
-| `flow.test { }` | `flow.test { tester in }` |
-| `awaitItem()` | `await tester.awaitItem()` |
-| `awaitComplete()` | `await tester.awaitCompletion()` |
-| `awaitError()` | `await tester.awaitError()` |
-| `expectNoEvents()` | `await tester.expectNoEvents()` |
-| `TestCoroutineScheduler` / `runTest` | `TestClock` + `FlowTester` |
+| `flow.test { }` | `flow.probing { reader in }` |
+| `awaitItem()` | `try await reader.awaitValue()` |
+| `awaitComplete()` | `try await reader.expectCompletion()` |
+| `awaitError()` | `try await reader.expectError(_:matching:)` |
+| `expectNoEvents()` | `try await reader.expectNextValue(_:)` after a known emission |
+| `TestCoroutineScheduler` / `runTest` | `TestClock` + `probing` |
 | `advanceTimeBy(ms)` | `await clock.advance(by: .milliseconds(ms))` |
 
 ## Side-by-side comparisons

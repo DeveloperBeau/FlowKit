@@ -23,7 +23,7 @@ struct DebounceTests {
 
             // Wait for the debounce to subscribe before emitting; replay:0
             // drops anything sent before the subscription is live.
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
 
             // After each emit, wait until debounce has registered the value
             // before advancing, so the clock never outruns delivery.
@@ -58,7 +58,7 @@ struct DebounceTests {
                     .debounce(for: .seconds(1), clock: clock)
             )
 
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
 
             await upstream.emit(42)
             // Wait until debounce has registered the value and its clock sleep

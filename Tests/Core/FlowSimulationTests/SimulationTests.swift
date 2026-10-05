@@ -107,7 +107,7 @@ struct SimulationTests {
 
         try await ProbeScope.run { scope in
             let tester = scope.probe(pipeline)
-            await pollUntil { await gps.subscriptionCount >= 1 }
+            try await gps.waitForSubscribers(1)
             try await clock.waitForSleepers(1)
 
             // Burst 1: 200 fixes inside the first window.
@@ -210,7 +210,7 @@ struct SimulationTests {
 
         try await ProbeScope.run { scope in
             let tester = scope.probe(results)
-            await pollUntil { await keystrokes.subscriptionCount >= 1 }
+            try await keystrokes.waitForSubscribers(1)
 
             await keystrokes.emit("f")
             try await typed.waitForValue { $0 == "f" }

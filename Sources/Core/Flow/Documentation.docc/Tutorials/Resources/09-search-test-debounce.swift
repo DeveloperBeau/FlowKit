@@ -40,22 +40,25 @@ func debounceSupressesRapidKeystrokes() async throws {
             guard !query.isEmpty else { return ThrowingFlow { _ in } }
             return repository.search(query: query)
         }
-        .test { tester in
-            // Rapid keystrokes, each within the debounce window
-            await queries.send("s")
-            await clock.advance(by: .milliseconds(100))
-            await queries.send("sw")
-            await clock.advance(by: .milliseconds(100))
-            await queries.send("swi")
+        .probing { reader in
+            // The collector has attached once the state flow's snapshot is read.
+            try await queries.waitForSubscribers(1)
 
-            // No results yet because the debounce window hasn't closed
-            await tester.expectNoValue(within: .milliseconds(50))
+            // Rapid keystrokes, each within the debounce window
+            queries.send("s")
+            await clock.advance(by: .milliseconds(100))
+            queries.send("sw")
+            await clock.advance(by: .milliseconds(100))
+            queries.send("swi")
+
+            // The debounce window hasn't closed: the operator is parked on its timer
+            try await clock.waitForSleepers(1)
 
             // Advance past the 300 ms debounce window
             await clock.advance(by: .milliseconds(400))
 
             // Now the pipeline fires exactly once with the latest query
-            let results = try await tester.awaitValue()
+            let results = try await reader.awaitValue()
             #expect(results.count == 1)
             #expect(results[0].name == "Swift Hoodie")
         }

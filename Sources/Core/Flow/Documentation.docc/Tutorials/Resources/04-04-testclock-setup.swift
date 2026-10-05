@@ -13,18 +13,17 @@ struct DebounceOperatorTests {
         let clock = TestClock()
         let queries = MutableSharedFlow<String>(replay: 0)
 
-        // TestScope.run collects the flow in a concurrent background task so
-        // that advance() calls interleave correctly with the debounce sleeps.
-        try await TestScope.run { scope in
-            let tester = try await scope.test(
-                queries.asFlow().debounce(for: .milliseconds(300), clock: clock)
-            )
+        // probing collects the flow in a background task, so advance() calls
+        // interleave with the debounce sleeps. Reads wait on the flow itself.
+        try await queries.asFlow()
+            .debounce(for: .milliseconds(300), clock: clock)
+            .probing { reader in
+                // A hot flow with no replay drops anything emitted before the
+                // collector attaches, so wait for the subscription first.
+                try await queries.waitForSubscribers(1)
 
-            // Small real-time yield lets the collection task attach before we emit.
-            try? await Task.sleep(for: .seconds(0.01))
-
-            // Assertions continue in the next steps...
-            _ = tester
-        }
+                // Assertions continue in the next steps...
+                _ = reader
+            }
     }
 }

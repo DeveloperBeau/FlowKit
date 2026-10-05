@@ -9,10 +9,10 @@ struct FlowBasicsTests {
     func emitsValuesInOrder() async throws {
         // Flow(of:) is a simple cold source. It emits every argument
         // and then completes. Great for testing downstream operators in isolation.
-        try await Flow(of: "apple", "banana", "cherry").test { tester in
-            try await tester.expectValue("apple")
-            try await tester.expectValue("banana")
-            try await tester.expectValue("cherry")
+        try await Flow(of: "apple", "banana", "cherry").probing { reader in
+            try await reader.expectValue("apple")
+            try await reader.expectValue("banana")
+            try await reader.expectValue("cherry")
         }
     }
 }

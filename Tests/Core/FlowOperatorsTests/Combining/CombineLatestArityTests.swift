@@ -20,9 +20,9 @@ struct CombineLatestArityTests {
 
         try await ProbeScope.run { scope in
             let tester = scope.probe(combined)
-            await pollUntil { await a.subscriptionCount >= 1 }
-            await pollUntil { await b.subscriptionCount >= 1 }
-            await pollUntil { await c.subscriptionCount >= 1 }
+            try await a.waitForSubscribers(1)
+            try await b.waitForSubscribers(1)
+            try await c.waitForSubscribers(1)
 
             await a.emit(1)
             await b.emit("x")
@@ -60,7 +60,7 @@ struct CombineLatestArityTests {
         try await ProbeScope.run { scope in
             let tester = scope.probe(combined)
             for source in [a, b, c, d] {
-                await pollUntil { await source.subscriptionCount >= 1 }
+                try await source.waitForSubscribers(1)
             }
 
             await a.emit(1)
@@ -89,7 +89,7 @@ struct CombineLatestArityTests {
         try await ProbeScope.run { scope in
             let tester = scope.probe(combined)
             for source in sources {
-                await pollUntil { await source.subscriptionCount >= 1 }
+                try await source.waitForSubscribers(1)
             }
             for (index, source) in sources.enumerated() {
                 await source.emit(1 << index)

@@ -11,11 +11,9 @@ struct SessionManagerTests {
 
         // MutableStateFlow replays its current value to each new collector,
         // so the first expectValue call sees the initial state immediately.
-        try await TestScope.run { scope in
-            let tester = try await scope.test(manager.stateFlow.asFlow())
-
+        try await manager.stateFlow.asFlow().probing { reader in
             // The initial value is emitted as soon as the collector subscribes.
-            try await tester.expectValue(.loggedOut)
+            try await reader.expectValue(.loggedOut)
 
             // Assertions for transitions continue in the next step.
         }

@@ -21,8 +21,8 @@ private func waitForSleeper(_ clock: TestClock) async throws {
 
 /// Yields until the clock has no sleepers, i.e. a cancelled stop's sleep has
 /// been torn down before the next one is scheduled.
-private func waitForNoSleepers(_ clock: TestClock) async {
-    await pollUntil { clock.sleeperCount == 0 }
+private func waitForNoSleepers(_ clock: TestClock) async throws {
+    try await clock.waitForNoSleepers()
 }
 
 @Suite("SharingCoordinator")
@@ -130,7 +130,7 @@ struct SharingCoordinatorTests {
         await clock.advance(by: .seconds(2))
 
         await coordinator.subscriberDidAppear() // cancels the pending stop
-        await waitForNoSleepers(clock) // the cancelled stop's sleep is torn down
+        try await waitForNoSleepers(clock) // the cancelled stop's sleep is torn down
         await coordinator.subscriberDidDisappear() // schedules a fresh stop
         try await waitForSleeper(clock)
 

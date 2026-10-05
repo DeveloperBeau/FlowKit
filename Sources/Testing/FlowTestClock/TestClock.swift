@@ -59,7 +59,7 @@ public final class TestClock: Clock, @unchecked Sendable {
 
     private struct SleeperWaiter {
         let id: UUID
-        let count: Int
+        let isSatisfied: @Sendable (Int) -> Bool
         let continuation: CheckedContinuation<Void, any Error>
     }
 
@@ -104,17 +104,44 @@ public final class TestClock: Clock, @unchecked Sendable {
     /// - Parameter count: The number of registered sleepers to wait for.
     /// - Throws: `CancellationError` if the surrounding task is cancelled.
     public func waitForSleepers(_ count: Int) async throws {
+        try await waitForSleeperCount { $0 >= count }
+    }
+
+    /// Suspends until at most `count` sleepers remain registered on this clock,
+    /// then returns. Returns at once if no more than that many already are.
+    ///
+    /// The push counterpart of polling ``sleeperCount`` for it to fall: a
+    /// sleeper leaving the clock, whether woken by an advance or torn down by
+    /// cancellation, resumes the waiter directly. `waitForNoSleepers()` is the
+    /// common case.
+    ///
+    /// - Parameter count: The largest number of registered sleepers to accept.
+    /// - Throws: `CancellationError` if the surrounding task is cancelled.
+    public func waitForSleepers(atMost count: Int) async throws {
+        try await waitForSleeperCount { $0 <= count }
+    }
+
+    /// Suspends until no sleeper is registered on this clock, e.g. until a
+    /// cancelled operator's sleep has been torn down. Equivalent to
+    /// `waitForSleepers(atMost: 0)`.
+    ///
+    /// - Throws: `CancellationError` if the surrounding task is cancelled.
+    public func waitForNoSleepers() async throws {
+        try await waitForSleepers(atMost: 0)
+    }
+
+    private func waitForSleeperCount(_ isSatisfied: @escaping @Sendable (Int) -> Bool) async throws {
         let id = UUID()
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
                 lock.withLock { [self] in
                     if Task.isCancelled {
                         continuation.resume(throwing: CancellationError())
-                    } else if state.sleepers.count >= count {
+                    } else if isSatisfied(state.sleepers.count) {
                         continuation.resume()
                     } else {
                         state.sleeperWaiters.append(
-                            SleeperWaiter(id: id, count: count, continuation: continuation)
+                            SleeperWaiter(id: id, isSatisfied: isSatisfied, continuation: continuation)
                         )
                     }
                 }
@@ -154,25 +181,33 @@ public final class TestClock: Clock, @unchecked Sendable {
 
                     // Hand back the waiters this registration satisfies; they
                     // resume outside the lock.
-                    let registered = state.sleepers.count
-                    let satisfied = state.sleeperWaiters.filter { $0.count <= registered }
-                    state.sleeperWaiters.removeAll { $0.count <= registered }
-                    return satisfied.map(\.continuation)
+                    return takeSatisfiedWaiters()
                 }
                 for waiter in ready { waiter.resume() }
             }
         } onCancel: {
             // Remove this sleeper and resume its continuation so it's
             // never orphaned. Safe to call from any context.
-            let continuation: CheckedContinuation<Void, any Error>? = lock.withLock { [self] in
-                if let idx = state.sleepers.firstIndex(where: { $0.id == id }) {
-                    let sleeper = state.sleepers.remove(at: idx)
-                    return sleeper.continuation
+            let (continuation, ready): (CheckedContinuation<Void, any Error>?, [CheckedContinuation<Void, any Error>]) =
+                lock.withLock { [self] in
+                    if let idx = state.sleepers.firstIndex(where: { $0.id == id }) {
+                        let sleeper = state.sleepers.remove(at: idx)
+                        return (sleeper.continuation, takeSatisfiedWaiters())
+                    }
+                    return (nil, [])
                 }
-                return nil
-            }
             continuation?.resume(throwing: CancellationError())
+            for waiter in ready { waiter.resume() }
         }
+    }
+
+    /// Removes and returns the waiters the current sleeper count satisfies.
+    /// Call with the lock held; resume the result after releasing it.
+    private func takeSatisfiedWaiters() -> [CheckedContinuation<Void, any Error>] {
+        let registered = state.sleepers.count
+        let satisfied = state.sleeperWaiters.filter { $0.isSatisfied(registered) }
+        state.sleeperWaiters.removeAll { $0.isSatisfied(registered) }
+        return satisfied.map(\.continuation)
     }
 
     /// Advances virtual time by `duration` and wakes any sleepers whose
@@ -202,7 +237,7 @@ public final class TestClock: Clock, @unchecked Sendable {
             // the next sleeper is chosen.
             await Self.drainScheduler()
 
-            let next: Sleeper? = lock.withLock {
+            let next: (sleeper: Sleeper, ready: [CheckedContinuation<Void, any Error>])? = lock.withLock {
                 guard let first = state.sleepers.first, first.deadline <= deadline else {
                     if state.currentInstant < deadline {
                         state.currentInstant = deadline
@@ -210,14 +245,16 @@ public final class TestClock: Clock, @unchecked Sendable {
                     return nil
                 }
                 state.currentInstant = first.deadline
-                return state.sleepers.removeFirst()
+                let sleeper = state.sleepers.removeFirst()
+                return (sleeper, takeSatisfiedWaiters())
             }
 
-            guard let sleeper = next else {
+            guard let next else {
                 await Self.drainScheduler()
                 return
             }
-            sleeper.continuation.resume()
+            next.sleeper.continuation.resume()
+            for waiter in next.ready { waiter.resume() }
         }
     }
 

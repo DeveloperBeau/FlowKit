@@ -15,7 +15,7 @@ struct MutableSharedFlowTests {
             let t1 = scope.probe(shared.asFlow())
             let t2 = scope.probe(shared.asFlow())
 
-            await pollUntil { await shared.subscriptionCount == 2 }
+            try await shared.waitForSubscribers(2)
 
             await shared.emit("event1")
             try await t1.expectValue("event1")
@@ -39,7 +39,7 @@ struct MutableSharedFlowTests {
             try await tester.expectValue(2)
             try await tester.expectValue(3)
             // Nothing beyond the replay cache: the next value is the live one.
-            await pollUntil { await shared.subscriptionCount == 1 }
+            try await shared.waitForSubscribers(1)
             await shared.emit(4)
             try await tester.expectNextValue(4)
         }
@@ -52,7 +52,7 @@ struct MutableSharedFlowTests {
         try await ProbeScope.run { scope in
             _ = scope.probe(shared.asFlow())
             _ = scope.probe(shared.asFlow())
-            await pollUntil { await shared.subscriptionCount == 2 }
+            try await shared.waitForSubscribers(2)
             #expect(await shared.subscriptionCount == 2)
         }
     }
@@ -66,7 +66,7 @@ struct MutableSharedFlowTests {
 
         try await shared.asFlow().probing { tester in
             // An empty cache replays nothing: the first value is the live one.
-            await pollUntil { await shared.subscriptionCount == 1 }
+            try await shared.waitForSubscribers(1)
             await shared.emit(3)
             try await tester.expectNextValue(3)
         }
@@ -80,7 +80,7 @@ struct MutableSharedFlowTests {
 
         try await shared.asFlow().probing { tester in
             // Zero replay buffers nothing: the first value is the live one.
-            await pollUntil { await shared.subscriptionCount == 1 }
+            try await shared.waitForSubscribers(1)
             await shared.emit(3)
             try await tester.expectNextValue(3)
         }

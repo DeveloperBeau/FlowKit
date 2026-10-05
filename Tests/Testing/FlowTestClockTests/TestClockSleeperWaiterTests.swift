@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import FlowSharedModels
 import FlowTestSupport
 @testable import FlowTestClock
 
@@ -118,6 +119,87 @@ struct TestClockSleeperWaiterTests {
 
         let live = sleeper(on: clock, seconds: 2)
         try await waiter.value
+        await clock.run()
+        try await live.value
+    }
+
+    // MARK: - Falling counts
+
+    /// Runs `wait` in its own task and reports when it returns.
+    private func startWaiter(
+        _ wait: @escaping @Sendable () async throws -> Void
+    ) -> (task: Task<Void, any Error>, returned: Signal) {
+        let returned = Signal()
+        let task = Task {
+            try await wait()
+            returned.fire()
+        }
+        return (task, returned)
+    }
+
+    @Test("waitForNoSleepers returns at once on a clock with no sleepers")
+    func noSleepersReturnsImmediately() async {
+        let clock = TestClock()
+        let waiter = startWaiter { try await clock.waitForNoSleepers() }
+        #expect(await waiter.returned.firesWithinHops(), "an empty clock kept the waiter parked")
+        let atMost = startWaiter { try await clock.waitForSleepers(atMost: 3) }
+        #expect(await atMost.returned.firesWithinHops(), "atMost 3 parked on an empty clock")
+    }
+
+    @Test("waitForNoSleepers resumes when an advance wakes the last sleeper")
+    func noSleepersAfterAdvance() async throws {
+        let clock = TestClock()
+        let first = sleeper(on: clock, seconds: 1)
+        let second = sleeper(on: clock, seconds: 2)
+        try await clock.waitForSleepers(2)
+
+        let none = startWaiter { try await clock.waitForNoSleepers() }
+        let atMostOne = startWaiter { try await clock.waitForSleepers(atMost: 1) }
+        #expect(!(await none.returned.firesWithinHops()), "returned with 2 sleepers")
+        #expect(!(await atMostOne.returned.firesWithinHops()), "atMost 1 returned with 2 sleepers")
+
+        await clock.advance(by: .seconds(1))
+        #expect(await atMostOne.returned.firesWithinHops(), "atMost 1 did not return after one sleeper woke")
+        #expect(!(await none.returned.firesWithinHops()), "returned with 1 sleeper left")
+
+        await clock.advance(by: .seconds(1))
+        #expect(await none.returned.firesWithinHops(), "did not return after the last sleeper woke")
+        try await first.value
+        try await second.value
+    }
+
+    @Test("waitForNoSleepers resumes when cancellation tears the last sleeper down")
+    func noSleepersAfterCancellation() async throws {
+        let clock = TestClock()
+        let only = sleeper(on: clock, seconds: 1)
+        try await clock.waitForSleepers(1)
+
+        let none = startWaiter { try await clock.waitForNoSleepers() }
+        #expect(!(await none.returned.firesWithinHops()), "returned with a live sleeper")
+
+        only.cancel()
+        #expect(await none.returned.firesWithinHops(), "did not return after the sleeper was cancelled")
+    }
+
+    @Test("Cancelling a waitForNoSleepers waiter throws CancellationError")
+    func noSleepersCancellationThrows() async throws {
+        let clock = TestClock()
+        let live = sleeper(on: clock, seconds: 1)
+        try await clock.waitForSleepers(1)
+
+        let ended = Signal()
+        let thrown = Mutex<(any Error)?>(nil)
+        let task = Task {
+            do { try await clock.waitForNoSleepers() } catch { thrown.withLock { $0 = error } }
+            ended.fire()
+        }
+        // Give the waiter time to park, so the cancel reaches the handler
+        // rather than the cancelled-before-waiting check.
+        for _ in 0..<200 { await Task.yield() }
+        task.cancel()
+        #expect(await ended.firesWithinHops(), "a cancelled waiter stayed parked")
+        #expect(thrown.withLock { $0 } is CancellationError)
+
         await clock.run()
         try await live.value
     }

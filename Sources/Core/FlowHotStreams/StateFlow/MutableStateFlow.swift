@@ -74,6 +74,39 @@ public final class MutableStateFlow<Element: Sendable & Equatable>: StateFlow, S
         get async { await subscription.subscriberCount }
     }
 
+    /// Suspends until at least `count` collectors are attached, then returns.
+    /// Returns at once if that many already are.
+    ///
+    /// The push counterpart of polling ``subscriptionCount``: the flow's own
+    /// subscribe path resumes the waiter, so a test (or a producer that must
+    /// not emit into the void) waits for a collector to have attached without
+    /// a poll loop or a real-time bound.
+    ///
+    /// ```swift
+    /// let collector = Task { await flow.asFlow().collect { _ in } }
+    /// try await flow.waitForSubscribers(1)
+    /// ```
+    ///
+    /// - Parameter count: The number of attached collectors to wait for.
+    /// - Throws: `CancellationError` if the surrounding task is cancelled.
+    public func waitForSubscribers(_ count: Int) async throws {
+        try await subscription.waitForSubscriberCount { $0 >= count }
+    }
+
+    /// Suspends until at most `count` collectors remain attached, then
+    /// returns. Returns at once if no more than that many already are.
+    ///
+    /// The push counterpart of polling ``subscriptionCount`` for it to fall:
+    /// the flow's own unsubscribe path resumes the waiter, so a test can wait
+    /// for a cancelled collector to have detached before asserting on it.
+    /// `waitForSubscribers(atMost: 0)` waits for the last collector to leave.
+    ///
+    /// - Parameter count: The largest number of attached collectors to accept.
+    /// - Throws: `CancellationError` if the surrounding task is cancelled.
+    public func waitForSubscribers(atMost count: Int) async throws {
+        try await subscription.waitForSubscriberCount { $0 <= count }
+    }
+
     /// Sets `newValue` as the current value. Equivalent to writing `value`;
     /// a no-op when `newValue` equals the current value.
     public func send(_ newValue: Element) {

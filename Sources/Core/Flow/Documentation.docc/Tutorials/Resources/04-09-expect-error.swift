@@ -11,12 +11,15 @@ struct SearchViewModelErrorTests {
             repository: FailingProductRepository(error: .networkUnavailable)
         )
 
-        // ThrowingFlow uses ThrowingFlowTester which adds expectError(_:).
-        try await viewModel.resultsFlow.test { tester in
+        // A ThrowingFlow read through probing fails with expectError(_:matching:).
+        try await viewModel.resultsFlow.probing { reader in
             await viewModel.updateQuery("anything")
 
-            // Typed overload that works when the error type is Equatable.
-            try await tester.expectError(SearchError.networkUnavailable)
+            // The description names the expected error in a failure message.
+            // SearchError is Equatable, so the match is a plain comparison.
+            try await reader.expectError("network unavailable") { error in
+                (error as? SearchError) == .networkUnavailable
+            }
         }
     }
 }

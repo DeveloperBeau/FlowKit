@@ -209,7 +209,7 @@ func articleFeedEmitsCachedThenFresh() async throws {
 
 ### 5. Waiting on a clock-driven operator
 
-`TestClock.waitForSleepers(_:)` suspends until a time-based operator has registered its sleep, and `FlowProbe.waitForValue(where:)` suspends until a tapped value has passed through the operator. Neither polls or uses a deadline.
+`TestClock.waitForSleepers(_:)` suspends until a time-based operator has registered its sleep, and `FlowProbe.waitForValue(where:)` suspends until a tapped value has passed through the operator. `MutableSharedFlow` and `MutableStateFlow` have `waitForSubscribers(_:)` to wait for a collector to attach. Each has a falling counterpart, `TestClock.waitForSleepers(atMost:)` (and `waitForNoSleepers()`) and `waitForSubscribers(atMost:)`, for waiting until a sleep is torn down or a collector detaches. None polls or uses a deadline, and each throws `CancellationError` if the waiting task is cancelled.
 
 ```swift
 let clock = TestClock()
@@ -217,7 +217,7 @@ let probe = FlowProbe<Int>()
 let sampled = upstream.asFlow().tap(after: probe).sample(every: .seconds(1), clock: clock)
 
 try await sampled.probing { reader in
-    // Once the pipeline has subscribed to `upstream`:
+    try await upstream.waitForSubscribers(1)
     await upstream.emit(3)
     try await probe.waitForValue { $0 == 3 }
     try await clock.waitForSleepers(1)
@@ -255,7 +255,7 @@ To check that nothing else arrived, trigger a known emission and read for it wit
 
 ### Testing
 
-`FlowTester`, `ThrowingFlowTester`, and `TestScope` drive assertions against flows. `TestClock` gives deterministic virtual time for rate-limiting and sharing operators. Everything plugs in through the `Flow.test(timeout:_:)` extension. `FlowReader` (via `Flow.probing(_:)`) is the deadline-free alternative.
+`FlowReader` (via `Flow.probing(_:)`) reads a flow with no deadline. `TestClock` gives deterministic virtual time for rate-limiting and sharing operators, and `FlowTester`, `ThrowingFlowTester` and `TestScope` drive several flows at once against a deadline you measure on a `TestClock`.
 
 ## Contributing
 

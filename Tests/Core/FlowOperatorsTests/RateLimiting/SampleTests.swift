@@ -20,7 +20,7 @@ struct SampleTests {
                 upstream.asFlow().tap(after: probe).sample(every: .seconds(1), clock: clock)
             )
 
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
 
             await upstream.emit(1)
             await upstream.emit(2)
@@ -51,7 +51,7 @@ struct SampleTests {
                 upstream.asFlow().tap(after: probe).sample(every: .seconds(1), clock: clock)
             )
 
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
             // Wait until sample has registered its interval sleep before
             // advancing, rather than racing that registration.
             try await clock.waitForSleepers(1)

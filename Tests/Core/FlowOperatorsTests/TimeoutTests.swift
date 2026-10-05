@@ -21,7 +21,7 @@ struct TimeoutTests {
 
         try await ProbeScope.run { scope in
             let tester = scope.probe(flow)
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
             try await clock.waitForSleepers(1)
 
             await upstream.emit(1)
@@ -49,7 +49,7 @@ struct TimeoutTests {
 
         try await ProbeScope.run { scope in
             let tester = scope.probe(flow)
-            await pollUntil { await upstream.subscriptionCount >= 1 }
+            try await upstream.waitForSubscribers(1)
             try await clock.waitForSleepers(1)
             await clock.advance(by: .seconds(3))
             try await tester.expectError(FlowTimeoutError())

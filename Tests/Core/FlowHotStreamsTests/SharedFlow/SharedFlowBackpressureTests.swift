@@ -26,7 +26,7 @@ private actor Gate {
 @Suite("SharedFlow subscriber backpressure")
 struct SharedFlowBackpressureTests {
     @Test("dropOldest bounds a slow subscriber's buffer and keeps the newest value")
-    func dropOldestConflatesForSlowSubscriber() async {
+    func dropOldestConflatesForSlowSubscriber() async throws {
         let shared = MutableSharedFlow<Int>(replay: 0, extraBufferCapacity: 1, onBufferOverflow: .dropOldest)
         let gate = Gate()
         let received = Recorder<Int>()
@@ -37,7 +37,7 @@ struct SharedFlowBackpressureTests {
                 received.record(value)
             }
         }
-        await pollUntil { await shared.subscriptionCount >= 1 }
+        try await shared.waitForSubscribers(1)
 
         // If the emitter suspended on a full subscriber buffer, this would
         // deadlock; under dropOldest it drops and never suspends.
@@ -54,7 +54,7 @@ struct SharedFlowBackpressureTests {
     }
 
     @Test("dropLatest bounds a slow subscriber's buffer and sheds the newest values")
-    func dropLatestShedsForSlowSubscriber() async {
+    func dropLatestShedsForSlowSubscriber() async throws {
         let shared = MutableSharedFlow<Int>(replay: 0, extraBufferCapacity: 1, onBufferOverflow: .dropLatest)
         let gate = Gate()
         let received = Recorder<Int>()
@@ -65,7 +65,7 @@ struct SharedFlowBackpressureTests {
                 received.record(value)
             }
         }
-        await pollUntil { await shared.subscriptionCount >= 1 }
+        try await shared.waitForSubscribers(1)
 
         for value in 1...1000 { await shared.emit(value) }
         await gate.open()
@@ -81,13 +81,13 @@ struct SharedFlowBackpressureTests {
     }
 
     @Test("The default (suspend, no extra capacity) still delivers every value in order")
-    func defaultIsLossless() async {
+    func defaultIsLossless() async throws {
         let shared = MutableSharedFlow<Int>(replay: 0)
         let received = Recorder<Int>()
         let collecting = Task {
             await shared.asFlow().collect { value in received.record(value) }
         }
-        await pollUntil { await shared.subscriptionCount >= 1 }
+        try await shared.waitForSubscribers(1)
 
         for value in 1...100 { await shared.emit(value) }
         await received.wait(atLeast: 100)

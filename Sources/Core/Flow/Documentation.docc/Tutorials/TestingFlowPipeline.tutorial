@@ -1,8 +1,8 @@
 @Tutorial(time: 30) {
     @Intro(title: "Testing a Flow Pipeline") {
         Real sleeps make tests slow and flaky. FlowKit ships a `TestClock`, a manually-advanced
-        virtual clock, and a suite of `FlowTester` helpers that let you assert on stream values
-        without waiting for wall time.
+        virtual clock, and `probing`, which reads a flow with no deadline, so you can assert on stream
+        values without waiting for wall time.
 
         In this tutorial you will test the debounced search pipeline from *Building a Debounced
         Search* and the session state transitions from *Sharing State Between Views*. By the end
@@ -12,10 +12,12 @@
 
     @Section(title: "Write a basic test") {
         @ContentAndMedia {
-            The simplest way to test a `Flow` is the `.test(_:)` extension method. It starts
-            collecting the flow in a background task, hands you a `FlowTester`, and cancels
-            collection when the closure returns. `expectValue` asserts the next emitted value
-            matches an expected value; `expectCompletion` asserts the stream ends.
+            The simplest way to test a `Flow` is the `probing(_:)` extension method. It starts
+            collecting the flow in a background task, hands you a `FlowReader`, and cancels
+            collection when the closure returns. Every read suspends on the flow's own next
+            emission, with no timeout, so a slow machine cannot fail a correct test.
+            `expectValue` asserts the next emitted value matches an expected value;
+            `expectCompletion` asserts the stream ends.
         }
 
         @Steps {
@@ -54,15 +56,17 @@
 
         @Steps {
             @Step {
-                Create a `TestClock` and pass it to `debounce`. Use `TestScope.run` so the flow
-                runs concurrently with the test's advance calls.
+                Create a `TestClock` and pass it to `debounce`. `probing` collects the flow
+                concurrently with the test's advance calls, and `waitForSubscribers(_:)` waits
+                for the hot source to have a collector before anything is emitted.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-04-testclock-setup.swift)
             }
 
             @Step {
                 Emit several rapid keystrokes and advance the clock by less than the debounce
-                window. Assert that no value has been emitted yet because the debounce timer is still
+                window. `waitForSleepers(_:)` suspends until the debounce has registered its
+                timer, which shows no value has been emitted yet because the timer is still
                 running.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-05-no-value-yet.swift)
@@ -88,8 +92,8 @@
 
     @Section(title: "Test error paths") {
         @ContentAndMedia {
-            `ThrowingFlow` can fail. `ThrowingFlowTester` adds `expectError` to the tester API.
-            Use the typed overload when your error type is `Equatable`; use the predicate overload
+            `ThrowingFlow` can fail. A reader's `expectError(_:matching:)` takes a description and a
+            predicate. Compare against the error directly when it is `Equatable`; pattern-match
             when you need to inspect fields on a non-equatable error.
         }
 
@@ -102,14 +106,14 @@
             }
 
             @Step {
-                Use the `.test` extension on `ThrowingFlow` to get a `ThrowingFlowTester`. Call
-                `expectError(_:)` with the typed overload to assert the exact error value.
+                Use the `probing` extension on `ThrowingFlow` to get a reader. Call
+                `expectError(_:matching:)` with a predicate that compares the exact error value.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-09-expect-error.swift)
             }
 
             @Step {
-                Use the predicate overload for richer assertions, for example checking the
+                Pattern-match inside the predicate for richer assertions, for example checking the
                 error's `localizedDescription` or an associated value.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-10-predicate-error.swift)
@@ -119,16 +123,17 @@
 
     @Section(title: "Test multiple flows") {
         @ContentAndMedia {
-            `TestScope.run` runs a block inside a `FlowScope` where multiple flows can be
+            `TestScope.run(clock:_:)` runs a block inside a `FlowScope` where multiple flows can be
             collected concurrently. Each call to `scope.test(_:)` returns its own independent
             `FlowTester`. Assertions on different testers can be interleaved freely because all
-            flows are collected in parallel background tasks.
+            flows are collected in parallel background tasks. The scope's deadline is measured on
+            the `TestClock` you pass, so it expires only when the test advances time.
         }
 
         @Steps {
             @Step {
-                Use `TestScope.run` to collect both the raw query flow and the debounced results
-                flow at the same time.
+                Use `TestScope.run(clock:_:)` to collect both the raw query flow and the debounced
+                results flow at the same time.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-11-test-scope.swift)
             }
@@ -147,14 +152,14 @@
         @ContentAndMedia {
             `MutableStateFlow` is a hot stream that holds state and multicasts to all collectors.
             Testing it requires collecting in a background task before sending updates, because
-            the stream only replays the current value at subscription time. `TestScope.run`
+            the stream only replays the current value at subscription time. `probing`
             handles this naturally.
         }
 
         @Steps {
             @Step {
                 Set up a `SessionManager` with a `MutableStateFlow<SessionState>` and start
-                collecting its `stateFlow` inside `TestScope.run`.
+                collecting its `stateFlow` with `probing`.
 
                 @Code(name: "SessionManagerTests.swift", file: 04-13-hot-setup.swift)
             }
@@ -169,14 +174,15 @@
             @Step {
                 Drive the full sign-in → sign-out lifecycle and assert each transition in order.
                 Because `MutableStateFlow` drops duplicate values, sending the same state twice
-                should produce only one emission. Verify that with `expectNoValue`.
+                should produce only one emission. Verify that with `expectNextValue`, which
+                fails if anything arrives before the value you expect.
 
                 @Code(name: "SessionManagerTests.swift", file: 04-15-full-lifecycle.swift)
             }
 
             @Step {
-                Test that `SessionManager.signIn` throws on bad credentials by collecting the
-                throwing variant of the flow through a `ThrowingFlowTester`.
+                Test that `SessionManager.signIn` throws on bad credentials without
+                collecting the flow at all, then check that the state did not change.
 
                 @Code(name: "SessionManagerTests.swift", file: 04-16-error-path.swift)
             }
