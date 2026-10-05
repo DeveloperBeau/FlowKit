@@ -21,6 +21,7 @@ private let isSupported = {
 /// A value that moves somewhere other than `expected` fails the read by name
 /// instead of waiting forever. A source that never delivers at all parks until
 /// the test is cancelled: only a clock could say "nothing is coming".
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *)
 @MainActor
 private func awaitValue<Value: Equatable>(
     _ expected: Value,
