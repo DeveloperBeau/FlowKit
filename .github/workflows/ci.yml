@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
-      - uses: DeveloperBeau/resolve-swift@95dd7376c9df6efd1252713de2edbc4ae6df0663  # v1
+      - uses: DeveloperBeau/resolve-swift@f4122380a88b950040d16c59b9dacec63b4f482c  # v2
         with:
           swift-version: '6.3'
       - name: Show Swift version
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
-      - uses: DeveloperBeau/resolve-swift@95dd7376c9df6efd1252713de2edbc4ae6df0663  # v1
+      - uses: DeveloperBeau/resolve-swift@f4122380a88b950040d16c59b9dacec63b4f482c  # v2
         with:
           swift-version: '6.3'
       - name: Show Swift version
@@ -87,7 +87,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
-      - uses: DeveloperBeau/resolve-swift@95dd7376c9df6efd1252713de2edbc4ae6df0663  # v1
+      - uses: DeveloperBeau/resolve-swift@f4122380a88b950040d16c59b9dacec63b4f482c  # v2
         with:
           swift-version: '6.3.3'
       - name: Show Swift version
