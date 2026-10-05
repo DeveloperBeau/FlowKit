@@ -25,10 +25,7 @@ struct ThrowingFlowRateLimitingTests {
                 }.tap(after: probe).debounce(for: .seconds(1), clock: clock)
             )
 
-            for _ in 0..<200 {
-                if await upstream.subscriptionCount >= 1 { break }
-                try? await Task.sleep(for: .milliseconds(10))
-            }
+            await pollUntil { await upstream.subscriptionCount >= 1 }
             await upstream.emit(42)
             // Wait until debounce has registered the value before advancing.
             await pollUntil { await probe.last == 42 }
@@ -64,10 +61,7 @@ struct ThrowingFlowRateLimitingTests {
                 }.throttle(for: .seconds(1), clock: clock)
             )
 
-            for _ in 0..<200 {
-                if await upstream.subscriptionCount >= 1 { break }
-                try? await Task.sleep(for: .milliseconds(10))
-            }
+            await pollUntil { await upstream.subscriptionCount >= 1 }
             await upstream.emit(1)
             try await tester.expectValue(1)
         }
@@ -136,10 +130,7 @@ struct ThrowingFlowRateLimitingTests {
                 }.tap(after: probe).sample(every: .seconds(1), clock: clock)
             )
 
-            for _ in 0..<200 {
-                if await upstream.subscriptionCount >= 1 { break }
-                try? await Task.sleep(for: .milliseconds(10))
-            }
+            await pollUntil { await upstream.subscriptionCount >= 1 }
             await upstream.emit(1)
             await upstream.emit(2)
             // Wait until sample has stored the burst before advancing.

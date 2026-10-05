@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowOperators
 
 @Suite("terminal operators")
@@ -99,8 +100,9 @@ struct TerminalOperatorTests {
         let processed = Mutex<[Int]>([])
         let flow = Flow(of: 1, 2, 3)
         await flow.collectLatest { value in
-            // Simulate work. Only the last value should complete.
-            try? await Task.sleep(for: .seconds(0.01))
+            // Simulate work that only a newer value can interrupt: the earlier
+            // values park until collectLatest cancels them, the last one ends.
+            if value != 3 { await parkUntilCancelled() }
             processed.withLock { $0.append(value) }
         }
         // At minimum, the last value (3) should be processed

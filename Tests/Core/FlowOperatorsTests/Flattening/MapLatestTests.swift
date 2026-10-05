@@ -11,17 +11,15 @@ struct MapLatestTests {
     @Test("mapLatest cancels the in-flight transform when a newer value arrives")
     func cancelsStaleTransform() async throws {
         let upstream = MutableSharedFlow<Int>(replay: 0)
-        let firstStarted = Mutex(false)
-        let firstCancelled = Mutex(false)
+        let firstStarted = Signal()
+        let firstCancelled = Signal()
 
         let results = upstream.asFlow().mapLatest { value -> String in
             if value == 1 {
-                firstStarted.withLock { $0 = true }
+                firstStarted.fire()
                 // Park until cancelled; only cancellation can end this work.
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(1))
-                }
-                firstCancelled.withLock { $0 = true }
+                await parkUntilCancelled()
+                firstCancelled.fire()
             }
             return "done-\(value)"
         }
@@ -31,12 +29,12 @@ struct MapLatestTests {
             await pollUntil { await upstream.subscriptionCount >= 1 }
 
             await upstream.emit(1)
-            await pollUntil { firstStarted.withLock { $0 } }
+            await firstStarted.wait()
             await upstream.emit(2)
 
             try await tester.expectValue("done-2")
-            await pollUntil { firstCancelled.withLock { $0 } }
-            #expect(firstCancelled.withLock { $0 })
+            await firstCancelled.wait()
+            #expect(firstCancelled.hasFired)
         }
     }
 
@@ -47,17 +45,17 @@ struct MapLatestTests {
         // upstream may legitimately skip intermediate results (Kotlin
         // mapLatest semantics), which under load made a plain
         // Flow(of: 1, 2, 3) version of this test flaky.
-        let observed = Mutex<[Int]>([])
+        let observed = Recorder<Int>()
         let upstream = Flow<Int> { collector in
             for value in 1...3 {
                 await collector.emit(value)
-                await pollUntil { observed.withLock { $0 }.count >= value }
+                await observed.wait(atLeast: value)
             }
         }
         await upstream.mapLatest { $0 * 10 }.collect { value in
-            observed.withLock { $0.append(value) }
+            observed.record(value)
         }
-        #expect(observed.withLock { $0 } == [10, 20, 30])
+        #expect(observed.elements == [10, 20, 30])
     }
 
     @Test("transformLatest can emit multiple values per upstream value")

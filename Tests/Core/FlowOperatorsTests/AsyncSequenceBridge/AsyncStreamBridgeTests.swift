@@ -31,18 +31,16 @@ struct AsyncStreamBridgeTests {
 
     @Test("asAsyncStream cancels collection when the stream is cancelled")
     func cancelsOnStreamCancellation() async {
-        let wasCancelled = Mutex(false)
-        let started = Mutex(false)
+        let wasCancelled = Signal()
+        let started = Signal()
         // Observe cancellation by exiting the spin, not via
         // withTaskCancellationHandler: a cancel that races the handler's
         // registration can be missed by the runtime, whereas the isCancelled
         // flag is always visible to the spinning body.
         let flow = Flow<Int> { _ in
-            started.withLock { $0 = true }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(1))
-            }
-            wasCancelled.withLock { $0 = true }
+            started.fire()
+            await parkUntilCancelled()
+            wasCancelled.fire()
         }
 
         let task = Task {
@@ -51,15 +49,15 @@ struct AsyncStreamBridgeTests {
         }
 
         // Wait until the flow is actually collecting before cancelling.
-        await pollUntil { started.withLock { $0 } }
+        await started.wait()
         task.cancel()
         await task.value
 
         // The outer iteration task can finish before the flow's collection
         // task observes its cancellation; give it a bounded convergence
         // window so a genuine regression fails instead of hanging the suite.
-        await pollUntil { wasCancelled.withLock { $0 } }
-        #expect(wasCancelled.withLock { $0 })
+        await wasCancelled.wait()
+        #expect(wasCancelled.hasFired)
     }
 
     @Test("asAsyncThrowingStream yields all values from a finite throwing flow")
@@ -97,18 +95,16 @@ struct AsyncStreamBridgeTests {
 
     @Test("asAsyncThrowingStream cancels collection on stream cancellation")
     func throwingCancelsCollection() async {
-        let wasCancelled = Mutex(false)
-        let started = Mutex(false)
+        let wasCancelled = Signal()
+        let started = Signal()
         // Observe cancellation by exiting the spin, not via
         // withTaskCancellationHandler: a cancel that races the handler's
         // registration can be missed by the runtime, whereas the isCancelled
         // flag is always visible to the spinning body.
         let flow = ThrowingFlow<Int> { _ in
-            started.withLock { $0 = true }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(1))
-            }
-            wasCancelled.withLock { $0 = true }
+            started.fire()
+            await parkUntilCancelled()
+            wasCancelled.fire()
         }
 
         let task = Task {
@@ -119,14 +115,14 @@ struct AsyncStreamBridgeTests {
         }
 
         // Wait until the flow is actually collecting before cancelling.
-        await pollUntil { started.withLock { $0 } }
+        await started.wait()
         task.cancel()
         await task.value
 
         // The outer iteration task can finish before the flow's collection
         // task observes its cancellation; give it a bounded convergence
         // window so a genuine regression fails instead of hanging the suite.
-        await pollUntil { wasCancelled.withLock { $0 } }
-        #expect(wasCancelled.withLock { $0 })
+        await wasCancelled.wait()
+        #expect(wasCancelled.hasFired)
     }
 }

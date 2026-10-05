@@ -130,21 +130,21 @@ struct EmitAllTests {
     @Test("cancellation mid-emitAll stops the inner collection promptly")
     func cancellationStopsInnerCollection() async {
         let inner = MutableSharedFlow<Int>(replay: 0)
-        let received = Mutex<[Int]>([])
+        let received = Recorder<Int>()
 
         let outer = Flow<Int> { collector in
             await collector.emitAll(inner.asFlow())
         }
         let subscriber = Task {
             await outer.collect { value in
-                received.withLock { $0.append(value) }
+                received.record(value)
             }
         }
         await pollUntil { await inner.subscriptionCount >= 1 }
 
         await inner.emit(1)
         await inner.emit(2)
-        await pollUntil { received.withLock { $0.count } >= 2 }
+        await received.wait(atLeast: 2)
 
         subscriber.cancel()
         // The cancelled subscriber must detach from the inner flow; emissions
@@ -154,6 +154,6 @@ struct EmitAllTests {
 
         await inner.emit(3)
         for _ in 0..<100 { await Task.yield() }
-        #expect(received.withLock { $0 } == [1, 2], "no delivery after cancellation")
+        #expect(received.elements == [1, 2], "no delivery after cancellation")
     }
 }

@@ -41,9 +41,9 @@ struct AsyncSequenceInteropTests {
 
     @Test("asThrowingFlow cancellation tears down the bridged sequence")
     func sequenceCancellation() async throws {
-        let terminated = Mutex(false)
+        let terminated = Signal()
         let (stream, continuation) = AsyncStream<Int>.makeStream()
-        continuation.onTermination = { _ in terminated.withLock { $0 = true } }
+        continuation.onTermination = { _ in terminated.fire() }
         continuation.yield(1)
         // Never finished: only cancellation can end the iteration.
 
@@ -52,8 +52,8 @@ struct AsyncSequenceInteropTests {
             try await tester.expectValue(1)
         }
         // TestScope cancelled the collection; the stream must see termination.
-        await pollUntil { terminated.withLock { $0 } }
-        #expect(terminated.withLock { $0 })
+        await terminated.wait()
+        #expect(terminated.hasFired)
     }
 
     @Test("asFlow bridges a non-failing sequence")

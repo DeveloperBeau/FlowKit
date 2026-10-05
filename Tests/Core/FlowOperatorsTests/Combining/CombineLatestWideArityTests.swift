@@ -149,12 +149,10 @@ struct CombineLatestWideArityTests {
             sources[5].asFlow()
         ) { a, b, c, d, e, f in [a, b, c, d, e, f] }
 
-        let latest = Mutex<[Int]?>(nil)
-        let emissionCount = Mutex(0)
+        let emissions = Recorder<[Int]>()
         let subscriber = Task {
             await combined.collect { value in
-                latest.withLock { $0 = value }
-                emissionCount.withLock { $0 += 1 }
+                emissions.record(value)
             }
         }
         for source in sources {
@@ -175,13 +173,13 @@ struct CombineLatestWideArityTests {
         }
 
         let expected = Array(repeating: perSourceFinal, count: 6)
-        await pollUntil { latest.withLock { $0 } == expected }
-        #expect(latest.withLock { $0 } == expected, "the last emission of every source must survive the storm")
+        await emissions.wait { $0.last == expected }
+        #expect(emissions.last == expected, "the last emission of every source must survive the storm")
 
         // No duplicate emissions after quiescence.
-        let settled = emissionCount.withLock { $0 }
+        let settled = emissions.count
         for _ in 0..<100 { await Task.yield() }
-        #expect(emissionCount.withLock { $0 } == settled, "a quiescent combination must not re-emit")
+        #expect(emissions.count == settled, "a quiescent combination must not re-emit")
 
         subscriber.cancel()
     }
