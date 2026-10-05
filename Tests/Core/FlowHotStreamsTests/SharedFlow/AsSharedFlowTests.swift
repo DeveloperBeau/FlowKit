@@ -9,8 +9,10 @@ import FlowTestSupport
 struct AsSharedFlowTests {
     @Test("asSharedFlow broadcasts upstream values to subscribers")
     func broadcasts() async throws {
+        let subscribed = Signal()
         let upstream = Flow<String> { collector in
-            try? await Task.sleep(for: .seconds(0.02))
+            // Held back until the subscriber is registered; replay is 0.
+            await subscribed.wait()
             await collector.emit("first")
             await collector.emit("second")
         }
@@ -21,6 +23,8 @@ struct AsSharedFlowTests {
         )
 
         try await shared.asFlow().probing { tester in
+            await pollUntil { await shared.subscriptionCount == 1 }
+            subscribed.fire()
             try await tester.expectValue("first")
             try await tester.expectValue("second")
         }

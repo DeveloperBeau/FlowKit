@@ -17,7 +17,7 @@ struct ThrowingFlowRateLimitingTests {
         let probe = FlowProbe<Int>()
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(
+            let tester = scope.probe(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {
                         try await collector.emit(value)
@@ -56,7 +56,7 @@ struct ThrowingFlowRateLimitingTests {
         let upstream = MutableSharedFlow<Int>(replay: 0)
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(
+            let tester = scope.probe(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {
                         try await collector.emit(value)
@@ -128,7 +128,7 @@ struct ThrowingFlowRateLimitingTests {
         let probe = FlowProbe<Int>()
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(
+            let tester = scope.probe(
                 ThrowingFlow<Int> { collector in
                     for await value in upstream.asFlow().asAsyncStream() {
                         try await collector.emit(value)

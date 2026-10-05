@@ -65,7 +65,7 @@ struct OnEmptyTests {
         let flow = ThrowingFlow<Int> { _ in throw Bad() }
             .onEmpty { _ in invoked.withLock { $0 = true } }
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(flow)
+            let tester = scope.probe(flow)
             try await tester.expectError(Bad())
         }
         #expect(!invoked.withLock { $0 })
@@ -95,7 +95,7 @@ struct EmitAllTests {
             })
         }
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             try await tester.expectValue(0)
             try await tester.expectValue(1)
             try await tester.expectError(Bad())
@@ -120,7 +120,7 @@ struct EmitAllTests {
             try await collector.emit(1)
         }
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             try await tester.expectValue(0)
             try await tester.expectValue(1)
             try await tester.expectCompletion()

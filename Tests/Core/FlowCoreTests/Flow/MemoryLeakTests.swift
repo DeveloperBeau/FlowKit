@@ -9,46 +9,49 @@ import FlowTestingCore
 struct MemoryLeakTests {
     @Test("FlowScope releases captured resources after cancellation")
     func scopeReleasesOnCancel() async {
-        final class Holder: @unchecked Sendable {}
+        final class Holder: @unchecked Sendable {
+            let released: Signal
+            init(released: Signal) { self.released = released }
+            deinit { released.fire() }
+        }
+        let released = Signal()
+        let started = Signal()
         weak var weakHolder: Holder?
         do {
-            let holder = Holder()
+            let holder = Holder(released: released)
             weakHolder = holder
             let scope = FlowScope()
             let task = scope.launch { [holder] in
                 _ = holder
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(1))
-                }
+                started.fire()
+                await parkUntilCancelled()
             }
-            try? await Task.sleep(for: .seconds(0.01))
+            await started.wait()
             scope.cancel()
             await task.value
         }
-        try? await Task.sleep(for: .seconds(0.05))
+        // The task's captured holder is freed when its closure is released.
+        await released.wait()
         #expect(weakHolder == nil)
     }
 
     @Test("FlowScope deinit cancels in-flight tasks")
     func scopeDeinitCancels() async {
-        let ranToCompletion = Mutex(false)
-        let started = Mutex(false)
+        let ranToCompletion = Signal()
+        let started = Signal()
         do {
             let scope = FlowScope()
             _ = scope.launch {
-                started.withLock { $0 = true }
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(1))
-                }
-                ranToCompletion.withLock { $0 = true }
+                started.fire()
+                await parkUntilCancelled()
+                ranToCompletion.fire()
             }
             // Ensure the task is running before the scope deinits.
-            await pollUntil { started.withLock { $0 } }
+            await started.wait()
         }
-        // Converge on the cancelled body running to completion, bounded so a
-        // genuine regression fails instead of hanging the suite.
-        await pollUntil { ranToCompletion.withLock { $0 } }
-        #expect(ranToCompletion.withLock { $0 })
+        // The scope is gone; its deinit must have cancelled the parked body.
+        await ranToCompletion.wait()
+        #expect(ranToCompletion.hasFired)
     }
 
     @Test("Completed tasks are removed from scope")
@@ -75,7 +78,6 @@ struct MemoryLeakTests {
             scope1.cancel()
             scope2.cancel()
         }
-        try? await Task.sleep(for: .seconds(0.05))
         #expect(weakScope1 == nil)
         #expect(weakScope2 == nil)
     }

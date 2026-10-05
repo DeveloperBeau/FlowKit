@@ -10,17 +10,16 @@ import FlowTestingCore
 /// down. It idles on a real-clock sleep that only ever ends by cancellation,
 /// so the stop flag setting proves the coordinator cancelled the upstream.
 private struct ObservableUpstream: Sendable {
-    let started = Mutex(false)
-    let stopped = Mutex(false)
+    let started = Signal()
+    let stopped = Signal()
 
     func flow() -> Flow<Int> {
         Flow<Int> { [started, stopped] collector in
             await collector.emit(1)
-            started.withLock { $0 = true }
-            // Idles until the sharing coordinator cancels the upstream task;
-            // cancellation wakes the sleep immediately.
-            try? await ContinuousClock().sleep(for: .seconds(3600))
-            stopped.withLock { $0 = true }
+            started.fire()
+            // Idles until the sharing coordinator cancels the upstream task.
+            await parkUntilCancelled()
+            stopped.fire()
         }
     }
 }
@@ -36,14 +35,14 @@ struct WhileSubscribedDefaultTests {
         let subscriber = Task {
             await shared.asFlow().collect { _ in }
         }
-        await pollUntil { upstream.started.withLock { $0 } }
-        #expect(upstream.started.withLock { $0 })
+        await upstream.started.wait()
+        #expect(upstream.started.hasFired)
 
         subscriber.cancel()
         // With a zero default stop timeout the upstream must be cancelled
         // without any clock advancement.
-        await pollUntil { upstream.stopped.withLock { $0 } }
-        #expect(upstream.stopped.withLock { $0 })
+        await upstream.stopped.wait()
+        #expect(upstream.stopped.hasFired)
         #expect(clock.sleeperCount == 0, "a zero stop timeout must never register a sleeper")
     }
 
@@ -56,12 +55,12 @@ struct WhileSubscribedDefaultTests {
         let subscriber = Task {
             await state.asFlow().collect { _ in }
         }
-        await pollUntil { upstream.started.withLock { $0 } }
-        #expect(upstream.started.withLock { $0 })
+        await upstream.started.wait()
+        #expect(upstream.started.hasFired)
 
         subscriber.cancel()
-        await pollUntil { upstream.stopped.withLock { $0 } }
-        #expect(upstream.stopped.withLock { $0 })
+        await upstream.stopped.wait()
+        #expect(upstream.stopped.hasFired)
         #expect(clock.sleeperCount == 0, "a zero stop timeout must never register a sleeper")
     }
 
@@ -77,16 +76,16 @@ struct WhileSubscribedDefaultTests {
         let subscriber = Task {
             await shared.asFlow().collect { _ in }
         }
-        await pollUntil { upstream.started.withLock { $0 } }
+        await upstream.started.wait()
 
         subscriber.cancel()
         // The delayed stop registers its sleep on the strategy clock instead
         // of stopping synchronously.
         await pollUntil { clock.sleeperCount >= 1 }
-        #expect(!upstream.stopped.withLock { $0 }, "the stop must wait for the timeout")
+        #expect(!upstream.stopped.hasFired, "the stop must wait for the timeout")
 
         await clock.advance(by: .seconds(5))
-        await pollUntil { upstream.stopped.withLock { $0 } }
-        #expect(upstream.stopped.withLock { $0 })
+        await upstream.stopped.wait()
+        #expect(upstream.stopped.hasFired)
     }
 }

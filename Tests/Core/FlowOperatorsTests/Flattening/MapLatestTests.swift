@@ -27,7 +27,7 @@ struct MapLatestTests {
         }
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(results)
+            let tester = scope.probe(results)
             await pollUntil { await upstream.subscriptionCount >= 1 }
 
             await upstream.emit(1)
@@ -74,7 +74,7 @@ struct MapLatestTests {
         struct Bad: Error, Equatable {}
         let flow = ThrowingFlow(of: 1).mapLatest { _ -> Int in throw Bad() }
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(flow)
+            let tester = scope.probe(flow)
             try await tester.expectError(Bad())
         }
     }

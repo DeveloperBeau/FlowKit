@@ -42,17 +42,18 @@ struct ReadOnlyViewTests {
         let source = MutableStateFlow(0)
         let view = source.asStateFlow()
 
-        let latestA = Mutex<Int?>(nil)
-        let latestB = Mutex<Int?>(nil)
+        let latestA = Recorder<Int>()
+        let latestB = Recorder<Int>()
         let subscriberA = Task {
-            await view.asFlow().collect { value in latestA.withLock { $0 = value } }
+            await view.asFlow().collect { value in latestA.record(value) }
         }
         let subscriberB = Task {
-            await view.asFlow().collect { value in latestB.withLock { $0 = value } }
+            await view.asFlow().collect { value in latestB.record(value) }
         }
         // Both subscribers observe the seed before the storm so neither races
         // its own subscription against the sends.
-        await pollUntil { latestA.withLock { $0 } != nil && latestB.withLock { $0 } != nil }
+        await latestA.wait(atLeast: 1)
+        await latestB.wait(atLeast: 1)
 
         await withTaskGroup(of: Void.self) { group in
             for value in 1...100 {
@@ -62,9 +63,10 @@ struct ReadOnlyViewTests {
         // Deterministic final value after the storm quiesces.
         source.send(-1)
 
-        await pollUntil { latestA.withLock { $0 } == -1 && latestB.withLock { $0 } == -1 }
-        #expect(latestA.withLock { $0 } == -1)
-        #expect(latestB.withLock { $0 } == -1)
+        await latestA.wait { $0.last == -1 }
+        await latestB.wait { $0.last == -1 }
+        #expect(latestA.last == -1)
+        #expect(latestB.last == -1)
         #expect(view.value == -1)
 
         subscriberA.cancel()

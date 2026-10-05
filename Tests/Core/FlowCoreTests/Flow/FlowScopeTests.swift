@@ -21,28 +21,22 @@ struct FlowScopeTests {
     @Test("cancel cancels all running tasks")
     func cancelCancelsTasks() async {
         let scope = FlowScope()
-        let wasCancelled = Mutex(false)
-        let started = Mutex(false)
+        let wasCancelled = Signal()
+        let started = Signal()
 
-        // Observe cancellation by exiting the spin: a cancel that races
-        // withTaskCancellationHandler's registration can be missed by the
-        // runtime, whereas the isCancelled flag is always visible.
         let task = scope.launch {
-            started.withLock { $0 = true }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(1))
-            }
-            wasCancelled.withLock { $0 = true }
+            started.fire()
+            await parkUntilCancelled()
+            wasCancelled.fire()
         }
 
-        // Wait until the task is actually running before cancelling, rather than
-        // racing a fixed sleep against it.
-        await pollUntil { started.withLock { $0 } }
+        // Cancel a running task, not a not-yet-started one.
+        await started.wait()
 
         scope.cancel()
         await task.value
 
-        #expect(wasCancelled.withLock { $0 })
+        #expect(wasCancelled.hasFired)
     }
 
     @Test("completed tasks are removed from the scope")
@@ -54,12 +48,8 @@ struct FlowScopeTests {
             }
             await task.value
         }
-        // Self-removal runs inside the Task after work() returns.
-        // Give the executor time to run the removal closures.
-        for _ in 0..<10 {
-            if scope.activeTaskCount == 0 { break }
-            try? await Task.sleep(for: .seconds(0.005))
-        }
+        // Self-removal is the last step of the task's closure, so a finished
+        // task is already out of the scope.
         #expect(scope.activeTaskCount == 0)
     }
 
@@ -76,28 +66,22 @@ struct FlowScopeTests {
 
     @Test("deinit cancels pending tasks")
     func deinitCancels() async {
-        let wasCancelled = Mutex(false)
-        let started = Mutex(false)
+        let wasCancelled = Signal()
+        let started = Signal()
 
         do {
             let scope = FlowScope()
-            // Observe cancellation by exiting the spin: a cancel that races
-            // withTaskCancellationHandler's registration can be missed by the
-            // runtime, whereas the isCancelled flag is always visible.
             _ = scope.launch {
-                started.withLock { $0 = true }
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(1))
-                }
-                wasCancelled.withLock { $0 = true }
+                started.fire()
+                await parkUntilCancelled()
+                wasCancelled.fire()
             }
             // Ensure the task is running before the scope deinits.
-            await pollUntil { started.withLock { $0 } }
+            await started.wait()
         }
 
-        // Converge on deinit's cancellation reaching the task, bounded so a
-        // genuine regression fails instead of hanging the suite.
-        await pollUntil { wasCancelled.withLock { $0 } }
-        #expect(wasCancelled.withLock { $0 })
+        // The scope is gone; its deinit must have cancelled the parked task.
+        await wasCancelled.wait()
+        #expect(wasCancelled.hasFired)
     }
 }

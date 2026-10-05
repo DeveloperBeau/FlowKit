@@ -13,7 +13,7 @@ struct CombineLatestTests {
         let flow2 = MutableSharedFlow<String>(replay: 0)
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(
+            let tester = scope.probe(
                 flow1.asFlow().combineLatest(flow2.asFlow())
             )
 

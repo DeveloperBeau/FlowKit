@@ -16,7 +16,7 @@ struct SampleTests {
         let probe = FlowProbe<Int>()
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(
+            let tester = scope.probe(
                 upstream.asFlow().tap(after: probe).sample(every: .seconds(1), clock: clock)
             )
 
@@ -47,7 +47,7 @@ struct SampleTests {
         let probe = FlowProbe<Int>()
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(
+            let tester = scope.probe(
                 upstream.asFlow().tap(after: probe).sample(every: .seconds(1), clock: clock)
             )
 

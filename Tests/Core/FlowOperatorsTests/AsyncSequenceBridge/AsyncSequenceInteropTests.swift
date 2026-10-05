@@ -32,7 +32,7 @@ struct AsyncSequenceInteropTests {
         continuation.finish(throwing: Broken())
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(stream.asThrowingFlow())
+            let tester = scope.probe(stream.asThrowingFlow())
             try await tester.expectValue(1)
             try await tester.expectValue(2)
             try await tester.expectError(Broken())
@@ -48,7 +48,7 @@ struct AsyncSequenceInteropTests {
         // Never finished: only cancellation can end the iteration.
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(stream.asThrowingFlow())
+            let tester = scope.probe(stream.asThrowingFlow())
             try await tester.expectValue(1)
         }
         // TestScope cancelled the collection; the stream must see termination.

@@ -106,7 +106,7 @@ struct SimulationTests {
             }
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(pipeline)
+            let tester = scope.probe(pipeline)
             await pollUntil { await gps.subscriptionCount >= 1 }
             await pollUntil { clock.sleeperCount >= 1 }
 
@@ -160,7 +160,7 @@ struct SimulationTests {
         .retry(3, shouldRetry: { $0 is MockBackend.Unavailable })
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(sync)
+            let tester = scope.probe(sync)
             for reading in stored {
                 try await tester.expectValue(reading)
             }
@@ -209,7 +209,7 @@ struct SimulationTests {
             }
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(results)
+            let tester = scope.probe(results)
             await pollUntil { await keystrokes.subscriptionCount >= 1 }
 
             await keystrokes.emit("f")
@@ -248,8 +248,8 @@ struct SimulationTests {
             .asSharedFlow(replay: 1)
 
         try await ProbeScope.run { scope in
-            let screenA = try await scope.probe(dashboard.asFlow())
-            let screenB = try await scope.probe(dashboard.asFlow())
+            let screenA = scope.probe(dashboard.asFlow())
+            let screenB = scope.probe(dashboard.asFlow())
 
             let initial = DashboardSnapshot(latitude: 51.5, uploadCount: 0)
             try await screenA.awaitValue(equalTo: initial)

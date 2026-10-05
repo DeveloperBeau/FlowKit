@@ -22,7 +22,7 @@ struct CombineLatestWideArityTests {
         ) { a, b, c, d, e, f in a + b + c + d + e + f }
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             for source in sources {
                 await pollUntil { await source.subscriptionCount >= 1 }
             }
@@ -74,7 +74,7 @@ struct CombineLatestWideArityTests {
         ) { a, b, c, d, e, f in a + b + c + d + e + f }
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             for source in sources {
                 await pollUntil { await source.subscriptionCount >= 1 }
             }
@@ -84,10 +84,13 @@ struct CombineLatestWideArityTests {
                 await source.emit(1)
                 await source.emit(2)
             }
-            // Nothing yet: the first value is the one the late source unlocks.
-            // Each of the five emitted 2 last, so the sum is 10 plus 100.
+            // Nothing yet: the first value is one the late source unlocks, so it
+            // carries its 100. The five others settle on 2 each, a sum of 10,
+            // and may still be mid-delivery when the first value is formed.
             await never.emit(100)
-            try await tester.expectNextValue(110)
+            let first = try await tester.awaitValue()
+            #expect(first >= 100, "a value before the sixth source emitted would be below 100")
+            if first != 110 { try await tester.awaitValue(equalTo: 110) }
         }
     }
 
@@ -102,7 +105,7 @@ struct CombineLatestWideArityTests {
         ) { a, b, c, d, e, f in a + b + c + d + e + f }
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             try await tester.expectCompletion()
         }
     }
@@ -120,7 +123,7 @@ struct CombineLatestWideArityTests {
         ) { a, b, c, d, e, f in a + b + c + d + e + f }
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             for source in sources {
                 await pollUntil { await source.subscriptionCount >= 1 }
             }
@@ -193,7 +196,7 @@ struct CombineLatestWideArityTests {
             ThrowingFlow(of: 8)
         ) { a, b, c, d in a + b + c + d }
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             try await tester.expectValue(15)
         }
     }
@@ -207,7 +210,7 @@ struct CombineLatestWideArityTests {
             ThrowingFlow(of: 5)
         )
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined.map { [$0.0, $0.1, $0.2, $0.3, $0.4] })
+            let tester = scope.probe(combined.map { [$0.0, $0.1, $0.2, $0.3, $0.4] })
             try await tester.expectValue([1, 2, 3, 4, 5])
         }
     }
@@ -225,7 +228,7 @@ struct CombineLatestWideArityTests {
             (a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) in a + b + c + d + e + f
         }
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             try await tester.expectError(Bad())
         }
     }
@@ -242,7 +245,7 @@ struct CombineLatestWideArityTests {
             (a: Int, b: Int, c: Int, d: Int, e: Int, f: Int) in a + b + c + d + e + f
         }
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             try await tester.expectValue(63)
         }
     }

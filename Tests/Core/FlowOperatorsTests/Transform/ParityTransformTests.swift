@@ -36,7 +36,7 @@ struct WhileOperatorTests {
         struct Bad: Error, Equatable {}
         let flow = ThrowingFlow(of: 1, 2).drop(while: { _ in throw Bad() })
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(flow)
+            let tester = scope.probe(flow)
             try await tester.expectError(Bad())
         }
     }
@@ -49,7 +49,7 @@ struct WhileOperatorTests {
             throw Bad()
         }.prefix(while: { $0 < 10 })
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(flow)
+            let tester = scope.probe(flow)
             try await tester.expectValue(1)
             try await tester.expectError(Bad())
         }
@@ -91,7 +91,7 @@ struct RunningScanTests {
         struct Bad: Error, Equatable {}
         let flow = ThrowingFlow(of: 1, 2).scan { _, _ in throw Bad() }
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(flow)
+            let tester = scope.probe(flow)
             try await tester.expectValue(1) // first value passes through untouched
             try await tester.expectError(Bad())
         }
@@ -133,7 +133,7 @@ struct ChunksTests {
             throw Bad()
         }.chunks(ofCount: 3)
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(flow)
+            let tester = scope.probe(flow)
             try await tester.expectError(Bad())
         }
     }

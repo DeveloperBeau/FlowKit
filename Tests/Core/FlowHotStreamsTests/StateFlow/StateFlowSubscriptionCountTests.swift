@@ -15,7 +15,7 @@ struct StateFlowSubscriptionCountTests {
         // The whileSubscribed convention: the owner collects its upstream
         // use-case flow only while the UI observes the state.
         let upstreamValues = MutableSharedFlow<Int>(replay: 0)
-        let upstreamActive = Mutex(false)
+        let upstreamActive = Signal()
         var upstream: Task<Void, Never>?
 
         let first = Task { await state.asFlow().collect { _ in } }
@@ -24,10 +24,10 @@ struct StateFlowSubscriptionCountTests {
 
         // First subscriber: start collecting the upstream into the state.
         upstream = Task {
-            upstreamActive.withLock { $0 = true }
+            upstreamActive.fire()
             await upstreamValues.asFlow().collect { value in state.send(value) }
         }
-        await pollUntil { upstreamActive.withLock { $0 } }
+        await upstreamActive.wait()
         await pollUntil { await upstreamValues.subscriptionCount == 1 }
         await upstreamValues.emit(7)
         await pollUntil { state.value == 7 }

@@ -19,7 +19,7 @@ struct CombineLatestArityTests {
         }
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             await pollUntil { await a.subscriptionCount >= 1 }
             await pollUntil { await b.subscriptionCount >= 1 }
             await pollUntil { await c.subscriptionCount >= 1 }
@@ -58,7 +58,7 @@ struct CombineLatestArityTests {
         }
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             for source in [a, b, c, d] {
                 await pollUntil { await source.subscriptionCount >= 1 }
             }
@@ -87,7 +87,7 @@ struct CombineLatestArityTests {
         ) { a, b, c, d, e in a + b + c + d + e }
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             for source in sources {
                 await pollUntil { await source.subscriptionCount >= 1 }
             }
@@ -109,7 +109,7 @@ struct CombineLatestArityTests {
 
         let combined = healthy.combineLatest(ThrowingFlow(of: 2), failing) { a, b, c in a + b + c }
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(combined)
+            let tester = scope.probe(combined)
             try await tester.expectError(Bad())
         }
     }

@@ -113,7 +113,7 @@ struct FlatMapLatestTests {
                 }
             }
 
-            _ = try await scope.probe(resultFlow)
+            _ = scope.probe(resultFlow)
 
             // Wait until the subscriber count reaches 1 so we know the
             // tester has actually subscribed before we start emitting.

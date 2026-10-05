@@ -131,7 +131,7 @@ let package = Package(
         // Helpers shared by the test targets below. Not a product.
         .target(
             name: "FlowTestSupport",
-            dependencies: ["FlowTesting"],
+            dependencies: ["FlowTesting", "FlowSharedModels"],
             path: "Tests/Support/FlowTestSupport",
             swiftSettings: strictSettings
         ),

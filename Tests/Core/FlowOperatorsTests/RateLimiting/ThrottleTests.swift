@@ -16,7 +16,7 @@ struct ThrottleTests {
         let probe = FlowProbe<Int>()
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(
+            let tester = scope.probe(
                 upstream.asFlow().tap(after: probe)
                     .throttle(for: .seconds(1), latest: true, clock: clock)
             )
@@ -43,7 +43,7 @@ struct ThrottleTests {
         let probe = FlowProbe<Int>()
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(
+            let tester = scope.probe(
                 upstream.asFlow().tap(after: probe)
                     .throttle(for: .seconds(1), latest: false, clock: clock)
             )

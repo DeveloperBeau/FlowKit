@@ -52,8 +52,8 @@ struct MutableStateFlowTests {
     func multipleSubscribers() async throws {
         let state = MutableStateFlow(0)
         try await ProbeScope.run { scope in
-            let t1 = try await scope.probe(state.asFlow())
-            let t2 = try await scope.probe(state.asFlow())
+            let t1 = scope.probe(state.asFlow())
+            let t2 = scope.probe(state.asFlow())
 
             try await t1.expectValue(0)
             try await t2.expectValue(0)

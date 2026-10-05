@@ -12,10 +12,10 @@ struct MutableSharedFlowTests {
     func emitDelivers() async throws {
         let shared = MutableSharedFlow<String>(replay: 0)
         try await ProbeScope.run { scope in
-            let t1 = try await scope.probe(shared.asFlow())
-            let t2 = try await scope.probe(shared.asFlow())
+            let t1 = scope.probe(shared.asFlow())
+            let t2 = scope.probe(shared.asFlow())
 
-            try? await Task.sleep(for: .seconds(0.02))
+            await pollUntil { await shared.subscriptionCount == 2 }
 
             await shared.emit("event1")
             try await t1.expectValue("event1")
@@ -50,8 +50,8 @@ struct MutableSharedFlowTests {
         let shared = MutableSharedFlow<Int>(replay: 0)
         #expect(await shared.subscriptionCount == 0)
         try await ProbeScope.run { scope in
-            _ = try await scope.probe(shared.asFlow())
-            _ = try await scope.probe(shared.asFlow())
+            _ = scope.probe(shared.asFlow())
+            _ = scope.probe(shared.asFlow())
             await pollUntil { await shared.subscriptionCount == 2 }
             #expect(await shared.subscriptionCount == 2)
         }

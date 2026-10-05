@@ -20,7 +20,7 @@ struct TimeoutTests {
             .timeout(for: .seconds(10), clock: clock)
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(flow)
+            let tester = scope.probe(flow)
             await pollUntil { await upstream.subscriptionCount >= 1 }
             await pollUntil { clock.sleeperCount >= 1 }
 
@@ -48,7 +48,7 @@ struct TimeoutTests {
         let flow = upstream.asFlow().timeout(for: .seconds(3), clock: clock)
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(flow)
+            let tester = scope.probe(flow)
             await pollUntil { await upstream.subscriptionCount >= 1 }
             await pollUntil { clock.sleeperCount >= 1 }
             await clock.advance(by: .seconds(3))
@@ -62,7 +62,7 @@ struct TimeoutTests {
         let flow = Flow(of: 1, 2).timeout(for: .seconds(5), clock: clock)
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(flow)
+            let tester = scope.probe(flow)
             try await tester.expectValue(1)
             try await tester.expectValue(2)
             try await tester.expectCompletion()
@@ -79,7 +79,7 @@ struct TimeoutTests {
         }.timeout(for: .seconds(5), clock: clock)
 
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(flow)
+            let tester = scope.probe(flow)
             try await tester.expectValue(1)
             try await tester.expectError(Bad())
         }

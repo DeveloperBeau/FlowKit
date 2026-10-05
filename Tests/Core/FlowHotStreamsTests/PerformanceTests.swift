@@ -14,7 +14,7 @@ struct PerformanceTests {
         try await ProbeScope.run { scope in
             var testers: [FlowReader<Int>] = []
             for _ in 0..<100 {
-                testers.append(try await scope.probe(shared.asFlow()))
+                testers.append(scope.probe(shared.asFlow()))
             }
 
             await pollUntil { await shared.subscriptionCount == 100 }
@@ -34,7 +34,7 @@ struct PerformanceTests {
         try await ProbeScope.run { scope in
             var testers: [FlowReader<Int>] = []
             for _ in 0..<10 {
-                testers.append(try await scope.probe(shared.asFlow()))
+                testers.append(scope.probe(shared.asFlow()))
             }
 
             await pollUntil { await shared.subscriptionCount == 10 }

@@ -53,7 +53,7 @@ struct FilterIsInstanceTests {
             throw Bad()
         }
         try await ProbeScope.run { scope in
-            let tester = try await scope.probe(source.filterIsInstance(LocationEvent.self))
+            let tester = scope.probe(source.filterIsInstance(LocationEvent.self))
             try await tester.expectValue(LocationEvent(id: 1))
             try await tester.expectValue(LocationEvent(id: 2))
             try await tester.expectError(Bad())
