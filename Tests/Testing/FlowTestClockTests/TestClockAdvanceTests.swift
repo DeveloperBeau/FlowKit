@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import FlowTestSupport
 @testable import FlowTestClock
 
 @Suite("TestClock advance")
@@ -27,7 +28,7 @@ struct TestClockAdvanceTests {
             await flag.set(true)
         }
 
-        try? await Task.sleep(for: .seconds(0.01))
+        await pollUntil { clock.sleeperCount >= 1 }
         let beforeAdvance = await flag.value
         #expect(!beforeAdvance)
 
@@ -58,8 +59,8 @@ struct TestClockAdvanceTests {
             await order.append(3)
         }
 
-        // Give all sleepers time to register
-        try? await Task.sleep(for: .seconds(0.02))
+        // Wait for all sleepers to register
+        await pollUntil { clock.sleeperCount >= 3 }
 
         // Advance incrementally so each sleeper wakes and appends before
         // the next one is resumed.
@@ -80,7 +81,7 @@ struct TestClockAdvanceTests {
         let task = Task {
             try await clock.sleep(until: TestClock.Instant(offset: .seconds(10)), tolerance: nil)
         }
-        try? await Task.sleep(for: .seconds(0.01))
+        await pollUntil { clock.sleeperCount >= 1 }
         task.cancel()
         do {
             try await task.value

@@ -15,7 +15,7 @@ struct FlowTestingReachabilityTests {
     @Test("FlowTester is reachable via .test(timeout:_:)")
     func flowTesterReachable() async throws {
         let flow = Flow(of: 1, 2, 3)
-        try await flow.test { tester in
+        try await flow.test(timeout: .seconds(3600)) { tester in
             try await tester.expectValue(1)
             try await tester.expectValue(2)
             try await tester.expectValue(3)
@@ -27,14 +27,27 @@ struct FlowTestingReachabilityTests {
     func throwingTesterReachable() async throws {
         struct BoomError: Error, Equatable {}
         let flow = ThrowingFlow<Int> { _ in throw BoomError() }
-        try await flow.test { tester in
+        try await flow.test(timeout: .seconds(3600)) { tester in
             try await tester.expectError(BoomError())
+        }
+    }
+
+    @Test("FlowReader is reachable via .probing(_:)")
+    func flowReaderReachable() async throws {
+        try await Flow(of: 1, 2).probing { reader in
+            try await reader.expectValue(1)
+            try await reader.expectNextValue(2)
+            try await reader.expectCompletion()
+        }
+        struct BoomError: Error {}
+        try await ThrowingFlow<Int> { _ in throw BoomError() }.probing { reader in
+            try await reader.expectError("boom") { $0 is BoomError }
         }
     }
 
     @Test("TestScope is reachable")
     func testScopeReachable() async throws {
-        try await TestScope.run { scope in
+        try await TestScope.run(timeout: .seconds(3600)) { scope in
             let t = try await scope.test(Flow(of: 42))
             try await t.expectValue(42)
         }

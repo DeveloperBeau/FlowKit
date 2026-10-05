@@ -3,6 +3,7 @@ import FlowCore
 import FlowSharedModels
 import FlowHotStreams
 import FlowTesting
+import FlowTestSupport
 import FlowTestClock
 @testable import FlowOperators
 
@@ -14,26 +15,26 @@ struct SampleTests {
         let upstream = MutableSharedFlow<Int>(replay: 0)
         let probe = FlowProbe<Int>()
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(
+        try await ProbeScope.run { scope in
+            let tester = scope.probe(
                 upstream.asFlow().tap(after: probe).sample(every: .seconds(1), clock: clock)
             )
 
-            await waitUntil { await upstream.subscriptionCount >= 1 }
+            await pollUntil { await upstream.subscriptionCount >= 1 }
 
             await upstream.emit(1)
             await upstream.emit(2)
             await upstream.emit(3)
             // Wait until sample has stored the burst before advancing.
-            await waitUntil { await probe.last == 3 }
-            await waitUntil { clock.sleeperCount >= 1 }
+            await pollUntil { await probe.last == 3 }
+            await pollUntil { clock.sleeperCount >= 1 }
 
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(3) // most recent at sample point
 
             await upstream.emit(10)
-            await waitUntil { await probe.last == 10 }
-            await waitUntil { clock.sleeperCount >= 1 }
+            await pollUntil { await probe.last == 10 }
+            await pollUntil { clock.sleeperCount >= 1 }
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(10)
         }
@@ -45,24 +46,25 @@ struct SampleTests {
         let upstream = MutableSharedFlow<Int>(replay: 0)
         let probe = FlowProbe<Int>()
 
-        try await TestScope.run(timeout: .seconds(15)) { scope in
-            let tester = try await scope.test(
+        try await ProbeScope.run { scope in
+            let tester = scope.probe(
                 upstream.asFlow().tap(after: probe).sample(every: .seconds(1), clock: clock)
             )
 
-            await waitUntil { await upstream.subscriptionCount >= 1 }
+            await pollUntil { await upstream.subscriptionCount >= 1 }
             // Wait until sample has registered its interval sleep before
             // advancing, rather than racing that registration.
-            await waitUntil { clock.sleeperCount >= 1 }
+            await pollUntil { clock.sleeperCount >= 1 }
 
             // No values emitted. Advance two intervals.
             await clock.advance(by: .seconds(2))
-            await tester.expectNoValue(within: .milliseconds(50))
+            // The empty intervals produce nothing: the next read below is the
+            // value emitted after them, so anything earlier would fail it.
 
             // Now emit and advance
             await upstream.emit(42)
-            await waitUntil { await probe.last == 42 }
-            await waitUntil { clock.sleeperCount >= 1 }
+            await pollUntil { await probe.last == 42 }
+            await pollUntil { clock.sleeperCount >= 1 }
             await clock.advance(by: .seconds(1))
             try await tester.expectValue(42)
         }

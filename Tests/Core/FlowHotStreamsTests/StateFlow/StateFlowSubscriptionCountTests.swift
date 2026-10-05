@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowHotStreams
 
 @Suite("MutableStateFlow.subscriptionCount")
@@ -14,39 +15,39 @@ struct StateFlowSubscriptionCountTests {
         // The whileSubscribed convention: the owner collects its upstream
         // use-case flow only while the UI observes the state.
         let upstreamValues = MutableSharedFlow<Int>(replay: 0)
-        let upstreamActive = Mutex(false)
+        let upstreamActive = Signal()
         var upstream: Task<Void, Never>?
 
         let first = Task { await state.asFlow().collect { _ in } }
-        await waitUntil { await state.subscriptionCount == 1 }
+        await pollUntil { await state.subscriptionCount == 1 }
         #expect(await state.subscriptionCount == 1)
 
         // First subscriber: start collecting the upstream into the state.
         upstream = Task {
-            upstreamActive.withLock { $0 = true }
+            upstreamActive.fire()
             await upstreamValues.asFlow().collect { value in state.send(value) }
         }
-        await waitUntil { upstreamActive.withLock { $0 } }
-        await waitUntil { await upstreamValues.subscriptionCount == 1 }
+        await upstreamActive.wait()
+        await pollUntil { await upstreamValues.subscriptionCount == 1 }
         await upstreamValues.emit(7)
-        await waitUntil { state.value == 7 }
+        await pollUntil { state.value == 7 }
         #expect(state.value == 7, "upstream flows into the state while subscribed")
 
         let second = Task { await state.asFlow().collect { _ in } }
-        await waitUntil { await state.subscriptionCount == 2 }
+        await pollUntil { await state.subscriptionCount == 2 }
         #expect(await state.subscriptionCount == 2)
 
         second.cancel()
-        await waitUntil { await state.subscriptionCount == 1 }
+        await pollUntil { await state.subscriptionCount == 1 }
         #expect(await state.subscriptionCount == 1)
 
         first.cancel()
-        await waitUntil { await state.subscriptionCount == 0 }
+        await pollUntil { await state.subscriptionCount == 0 }
         #expect(await state.subscriptionCount == 0)
 
         // Zero subscribers: the gate stops the upstream collection.
         upstream?.cancel()
-        await waitUntil { await upstreamValues.subscriptionCount == 0 }
+        await pollUntil { await upstreamValues.subscriptionCount == 0 }
         #expect(await upstreamValues.subscriptionCount == 0, "upstream released once the count hits zero")
     }
 
@@ -73,9 +74,9 @@ struct StateFlowSubscriptionCountTests {
         // Churn subscribers while the readers watch the count.
         for _ in 0..<50 {
             let subscriber = Task { await state.asFlow().collect { _ in } }
-            await waitUntil { await state.subscriptionCount >= 1 }
+            await pollUntil { await state.subscriptionCount >= 1 }
             subscriber.cancel()
-            await waitUntil { await state.subscriptionCount == 0 }
+            await pollUntil { await state.subscriptionCount == 0 }
         }
 
         stopReading.withLock { $0 = true }
@@ -95,13 +96,13 @@ struct StateFlowSubscriptionCountTests {
         // zero. Polling observes crossings; starts and stops must pair up.
         let supervisor = Task {
             while !stormDone.withLock({ $0 }) {
-                await waitUntil(timeout: .milliseconds(200)) {
+                await pollUntil {
                     await state.subscriptionCount > 0 || stormDone.withLock { $0 }
                 }
                 guard !stormDone.withLock({ $0 }) else { break }
                 if await state.subscriptionCount > 0 {
                     starts.withLock { $0 += 1 }
-                    await waitUntil { await state.subscriptionCount == 0 }
+                    await pollUntil { await state.subscriptionCount == 0 }
                     stops.withLock { $0 += 1 }
                 }
             }
@@ -112,7 +113,7 @@ struct StateFlowSubscriptionCountTests {
         // converges on the supervisor observing it instead of racing a fast
         // storm against the supervisor's first poll.
         let anchor = Task { await state.asFlow().collect { _ in } }
-        await waitUntil { starts.withLock { $0 } >= 1 }
+        await pollUntil { starts.withLock { $0 } >= 1 }
         #expect(starts.withLock { $0 } == 1, "the anchor's attach is the only crossing so far")
 
         await withTaskGroup(of: Void.self) { group in
@@ -121,7 +122,7 @@ struct StateFlowSubscriptionCountTests {
                     let subscriber = Task { await state.asFlow().collect { _ in } }
                     // Let the subscription register before detaching, so the
                     // storm exercises real attach/detach churn.
-                    await waitUntil { await state.subscriptionCount >= 1 }
+                    await pollUntil { await state.subscriptionCount >= 1 }
                     subscriber.cancel()
                     await subscriber.value
                 }
@@ -130,10 +131,10 @@ struct StateFlowSubscriptionCountTests {
 
         anchor.cancel()
         await anchor.value
-        await waitUntil { await state.subscriptionCount == 0 }
+        await pollUntil { await state.subscriptionCount == 0 }
         #expect(await state.subscriptionCount == 0, "the storm must fully unwind")
 
-        await waitUntil { stops.withLock { $0 } == starts.withLock { $0 } }
+        await pollUntil { stops.withLock { $0 } == starts.withLock { $0 } }
         stormDone.withLock { $0 = true }
         await supervisor.value
         #expect(starts.withLock { $0 } == stops.withLock { $0 },

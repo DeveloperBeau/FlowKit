@@ -1,6 +1,7 @@
 import Testing
 import FlowCore
 import FlowTesting
+import FlowTestSupport
 import FlowSharedModels
 @testable import FlowOperators
 
@@ -15,7 +16,7 @@ struct OnStartTests {
         }
         try await flow.onStart {
             log.withLock { $0.append("onStart") }
-        }.test { tester in
+        }.probing { tester in
             try await tester.expectValue(1)
             try await tester.expectCompletion()
         }

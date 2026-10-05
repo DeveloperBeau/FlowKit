@@ -1,13 +1,14 @@
 import Testing
 import Foundation
 import FlowSharedModels
+import FlowTestSupport
 @testable import FlowTestingCore
 
 @Suite("TimeoutHelpers")
 struct TimeoutHelpersTests {
     @Test("withThrowingTimeout returns the body's value on success")
     func successReturnsValue() async throws {
-        let result = try await withThrowingTimeout(.seconds(1)) {
+        let result = try await withThrowingTimeout(.seconds(3600)) {
             return 42
         }
         #expect(result == 42)
@@ -17,9 +18,9 @@ struct TimeoutHelpersTests {
     func timeoutThrows() async {
         do {
             _ = try await withThrowingTimeout(.milliseconds(50)) {
-                // Scale with the timeout so the body always loses the race,
+                // Never finishes by itself, so the timeout always wins the race,
                 // whatever FLOWKIT_TIMEOUT_SCALE the runner sets.
-                try await Task.sleep(for: scaledTimeout(.seconds(0.5)))
+                await parkUntilCancelled()
                 return 0
             }
             Issue.record("expected timeout error")
@@ -34,7 +35,7 @@ struct TimeoutHelpersTests {
     func propagatesBodyErrors() async {
         struct TestError: Error, Equatable {}
         do {
-            _ = try await withThrowingTimeout(.seconds(1)) {
+            _ = try await withThrowingTimeout(.seconds(3600)) {
                 throw TestError()
             }
             Issue.record("expected TestError")

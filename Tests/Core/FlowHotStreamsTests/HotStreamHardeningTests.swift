@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowHotStreams
 
 @Suite("Hot stream hardening")
@@ -19,12 +20,13 @@ struct HotStreamHardeningTests {
         }
         let shared = source.asSharedFlow(replay: 1)
 
-        let aGot = Mutex(false)
-        let bGot = Mutex(false)
-        let a = Task { await shared.asFlow().collect { _ in aGot.withLock { $0 = true } } }
-        let b = Task { await shared.asFlow().collect { _ in bGot.withLock { $0 = true } } }
+        let aGot = Signal()
+        let bGot = Signal()
+        let a = Task { await shared.asFlow().collect { _ in aGot.fire() } }
+        let b = Task { await shared.asFlow().collect { _ in bGot.fire() } }
 
-        while !(aGot.withLock { $0 } && bGot.withLock { $0 }) { await Task.yield() }
+        await aGot.wait()
+        await bGot.wait()
         #expect(starts.withLock { $0 } == 1, "the cold upstream must run once and multicast, not once per collector")
 
         a.cancel()
@@ -39,9 +41,9 @@ struct HotStreamHardeningTests {
     func stateFlowConcurrentWritesConverge() async {
         let sentinel = 999_999
         let state = MutableStateFlow(-1)
-        let observed = Mutex<[Int]>([])
+        let observed = Recorder<Int>()
         let collecting = Task {
-            await state.asFlow().collect { value in observed.withLock { $0.append(value) } }
+            await state.asFlow().collect { value in observed.record(value) }
         }
 
         await withTaskGroup(of: Void.self) { group in
@@ -55,10 +57,10 @@ struct HotStreamHardeningTests {
         // The last write wins because the actor serializes sends.
         state.send(sentinel)
 
-        while !observed.withLock({ $0.last == sentinel }) { await Task.yield() }
+        await observed.wait { $0.last == sentinel }
         #expect(state.value == sentinel, "the final write must survive 800 concurrent writes")
 
-        #expect(observed.withLock { $0.last } == sentinel)
+        #expect(observed.last == sentinel)
 
         collecting.cancel()
         await collecting.value
@@ -71,13 +73,13 @@ struct HotStreamHardeningTests {
         let shared = MutableSharedFlow<Int>(replay: 3)
         for value in 1...5 { await shared.emit(value) }
 
-        let received = Mutex<[Int]>([])
+        let received = Recorder<Int>()
         let collecting = Task {
-            await shared.asFlow().collect { value in received.withLock { $0.append(value) } }
+            await shared.asFlow().collect { value in received.record(value) }
         }
-        while received.withLock({ $0.count < 3 }) { await Task.yield() }
+        await received.wait(atLeast: 3)
 
-        #expect(received.withLock { $0 } == [3, 4, 5], "a late subscriber gets exactly the last 3 of 5 emitted")
+        #expect(received.elements == [3, 4, 5], "a late subscriber gets exactly the last 3 of 5 emitted")
 
         collecting.cancel()
         await collecting.value

@@ -89,7 +89,7 @@ Then add `Flow` to production targets and `FlowTesting` to test targets:
 )
 ```
 
-## Four motivating examples
+## Five motivating examples
 
 ### 1. Offline-first article feed
 
@@ -203,6 +203,20 @@ func articleFeedEmitsCachedThenFresh() async throws {
 }
 ```
 
+### 5. Reading a flow without a deadline
+
+`probing` reads a flow with no timeout. Each read waits for the flow's next emission, completion or failure, so a slow CI machine cannot fail a correct test.
+
+```swift
+try await feed.probing { reader in
+    try await reader.expectValue([.cached])
+    try await reader.expectValue([.cached, .fresh])
+    try await reader.expectCompletion()
+}
+```
+
+To check that nothing else arrived, trigger a known emission and read for it with `expectNextValue(_:)` instead of sleeping. The one limit: a producer that stays open and never emits again cannot be told from a slow one without a clock, so use `test(timeout:)` when you need that bound.
+
 ## What's inside
 
 ### Cold streams
@@ -230,7 +244,7 @@ func articleFeedEmitsCachedThenFresh() async throws {
 
 ### Testing
 
-`FlowTester`, `ThrowingFlowTester`, and `TestScope` drive assertions against flows. `TestClock` gives deterministic virtual time for rate-limiting and sharing operators. Everything plugs in through the `Flow.test(timeout:_:)` extension.
+`FlowTester`, `ThrowingFlowTester`, and `TestScope` drive assertions against flows. `TestClock` gives deterministic virtual time for rate-limiting and sharing operators. Everything plugs in through the `Flow.test(timeout:_:)` extension. `FlowReader` (via `Flow.probing(_:)`) is the deadline-free alternative.
 
 ## Contributing
 

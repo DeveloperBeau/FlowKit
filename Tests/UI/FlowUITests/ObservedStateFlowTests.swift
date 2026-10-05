@@ -1,9 +1,11 @@
 #if canImport(SwiftUI) && canImport(Observation)
 import Testing
 import SwiftUI
+import Foundation
 import FlowCore
 import FlowHotStreams
 import FlowTesting
+import FlowTestSupport
 @testable import FlowSwiftUI
 
 private let isSupported = {
@@ -13,28 +15,41 @@ private let isSupported = {
     return false
 }()
 
-/// Polls until `condition` holds. Observation updates hop through the
-/// collection task and back to the main actor, so a fixed sleep is a race —
-/// on a slow simulator the update lands after it. This converges once the
-/// update arrives. Bounded like `waitUntil` so a condition that never
-/// converges returns to the caller, whose assertion then fails the test
-/// instead of hanging the suite. Kept local (rather than using `waitUntil`)
-/// because the condition closure here is main-actor-bound and non-Sendable.
+/// Suspends until `read()` equals `expected`, woken by Observation rather than
+/// a clock. Observation tracking registers synchronously on the main actor in
+/// the same step that read the stale value, so a change cannot slip between
+/// the check and the registration, and a stalled process only delays the wake.
+/// A value that moves somewhere other than `expected` fails the read by name
+/// instead of waiting forever. A source that never delivers at all parks until
+/// the test is cancelled: only a clock could say "nothing is coming".
+@available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *)
 @MainActor
-private func poll(until condition: () -> Bool) async {
-    let deadline = ContinuousClock.now.advanced(by: .seconds(30))
-    var spins = 0
-    while !condition() {
-        if ContinuousClock.now >= deadline { return }
-        spins += 1
-        if spins <= 50 {
-            await Task.yield()
-        } else {
-            // Back off so a waiting test releases its pool thread instead of
-            // starving the narrow cooperative pools on CI simulators.
-            try? await Task.sleep(for: .milliseconds(1))
+private func awaitValue<Value: Equatable>(
+    _ expected: Value,
+    of read: @MainActor () -> Value,
+    sourceLocation: SourceLocation = #_sourceLocation
+) async {
+    let start = read()
+    while true {
+        let current = read()
+        if current == expected { return }
+        if current != start {
+            Issue.record(
+                "value became \(current) while waiting for \(expected)",
+                sourceLocation: sourceLocation
+            )
+            return
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            withObservationTracking { _ = read() } onChange: { continuation.resume() }
         }
     }
+}
+
+/// Blocks the main actor, as a stalled process would, so no queued job runs.
+@MainActor
+private func stallMainActor(seconds: TimeInterval) {
+    Thread.sleep(forTimeInterval: seconds)
 }
 
 /// Gives a stopped or deduplicated observer every scheduling chance to (wrongly)
@@ -61,11 +76,11 @@ struct ObservedStateFlowTests {
         let source = MutableStateFlow(1)
         let observed = ObservedStateFlow(source, initialValue: 0)
         observed.start()
-        await poll { observed.value == 1 }
+        await awaitValue(1, of: { observed.value })
         #expect(observed.value == 1)
 
         source.send(99)
-        await poll { observed.value == 99 }
+        await awaitValue(99, of: { observed.value })
         #expect(observed.value == 99)
         observed.stop()
     }
@@ -79,7 +94,7 @@ struct ObservedStateFlowTests {
         observed.start() // no-op second call
         // A second start must not double-collect or crash; wait for the single
         // collection to land, then tear down.
-        await poll { observed.value == 1 }
+        await awaitValue(1, of: { observed.value })
         observed.stop()
     }
 
@@ -90,7 +105,7 @@ struct ObservedStateFlowTests {
         let observed = ObservedStateFlow(source, initialValue: 0)
         observed.start()
         // Confirm collection is actually running before stopping it.
-        await poll { observed.value == 1 }
+        await awaitValue(1, of: { observed.value })
         observed.stop()
 
         source.send(777) // applied synchronously; delivery to observers is async
@@ -104,12 +119,40 @@ struct ObservedStateFlowTests {
         let source = MutableStateFlow(5)
         let observed = ObservedStateFlow(source, initialValue: 0)
         observed.start()
-        await poll { observed.value == 5 }
+        await awaitValue(5, of: { observed.value })
         #expect(observed.value == 5)
 
         source.send(5) // equal, no update
-        await settle()
-        #expect(observed.value == 5)
+        source.send(6) // sentinel: once it lands, the equal send had its chance
+        await awaitValue(6, of: { observed.value })
+        #expect(observed.value == 6)
+        observed.stop()
+    }
+
+    @Test("a value that moves somewhere unexpected fails the wait by name")
+    func wrongValueFailsByName() async {
+        guard #available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *) else { return }
+        let source = MutableStateFlow(0)
+        let observed = ObservedStateFlow(source, initialValue: 0)
+        observed.start()
+        source.send(7)
+        await withKnownIssue {
+            await awaitValue(8, of: { observed.value })
+        } matching: { issue in
+            issue.comments.contains { $0.rawValue.contains("value became 7 while waiting for 8") }
+        }
+        observed.stop()
+    }
+
+    @Test("a main actor stall delays the wait without failing it")
+    func stallDoesNotFailTheWait() async {
+        guard #available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *) else { return }
+        let source = MutableStateFlow(3)
+        let observed = ObservedStateFlow(source, initialValue: 0)
+        observed.start()
+        stallMainActor(seconds: 1.5)
+        await awaitValue(3, of: { observed.value })
+        #expect(observed.value == 3)
         observed.stop()
     }
 
@@ -124,7 +167,7 @@ struct ObservedStateFlowTests {
         )
         observed.start()
         source.send(10)
-        await poll { observed.value == 10 }
+        await awaitValue(10, of: { observed.value })
         #expect(observed.value == 10)
         observed.stop()
     }
@@ -140,7 +183,7 @@ struct ObservedStateFlowTests {
         )
         observed.start()
         source.send(20)
-        await poll { observed.value == 20 }
+        await awaitValue(20, of: { observed.value })
         #expect(observed.value == 20)
         observed.stop()
     }
@@ -172,7 +215,7 @@ struct CollectedStateTests {
         let wrapper = CollectedState(wrappedValue: 0, source)
         wrapper.update() // simulates SwiftUI calling update during view update
         source.send(42)
-        await poll { wrapper.wrappedValue == 42 }
+        await awaitValue(42, of: { wrapper.wrappedValue })
         #expect(wrapper.wrappedValue == 42)
     }
 
@@ -184,7 +227,7 @@ struct CollectedStateTests {
         wrapper.update()
         wrapper.update()
         wrapper.update()
-        await poll { wrapper.wrappedValue == 5 }
+        await awaitValue(5, of: { wrapper.wrappedValue })
         #expect(wrapper.wrappedValue == 5)
     }
 }
@@ -199,31 +242,29 @@ struct ObservedStateFlowDeinitTests {
         do {
             let observed = ObservedStateFlow(probe, initialValue: 0)
             observed.start()
-            await poll { probe.isCollecting }
-            #expect(probe.isCollecting)
+            await probe.started.wait()
+            #expect(probe.started.hasFired)
             // observed goes out of scope here, so releasing it must cancel the task
         }
-        await poll { probe.wasCancelled }
-        #expect(probe.wasCancelled)
+        await probe.cancelled.wait()
+        #expect(probe.cancelled.hasFired)
     }
 }
 
-/// A state flow whose collection blocks until cancelled, recording both ends.
-private final class CancellationProbe: StateFlow, @unchecked Sendable {
-    private let lock = NSLock()
-    private var collecting = false
-    private var cancelled = false
+/// A state flow whose collection parks until cancelled, signalling when it
+/// starts and when it is cancelled.
+private final class CancellationProbe: StateFlow, Sendable {
+    let started = Signal()
+    let cancelled = Signal()
     var value: Int { 0 }
-    var isCollecting: Bool { lock.withLock { collecting } }
-    var wasCancelled: Bool { lock.withLock { cancelled } }
 
     func asFlow() -> Flow<Int> {
         Flow { _ in
-            self.lock.withLock { self.collecting = true }
+            self.started.fire()
             await withTaskCancellationHandler {
-                while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(1)) }
+                await parkUntilCancelled()
             } onCancel: {
-                self.lock.withLock { self.cancelled = true }
+                self.cancelled.fire()
             }
         }
     }

@@ -2,6 +2,7 @@ import Testing
 import FlowCore
 import FlowSharedModels
 import FlowTesting
+import FlowTestSupport
 @testable import FlowHotStreams
 
 @Suite("Read-only hot stream views")
@@ -19,7 +20,7 @@ struct ReadOnlyViewTests {
         #expect(view.value == 1)
 
         // A late subscriber on the view replays the current value.
-        try await view.asFlow().test { tester in
+        try await view.asFlow().probing { tester in
             try await tester.expectValue(1)
             source.send(2)
             try await tester.expectValue(2)
@@ -41,17 +42,18 @@ struct ReadOnlyViewTests {
         let source = MutableStateFlow(0)
         let view = source.asStateFlow()
 
-        let latestA = Mutex<Int?>(nil)
-        let latestB = Mutex<Int?>(nil)
+        let latestA = Recorder<Int>()
+        let latestB = Recorder<Int>()
         let subscriberA = Task {
-            await view.asFlow().collect { value in latestA.withLock { $0 = value } }
+            await view.asFlow().collect { value in latestA.record(value) }
         }
         let subscriberB = Task {
-            await view.asFlow().collect { value in latestB.withLock { $0 = value } }
+            await view.asFlow().collect { value in latestB.record(value) }
         }
         // Both subscribers observe the seed before the storm so neither races
         // its own subscription against the sends.
-        await waitUntil { latestA.withLock { $0 } != nil && latestB.withLock { $0 } != nil }
+        await latestA.wait(atLeast: 1)
+        await latestB.wait(atLeast: 1)
 
         await withTaskGroup(of: Void.self) { group in
             for value in 1...100 {
@@ -61,9 +63,10 @@ struct ReadOnlyViewTests {
         // Deterministic final value after the storm quiesces.
         source.send(-1)
 
-        await waitUntil { latestA.withLock { $0 } == -1 && latestB.withLock { $0 } == -1 }
-        #expect(latestA.withLock { $0 } == -1)
-        #expect(latestB.withLock { $0 } == -1)
+        await latestA.wait { $0.last == -1 }
+        await latestB.wait { $0.last == -1 }
+        #expect(latestA.last == -1)
+        #expect(latestB.last == -1)
         #expect(view.value == -1)
 
         subscriberA.cancel()
@@ -78,7 +81,7 @@ struct ReadOnlyViewTests {
         await source.emit("replayed")
         let view = source.asSharedFlow()
 
-        try await view.asFlow().test { tester in
+        try await view.asFlow().probing { tester in
             try await tester.expectValue("replayed")
             await source.emit("live")
             try await tester.expectValue("live")
@@ -94,12 +97,12 @@ struct ReadOnlyViewTests {
         let subscriber = Task {
             await view.asFlow().collect { _ in }
         }
-        await waitUntil { await view.subscriptionCount == 1 }
+        await pollUntil { await view.subscriptionCount == 1 }
         #expect(await view.subscriptionCount == 1)
         #expect(await source.subscriptionCount == 1)
 
         subscriber.cancel()
-        await waitUntil { await view.subscriptionCount == 0 }
+        await pollUntil { await view.subscriptionCount == 0 }
         #expect(await view.subscriptionCount == 0)
     }
 
