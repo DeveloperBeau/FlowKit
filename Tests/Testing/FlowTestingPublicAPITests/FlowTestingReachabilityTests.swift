@@ -32,6 +32,19 @@ struct FlowTestingReachabilityTests {
         }
     }
 
+    @Test("FlowReader is reachable via .probing(_:)")
+    func flowReaderReachable() async throws {
+        try await Flow(of: 1, 2).probing { reader in
+            try await reader.expectValue(1)
+            try await reader.expectNextValue(2)
+            try await reader.expectCompletion()
+        }
+        struct BoomError: Error {}
+        try await ThrowingFlow<Int> { _ in throw BoomError() }.probing { reader in
+            try await reader.expectError("boom") { $0 is BoomError }
+        }
+    }
+
     @Test("TestScope is reachable")
     func testScopeReachable() async throws {
         try await TestScope.run { scope in
