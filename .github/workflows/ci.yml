@@ -28,6 +28,10 @@ jobs:
         run: swift build -j 2
       - name: Test with coverage
         run: swift test -j 2 --enable-code-coverage
+      # Release links differently from debug (opaque type descriptors, inlining),
+      # so UI targets get their own pass here; the Linux job cannot build them.
+      - name: Test all targets (release config)
+        run: swift test -j 2 -c release
       - name: Coverage report
         run: |
           BIN=$(find .build -name "FlowKitPackageTests.xctest" -type d | head -1)

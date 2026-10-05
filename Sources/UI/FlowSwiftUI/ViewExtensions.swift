@@ -9,7 +9,21 @@ extension View {
         priority: TaskPriority = .userInitiated,
         action: @escaping @MainActor (T) -> Void
     ) -> some View {
-        self.task(priority: priority) {
+        modifier(CollectingModifier(flow: flow, priority: priority, action: action))
+    }
+}
+
+/// Wraps `.task` in a named type so its opaque return type stays inside this
+/// module. Returned directly, the release-built opaque type descriptor of the
+/// newer `.task(name:priority:...)` overload leaks into client code and fails
+/// to link on deployment targets below that overload's availability.
+private struct CollectingModifier<T: Sendable>: ViewModifier {
+    let flow: Flow<T>
+    let priority: TaskPriority
+    let action: @MainActor (T) -> Void
+
+    func body(content: Content) -> some View {
+        content.task(priority: priority) {
             await _collectFlow(flow, action: action)
         }
     }
