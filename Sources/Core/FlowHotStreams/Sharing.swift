@@ -87,7 +87,8 @@ extension Flow {
                     task?.cancel()
                     task = nil
                 }
-            }
+            },
+            resetReplay: { await shared.resetReplayCache() }
         )
 
         return CoordinatedSharedFlow(
@@ -168,14 +169,12 @@ private actor CoordinatedSharedFlow<Element: Sendable>: SharedFlow, SubscriberCo
             guard let self else { return }
             await self.ensureActivated()
             await self.coordinator.subscriberDidAppear()
-            defer {
-                Task { [weak self] in
-                    await self?.coordinator.subscriberDidDisappear()
-                }
-            }
             await self.inner.asFlow().collect { value in
                 await collector.emit(value)
             }
+            // Awaited, not deferred to a task, so a zero replayExpiration has
+            // cleared the replay before this collection returns.
+            await self.coordinator.subscriberDidDisappear()
         }
     }
 
