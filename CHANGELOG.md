@@ -2,6 +2,17 @@
 
 All notable changes to FlowKit are documented here.
 
+## Unreleased
+
+### Fixed
+
+- `SharingStrategy.whileSubscribed(stopTimeout:replayExpiration:)` now clears the replay cache of
+  an `asSharedFlow` `replayExpiration` after the last subscriber leaves, as documented. Before,
+  `replayExpiration` was ignored and the replay was never cleared. With the default `.zero` the
+  replay is cleared before the leaving collection returns, so a later subscriber no longer
+  receives stale values. Pass a long `replayExpiration` to keep the replay across gaps.
+  `asStateFlow` keeps its value, as before.
+
 ## 2.3.0 — 2026-10-05
 
 ### Added

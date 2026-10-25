@@ -33,6 +33,14 @@ public enum SharingStrategy: Sendable, Equatable {
     /// subscriber a chance to arrive and keep the stream alive). The replay
     /// cache is cleared `replayExpiration` after the last subscriber leaves.
     ///
+    /// Both delays count from the moment the last subscriber leaves, so the
+    /// replay can be cleared before or after the upstream stops. A subscriber
+    /// that arrives in time cancels both. With `replayExpiration: .zero` (the
+    /// default) the replay is cleared before the leaving collection returns,
+    /// so a subscriber that arrives after it never receives the old values.
+    /// `replayExpiration` applies only to `asSharedFlow`: a `StateFlow` always
+    /// holds a value and keeps it.
+    ///
     /// Recommended default for UI state: `.whileSubscribed(stopTimeout: .seconds(5))`.
     case whileSubscribed(stopTimeout: Duration = .zero, replayExpiration: Duration = .zero)
 }
