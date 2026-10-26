@@ -359,3 +359,61 @@ struct ReplayExpirationSharedFlowTests {
         #expect(state.value == 1, "replayExpiration must not reset a StateFlow's value")
     }
 }
+
+/// A cold source whose first run, once cancelled, still has one emit in
+/// flight. The test holds that emit behind `gate`, so it can land after the
+/// coordinator has stopped the run. Later runs emit their start number and idle.
+private final class LateEmitUpstream: Sendable {
+    private let starts = Mutex(0)
+    let firstEmitted = Signal()
+    let gate = Signal()
+    let lateEmitDone = Signal()
+
+    func flow() -> Flow<Int> {
+        Flow<Int> { [starts, firstEmitted, gate, lateEmitDone] collector in
+            let number = starts.withLock { count -> Int in
+                count += 1
+                return count
+            }
+            await collector.emit(number)
+            guard number == 1 else {
+                await parkUntilCancelled()
+                return
+            }
+            firstEmitted.fire()
+            await parkUntilCancelled()
+            await gate.wait()
+            await collector.emit(99)
+            lateEmitDone.fire()
+        }
+    }
+}
+
+@Suite("asSharedFlow emit after stop")
+struct EmitAfterStopTests {
+    @Test("zero replayExpiration: an emit in flight when the upstream stops cannot refill the replay")
+    func lateEmitDoesNotSurviveReset() async {
+        let upstream = LateEmitUpstream()
+        let shared = upstream.flow().asSharedFlow(
+            replay: 1, strategy: .whileSubscribed(stopTimeout: .zero, replayExpiration: .zero),
+            clock: TestClock()
+        )
+        let first = Task { await shared.asFlow().collect { _ in } }
+        await upstream.firstEmitted.wait()
+        first.cancel()
+        // Without the fix the last subscriber leaves at once. With it the
+        // departure waits for the stopped upstream, so the timeout lets the
+        // gate open either way. The gate opens after the reset has run or is
+        // waiting for the upstream, which is the order that exposes the race.
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await first.value }
+            group.addTask { try? await Task.sleep(for: .milliseconds(300)) }
+            await group.next()
+            group.cancelAll()
+        }
+        upstream.gate.fire()
+        await upstream.lateEmitDone.wait()
+        await first.value
+        #expect(await firstValue(of: shared.asFlow()) == 2, "the late emit left a stale value in the replay")
+    }
+}
