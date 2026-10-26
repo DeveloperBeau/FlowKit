@@ -2,7 +2,20 @@
 
 All notable changes to FlowKit are documented here.
 
-## Unreleased
+## 2.4.0 — 2026-10-26
+
+### Changed
+
+- Behavior change for `asSharedFlow(replay:strategy:)` with
+  `.whileSubscribed(stopTimeout:replayExpiration:)`. The default `replayExpiration: .zero` now
+  clears the replay cache as soon as the last subscriber leaves. Code that relied on the replay
+  surviving a gap with no subscribers now sees an empty replay for the next subscriber. To keep
+  the old behavior, pass a very long `replayExpiration`, for example
+  `.whileSubscribed(stopTimeout: .seconds(5), replayExpiration: .seconds(86_400))`.
+- Source-level API notes for code that uses `SharingCoordinator` directly.
+  `SharingCoordinator.init` gains a `resetReplay` parameter with a default value, so existing
+  calls still compile. `SharingCoordinator.subscriberDidAppear()` is now `async`, so callers
+  must `await` it.
 
 ### Fixed
 
