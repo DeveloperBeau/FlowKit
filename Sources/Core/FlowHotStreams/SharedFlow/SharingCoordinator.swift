@@ -6,22 +6,29 @@ public actor SharingCoordinator {
     private let clock: any Clock<Duration>
     private let startClosure: @Sendable () -> Void
     private let stopClosure: @Sendable () -> Void
+    private let resetReplayClosure: @Sendable () async -> Void
 
     private var isActive: Bool = false
     private var isUpstreamRunning: Bool = false
     private var subscriberCount: Int = 0
     private var pendingStopTask: Task<Void, Never>?
+    private var pendingResetTask: Task<Void, Never>?
+    // A reset in progress. A new subscriber waits for it before it can read
+    // the replay, so it never sees the value being cleared.
+    private var runningReset: Task<Void, Never>?
 
     public init(
         strategy: SharingStrategy,
         clock: any Clock<Duration>,
         start: @escaping @Sendable () -> Void,
-        stop: @escaping @Sendable () -> Void
+        stop: @escaping @Sendable () -> Void,
+        resetReplay: @escaping @Sendable () async -> Void = {}
     ) {
         self.strategy = strategy
         self.clock = clock
         self.startClosure = start
         self.stopClosure = stop
+        self.resetReplayClosure = resetReplay
     }
 
     public func activate() {
@@ -35,15 +42,23 @@ public actor SharingCoordinator {
         isActive = false
         pendingStopTask?.cancel()
         pendingStopTask = nil
+        pendingResetTask?.cancel()
+        pendingResetTask = nil
         if isUpstreamRunning {
             stopUpstream()
         }
     }
 
-    public func subscriberDidAppear() {
+    /// Records a new subscriber. Returns only after any replay reset already
+    /// under way has finished, so the subscriber cannot read a stale replay.
+    public func subscriberDidAppear() async {
         pendingStopTask?.cancel()
         pendingStopTask = nil
+        pendingResetTask?.cancel()
+        pendingResetTask = nil
         subscriberCount += 1
+
+        if let runningReset { await runningReset.value }
 
         if !isUpstreamRunning && isActive {
             switch strategy {
@@ -62,22 +77,48 @@ public actor SharingCoordinator {
         switch strategy {
         case .eager, .lazy:
             return
-        case .whileSubscribed(let stopTimeout, _):
+        case .whileSubscribed(let stopTimeout, let replayExpiration):
+            let strategyClock = clock
             if stopTimeout == .zero {
                 if isUpstreamRunning { stopUpstream() }
-                return
+            } else {
+                pendingStopTask = Task { [weak self] in
+                    try? await strategyClock.sleep(for: stopTimeout, tolerance: nil)
+                    await self?.maybeFireDelayedStop()
+                }
             }
 
-            let strategyClock = clock
-            let task = Task { [weak self] in
-                try? await strategyClock.sleep(for: stopTimeout, tolerance: nil)
-                await self?.maybeFireDelayedStop()
+            if replayExpiration == .zero {
+                await resetReplay()
+            } else {
+                pendingResetTask = Task { [weak self] in
+                    try? await strategyClock.sleep(for: replayExpiration, tolerance: nil)
+                    await self?.maybeFireDelayedReset()
+                }
             }
-            pendingStopTask = task
-            // Yield so the task body starts and registers its sleep before
-            // the caller can advance a test clock.
-            await Task.yield()
+
+            if pendingStopTask != nil || pendingResetTask != nil {
+                // Yield so the task bodies start and register their sleeps
+                // before the caller can advance a test clock.
+                await Task.yield()
+            }
         }
+    }
+
+    private func maybeFireDelayedReset() async {
+        guard pendingResetTask != nil, !Task.isCancelled else { return }
+        guard subscriberCount == 0 else { return }
+        pendingResetTask = nil
+        await resetReplay()
+    }
+
+    /// Clears the replay. The reset runs as a task that `subscriberDidAppear`
+    /// awaits, because the coordinator is reentrant across this suspension.
+    private func resetReplay() async {
+        let reset = Task { [resetReplayClosure] in await resetReplayClosure() }
+        runningReset = reset
+        await reset.value
+        if runningReset == reset { runningReset = nil }
     }
 
     private func maybeFireDelayedStop() {
