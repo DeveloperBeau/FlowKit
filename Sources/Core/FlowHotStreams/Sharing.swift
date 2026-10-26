@@ -71,6 +71,9 @@ extension Flow {
         let shared = MutableSharedFlow<Element>(replay: replay)
         let source = self
         let upstream = Mutex<Task<Void, Never>?>(nil)
+        // Cancelled upstream tasks that may still have an emit in flight. The
+        // replay reset waits for them, so a late emit cannot refill the cache.
+        let stopped = Mutex<[Task<Void, Never>]>([])
 
         let coordinator = SharingCoordinator(
             strategy: strategy,
@@ -78,17 +81,30 @@ extension Flow {
             start: {
                 let task = Task { await source.collect { value in await shared.emit(value) } }
                 upstream.withLock { previous in
-                    previous?.cancel()
+                    if let previous {
+                        previous.cancel()
+                        stopped.withLock { $0.append(previous) }
+                    }
                     previous = task
                 }
             },
             stop: {
                 upstream.withLock { task in
-                    task?.cancel()
+                    if let task {
+                        task.cancel()
+                        stopped.withLock { $0.append(task) }
+                    }
                     task = nil
                 }
             },
-            resetReplay: { await shared.resetReplayCache() }
+            resetReplay: {
+                let draining = stopped.withLock { tasks -> [Task<Void, Never>] in
+                    defer { tasks.removeAll() }
+                    return tasks
+                }
+                for task in draining { await task.value }
+                await shared.resetReplayCache()
+            }
         )
 
         return CoordinatedSharedFlow(

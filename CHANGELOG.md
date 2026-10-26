@@ -2,6 +2,16 @@
 
 All notable changes to FlowKit are documented here.
 
+## Unreleased
+
+### Fixed
+
+- `asSharedFlow(replay:strategy:)` with `.whileSubscribed`: a value that a cancelled upstream
+  was still emitting when the last subscriber left could land after the replay reset and stay
+  in the cache for the next subscriber. The reset now waits for the stopped upstream to finish
+  first. An upstream that ignores cancellation delays the reset, and the next subscriber, until
+  it returns.
+
 ## 2.4.0 — 2026-10-26
 
 ### Changed
