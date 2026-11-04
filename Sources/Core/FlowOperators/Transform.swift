@@ -170,11 +170,10 @@ extension Flow {
         Flow<Element> { downstream in
             guard count > 0 else { return }
             let remaining = PrefixCounter(count)
-            await self.collect { value in
-                let shouldEmit = await remaining.takeIfPositive()
-                if shouldEmit {
-                    await downstream.emit(value)
-                }
+            await self.collectUntilStopped { value in
+                guard await remaining.takeIfPositive() else { return false }
+                await downstream.emit(value)
+                return await remaining.hasRemaining
             }
         }
     }
@@ -185,11 +184,10 @@ extension ThrowingFlow {
         ThrowingFlow<Element> { downstream in
             guard count > 0 else { return }
             let remaining = PrefixCounter(count)
-            try await self.collect { value in
-                let shouldEmit = await remaining.takeIfPositive()
-                if shouldEmit {
-                    try await downstream.emit(value)
-                }
+            try await self.collectUntilStopped { value in
+                guard await remaining.takeIfPositive() else { return false }
+                try await downstream.emit(value)
+                return await remaining.hasRemaining
             }
         }
     }
@@ -198,6 +196,7 @@ extension ThrowingFlow {
 private actor PrefixCounter {
     private var remaining: Int
     init(_ count: Int) { self.remaining = count }
+    var hasRemaining: Bool { remaining > 0 }
     func takeIfPositive() -> Bool {
         guard remaining > 0 else { return false }
         remaining -= 1
@@ -345,13 +344,14 @@ extension Flow {
     ) -> Flow<Element> {
         Flow<Element> { downstream in
             let active = Mutex(true)
-            await self.collect { value in
-                guard active.withLock({ $0 }) else { return }
+            await self.collectUntilStopped { value in
+                guard active.withLock({ $0 }) else { return false }
                 if await predicate(value) {
                     await downstream.emit(value)
-                } else {
-                    active.withLock { $0 = false }
+                    return true
                 }
+                active.withLock { $0 = false }
+                return false
             }
         }
     }
@@ -365,13 +365,14 @@ extension ThrowingFlow {
     ) -> ThrowingFlow<Element> {
         ThrowingFlow<Element> { downstream in
             let active = Mutex(true)
-            try await self.collect { value in
-                guard active.withLock({ $0 }) else { return }
+            try await self.collectUntilStopped { value in
+                guard active.withLock({ $0 }) else { return false }
                 if try await predicate(value) {
                     try await downstream.emit(value)
-                } else {
-                    active.withLock { $0 = false }
+                    return true
                 }
+                active.withLock { $0 = false }
+                return false
             }
         }
     }

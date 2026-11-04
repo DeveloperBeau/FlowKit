@@ -4,26 +4,83 @@ import FlowSharedModels
 // MARK: - first
 
 extension Flow {
-    /// Returns the first emitted value, or `nil` if the flow completes
-    /// without emitting.
+    /// Returns the first emitted value, then cancels the collection. Returns
+    /// `nil` if the flow completes without emitting.
+    ///
+    /// A flow that never emits and never completes keeps this suspended; wrap
+    /// the call in a timeout when the source may stay silent.
     public func first() async -> Element? {
-        let result = Mutex<Element?>(nil)
-        await self.collect { value in
-            result.withLock { if $0 == nil { $0 = value } }
-        }
-        return result.withLock { $0 }
+        await first(where: { _ in true })
     }
 
-    /// Returns the first value matching `predicate`, or `nil` if the flow
-    /// completes without a match.
+    /// Returns the first value matching `predicate`, then cancels the
+    /// collection. Returns `nil` if the flow completes without a match.
     public func first(
         where predicate: @escaping @Sendable (Element) -> Bool
     ) async -> Element? {
         let result = Mutex<Element?>(nil)
-        await self.collect { value in
-            result.withLock { if $0 == nil && predicate(value) { $0 = value } }
+        await collectUntilStopped { value in
+            result.withLock { found in
+                // A producer can emit again before it sees the cancellation.
+                guard found == nil else { return false }
+                if predicate(value) { found = value }
+                return found == nil
+            }
         }
         return result.withLock { $0 }
+    }
+}
+
+// MARK: - collectUntilStopped
+
+extension Flow {
+    /// Collects until `action` returns `false`, then cancels the upstream
+    /// collection and waits for it to end. `action` can run again before the
+    /// producer sees the cancellation, so it must ignore those late values.
+    internal func collectUntilStopped(
+        _ action: @escaping @Sendable (Element) async -> Bool
+    ) async {
+        let (stopped, stop) = AsyncStream<Void>.makeStream()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                defer { stop.finish() }
+                await self.collect { value in
+                    if await !action(value) { stop.finish() }
+                }
+            }
+            for await _ in stopped {}
+            group.cancelAll()
+        }
+    }
+}
+
+extension ThrowingFlow {
+    /// Collects until `action` returns `false`, then cancels the upstream
+    /// collection and waits for it to end. An error the upstream throws after
+    /// the stop, such as `CancellationError`, is dropped. `action` can run
+    /// again before the producer sees the cancellation, so it must ignore
+    /// those late values.
+    internal func collectUntilStopped(
+        _ action: @escaping @Sendable (Element) async throws -> Bool
+    ) async throws {
+        let (stopped, stop) = AsyncStream<Void>.makeStream()
+        let didStop = Mutex(false)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                defer { stop.finish() }
+                do {
+                    try await self.collect { value in
+                        if try await !action(value) {
+                            didStop.withLock { $0 = true }
+                            stop.finish()
+                        }
+                    }
+                } catch where didStop.withLock({ $0 }) {}
+            }
+            for await _ in stopped {}
+            group.cancelAll()
+            try await group.waitForAll()
+        }
     }
 }
 

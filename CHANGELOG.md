@@ -2,6 +2,19 @@
 
 All notable changes to FlowKit are documented here.
 
+## Unreleased
+
+### Fixed
+
+- `first()`, `first(where:)`, `contains(where:)` and `allSatisfy(_:)` now return as soon as
+  they have their answer and cancel the collection. Before, they kept collecting until the
+  flow completed, so on a flow that emits and then stays open, such as a `callbackFlow`
+  parked on `awaitClose`, they never returned. A flow that completes without emitting still
+  gives `nil`. A flow that never emits and never completes still keeps `first()` suspended,
+  so wrap the call in a timeout when the source can stay silent.
+- `prefix(_:)` and `prefix(while:)` on `Flow` and `ThrowingFlow` now cancel the upstream once
+  they stop taking values, so the prefixed flow completes even when the upstream stays open.
+
 ## 2.4.1 — 2026-10-26
 
 ### Fixed
