@@ -2,7 +2,7 @@
 
 All notable changes to FlowKit are documented here.
 
-## Unreleased
+## 2.4.2 — 2026-11-04
 
 ### Fixed
 
