@@ -257,6 +257,10 @@ To check that nothing else arrived, trigger a known emission and read for it wit
 
 `FlowReader` (via `Flow.probing(_:)`) reads a flow with no deadline. `TestClock` gives deterministic virtual time for rate-limiting and sharing operators, and `FlowTester`, `ThrowingFlowTester` and `TestScope` drive several flows at once against a deadline you measure on a `TestClock`.
 
+### Agent skill
+
+[`skills/flowkit/SKILL.md`](skills/flowkit/SKILL.md) is a short reference for coding agents that work in a project that uses FlowKit. It says which operators return early and which wait for the flow to complete, how `callbackFlow` and the hot flows behave, and how to test flows without sleeps. Copy the `skills/flowkit` folder into the skills folder of your agent.
+
 ## Contributing
 
 If your change touches anything in `Sources/Core/Flow/Documentation.docc/`, regenerate the static site before opening a PR:
