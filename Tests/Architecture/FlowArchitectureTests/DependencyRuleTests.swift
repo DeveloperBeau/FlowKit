@@ -162,6 +162,80 @@ struct DependencyRuleTests {
             )
         }
     }
+
+    @Test("An exception for one file does not hide the same import in another file")
+    func exceptionForOneFileDoesNotHideAnother() {
+        let violations = check(
+            targets: [
+                target("FlowOperators"),
+                target("FlowSharedModels")
+            ],
+            imports: [
+                "FlowOperators": [
+                    SwiftImport(
+                        moduleName: "FlowSharedModels",
+                        line: 1,
+                        file: "FlowOperators/A.swift"
+                    ),
+                    SwiftImport(
+                        moduleName: "FlowSharedModels",
+                        line: 3,
+                        file: "FlowOperators/B.swift"
+                    )
+                ]
+            ],
+            exceptions: [
+                KnownDependencyException(
+                    target: "FlowOperators",
+                    importedModule: "FlowSharedModels",
+                    file: "FlowOperators/A.swift",
+                    line: 1,
+                    kind: .undeclaredImport,
+                    reason: "Only A.swift is listed."
+                )
+            ]
+        )
+        let undeclared = violations.filter { $0.rule == .undeclaredImport }
+        #expect(undeclared.count == 1)
+        #expect(undeclared.first?.file == "FlowOperators/B.swift")
+        #expect(undeclared.first?.line == 3)
+        #expect(undeclared.first?.target == "FlowOperators")
+        #expect(undeclared.first?.importedModule == "FlowSharedModels")
+    }
+
+    @Test("An exception goes stale when its file drops the import, even if another file keeps it")
+    func exceptionGoesStaleWhenItsFileDropsTheImport() {
+        let violations = check(
+            targets: [
+                target("FlowOperators"),
+                target("FlowSharedModels")
+            ],
+            imports: [
+                "FlowOperators": [
+                    SwiftImport(
+                        moduleName: "FlowSharedModels",
+                        line: 2,
+                        file: "FlowOperators/B.swift"
+                    )
+                ]
+            ],
+            exceptions: [
+                KnownDependencyException(
+                    target: "FlowOperators",
+                    importedModule: "FlowSharedModels",
+                    file: "FlowOperators/A.swift",
+                    line: 1,
+                    kind: .undeclaredImport,
+                    reason: "A.swift no longer imports it."
+                )
+            ]
+        )
+        let stale = violations.filter { $0.rule == .staleKnownException }
+        #expect(stale.count == 1)
+        #expect(stale.first?.file == "FlowOperators/A.swift")
+        #expect(stale.first?.target == "FlowOperators")
+        #expect(stale.first?.importedModule == "FlowSharedModels")
+    }
 }
 
 private func check(

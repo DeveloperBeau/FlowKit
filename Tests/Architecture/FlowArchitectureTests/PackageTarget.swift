@@ -174,12 +174,16 @@ struct PackageTarget: Equatable, Sendable {
                         path = value
                     } else if label == "dependencies",
                               index + 2 < tokens.count,
-                              case .symbol("[", _) = tokens[index + 2] {
+                              case .symbol("[", let listLine) = tokens[index + 2] {
                         guard let close = matching(tokens, from: index + 2, open: "[", close: "]") else {
-                            throw LoadFailure(message: "Package.swift has an unclosed dependency list.")
+                            let targetName = name ?? declaredName(tokens) ?? "unknown"
+                            throw LoadFailure(
+                                message: "Target \(targetName) has an unclosed dependency list at line \(listLine)."
+                            )
                         }
                         let inner = Array(tokens[(index + 3)..<close])
-                        dependencies = try parseDependencies(inner)
+                        let targetName = name ?? declaredName(tokens) ?? "unknown"
+                        dependencies = try parseDependencies(inner, target: targetName)
                         index = close
                     }
                 }
@@ -201,25 +205,45 @@ struct PackageTarget: Equatable, Sendable {
         )
     }
 
-    private static func parseDependencies(_ tokens: [ManifestToken]) throws -> [Dependency] {
+    private static func parseDependencies(
+        _ tokens: [ManifestToken],
+        target: String
+    ) throws -> [Dependency] {
         var dependencies: [Dependency] = []
         var index = 0
         while index < tokens.count {
             if isDotWord(tokens, index, words: ["product"]) {
+                let line = tokenLine(tokens[index + 1])
                 guard let close = matchingCall(tokens, dotIndex: index) else {
-                    throw LoadFailure(message: "Package.swift has an unclosed product dependency.")
+                    throw LoadFailure(
+                        message: "Target \(target) has an unclosed product dependency at line \(line)."
+                    )
+                }
+                let inner = Array(tokens[(index + 3)..<close])
+                guard labeledName(inner) != nil else {
+                    throw LoadFailure(
+                        message: "Target \(target) has a product dependency with no name at line \(line)."
+                    )
                 }
                 index = close + 1
                 continue
             }
             if isDotWord(tokens, index, words: ["target", "byName"]) {
+                let kind = wordText(tokens[index + 1])
+                let line = tokenLine(tokens[index + 1])
                 guard let close = matchingCall(tokens, dotIndex: index) else {
-                    throw LoadFailure(message: "Package.swift has an unclosed target dependency.")
+                    throw LoadFailure(
+                        message: "Target \(target) has an unclosed target dependency at line \(line)."
+                    )
                 }
                 let inner = Array(tokens[(index + 3)..<close])
-                if let dependency = namedDependency(inner) {
-                    dependencies.append(dependency)
+                let found = labeledName(inner) ?? (kind == "byName" ? bareName(inner) : nil)
+                guard let found else {
+                    throw LoadFailure(
+                        message: "Target \(target) has a target dependency with no name at line \(line)."
+                    )
                 }
+                dependencies.append(Dependency(name: found.name, line: found.line))
                 index = close + 1
                 continue
             }
@@ -231,7 +255,11 @@ struct PackageTarget: Equatable, Sendable {
         return dependencies
     }
 
-    private static func namedDependency(_ tokens: [ManifestToken]) -> Dependency? {
+    /// The `name:` string at the top level of a dependency call.
+    ///
+    /// A package string on `.product` is not a name. Missing this label is an
+    /// error, so a bad call cannot disappear from the list.
+    private static func labeledName(_ tokens: [ManifestToken]) -> (name: String, line: Int)? {
         var index = 0
         var depth = 0
         while index < tokens.count {
@@ -243,10 +271,50 @@ struct PackageTarget: Equatable, Sendable {
             case .word("name", _) where depth == 0 && index + 2 < tokens.count:
                 if case .symbol(":", _) = tokens[index + 1],
                    case .string(let value, let line) = tokens[index + 2] {
-                    return Dependency(name: value, line: line)
+                    return (value, line)
                 }
+            default:
+                break
+            }
+            index += 1
+        }
+        return nil
+    }
+
+    /// `.byName("Module")` passes the module as a bare string.
+    private static func bareName(_ tokens: [ManifestToken]) -> (name: String, line: Int)? {
+        var index = 0
+        var depth = 0
+        while index < tokens.count {
+            switch tokens[index] {
+            case .symbol("(", _), .symbol("[", _):
+                depth += 1
+            case .symbol(")", _), .symbol("]", _):
+                depth -= 1
             case .string(let value, let line) where depth == 0:
-                return Dependency(name: value, line: line)
+                return (value, line)
+            default:
+                break
+            }
+            index += 1
+        }
+        return nil
+    }
+
+    private static func declaredName(_ tokens: [ManifestToken]) -> String? {
+        var index = 0
+        var depth = 0
+        while index < tokens.count {
+            switch tokens[index] {
+            case .symbol("(", _), .symbol("[", _):
+                depth += 1
+            case .symbol(")", _), .symbol("]", _):
+                depth -= 1
+            case .word("name", _) where depth == 0 && index + 2 < tokens.count:
+                if case .symbol(":", _) = tokens[index + 1],
+                   case .string(let value, _) = tokens[index + 2] {
+                    return value
+                }
             default:
                 break
             }
@@ -288,6 +356,20 @@ struct PackageTarget: Equatable, Sendable {
             return false
         }
         return words.contains(word)
+    }
+
+    private static func wordText(_ token: ManifestToken) -> String {
+        if case .word(let word, _) = token {
+            return word
+        }
+        return ""
+    }
+
+    private static func tokenLine(_ token: ManifestToken) -> Int {
+        switch token {
+        case .word(_, let line), .string(_, let line), .symbol(_, let line):
+            return line
+        }
     }
 
     private static func matchingCall(_ tokens: [ManifestToken], dotIndex: Int) -> Int? {
