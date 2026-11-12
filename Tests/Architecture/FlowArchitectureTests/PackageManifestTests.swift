@@ -54,6 +54,19 @@ struct PackageManifestTests {
         #expect(namelessTargetError?.message.contains("line 4") == true)
     }
 
+    @Test("A commented-out dependency is not a declared dependency")
+    func commentedOutDependencyIsNotDeclared() throws {
+        let source = manifest(dependencies: """
+            "FlowSharedModels", // "FlowTestClock",
+            /* .target(name: "FlowCore"), */
+            """)
+        let names = try PackageTarget.parseManifest(source)
+            .first { $0.name == "FlowCore" }?
+            .dependencies
+            .map(\.name)
+        #expect(names == ["FlowSharedModels"])
+    }
+
     @Test("Seeded fuzz of dependency lists accepts valid forms and rejects corrupt ones")
     func seededFuzzOfDependencyLists() {
         print("Package manifest fuzz seed: \(Self.fuzzSeed)")
@@ -100,15 +113,34 @@ struct PackageManifestTests {
                     }
                 }
             }
-            let comment = generator.next() % 2 == 0 ? "\n// note\n" : "\n/* block\n   comment */\n"
-            let body = entries.joined(separator: ",\(comment)")
+            let gapComment = generator.next() % 2 == 0 ? "\n// note\n" : "\n/* block\n   comment */\n"
+            let listed = entries.joined(separator: ",\(gapComment)")
+            let lineHidden = "SkipLine\(index)"
+            let blockHidden = "SkipBlock\(index)"
+            let productHidden = "SkipProduct\(index)"
+            let lineKind = Int(generator.next() % 2)
+            let blockKind = Int(generator.next() % 2)
+            let productComment = generator.next() % 2 == 0
+                ? "// .product(name: \"\(productHidden)\", package: \"hidden\")"
+                : "/* .product(name: \"\(productHidden)\", package: \"hidden\") */"
+            let shaped = """
+            \(commentedEntry(name: lineHidden, kind: lineKind, block: false))
+            \(commentedEntry(name: blockHidden, kind: blockKind, block: true))
+            \(productComment)
+            """
+            let body = listed + ",\n" + shaped
             let trailing = generator.next() % 2 == 0 ? "," : ""
             let valid = manifest(dependencies: body + trailing)
+            let hidden = [lineHidden, blockHidden, productHidden]
             do {
                 let parsed = try PackageTarget.parseManifest(valid)
                 let found = parsed.first { $0.name == "FlowCore" }?.dependencies.map(\.name) ?? []
                 if found != names {
                     failures.append("valid list \(index) parsed \(found) expected \(names)")
+                }
+                let commented = hidden.filter { found.contains($0) }
+                if !commented.isEmpty {
+                    failures.append("commented names \(commented) parsed in list \(index)")
                 }
             } catch {
                 failures.append("valid list \(index) threw \(error)")
@@ -129,6 +161,17 @@ struct PackageManifestTests {
         let message = failures.prefix(8).joined(separator: "\n")
         #expect(failures.isEmpty, "\(failures.count) manifest fuzz failures\n\(message)")
     }
+}
+
+/// A dependency entry inside a line comment or a block comment.
+///
+/// `kind` 0 is a bare string. Any other kind is a `.target(name:)` call.
+private func commentedEntry(name: String, kind: Int, block: Bool) -> String {
+    let entry = kind == 0 ? "\"\(name)\"," : ".target(name: \"\(name)\")"
+    if block {
+        return "/* \(entry) */"
+    }
+    return "// \(entry)"
 }
 
 /// A one-target manifest whose dependency list is the given text.
