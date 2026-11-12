@@ -10,6 +10,8 @@
 
 Full API documentation: <https://developerbeau.github.io/FlowKit/documentation/flow/>
 
+Project rules and how the modules fit together are in [standards.md](standards.md) and [Documentation/](Documentation/).
+
 FlowKit brings the Kotlin Flow mental model to Swift: cold asynchronous streams (`Flow`, `ThrowingFlow`), hot multicast primitives (`StateFlow`, `SharedFlow`), a rich operator library, and built-in testing infrastructure with virtual time.
 
 ## Why Swift
