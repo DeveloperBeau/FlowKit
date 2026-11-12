@@ -6,25 +6,35 @@ The API catalogue is the DocC site, [Flow](https://developerbeau.github.io/FlowK
 
 ## Testing
 
-Every feature, every seam, and every complete data flow has three tests: a success test, a failure test, and a seeded fuzz test. The fuzz test checks a false positive and a false negative. It prints the seed it ran with.
+1. `swift test` from the repo root passes from a clean checkout. Each pull request body carries that real output, plus the real output of `swift test -c release`, plus any iOS or Android build the change touches. No test is skipped, disabled, or flaky.
 
-A value that crosses a module boundary has an end-to-end test. The expected result in that test is written by hand.
+2. Tests assert behaviour a caller can observe, not internals.
 
-A wait has a bound. If the test hangs, the failure names the wait. Test names say what they prove. An assertion compares against a value the test wrote down. It does not compare against a value computed by the code under test.
+3. Every new public API has at least one happy-path test and one failure-path test.
 
-A flaky test is a defect in the code or in the test. Rerunning it is not a fix.
+4. Every bug fix ships with a regression test that fails without the fix.
 
-Read a flow with `probing` and move time with `TestClock`. A passing test does not sleep on the wall clock. When a test has to prove that a flow stayed quiet, pass a `TestClock` to `test(timeout:clock:_:)`, `TestScope.run(timeout:clock:_:)`, `withThrowingTimeout(_:clock:_:)`, or `waitUntil(timeout:clock:_:)`.
+5. Coverage is reported for changed modules. None drops below the previous merged pull request. Coverage is a floor, not proof. A test that cannot fail counts for nothing.
 
-An operator that has its answer cancels the upstream and waits for that upstream to end.
+6. Every feature, every seam, and every complete data flow has a success test, a failure test, and a fuzz test. A seam is each protocol boundary between modules. A fuzz test feeds generated or mutated input and checks both directions. Bad input is never accepted. Valid input is never rejected. Fuzz tests are seeded and print the seed.
 
-Coverage is a floor. A green coverage number does not replace the tests above.
+7. Mutation testing runs on every pull request that changes module code under test. Each mutation breaks code on purpose and names the test expected to fail. The run confirms that test fails, restores the code, and records the result in the pull request. Any surviving mutant in changed code is killed by a new test or explained. The branch is brought up to date with the default branch before the run. A change that does not touch module code skips this check and says so.
 
-A pull request that changes module code includes a mutation check. Break the code on purpose, name the test that should fail, confirm that it fails, restore the code, and record that result in the pull request. A change that does not touch module code skips this check and says so.
+8. Values that cross a module boundary have an end-to-end test checked against a hand-written expected result. No test asserts on a value it produced by calling the code under test.
+
+9. Every wait is bounded. A hang fails with a name that says what hung. Test names say what they prove. A flaky test is a defect. Fix the cause. Never retry it or skip it.
+
+10. Every module has its own tests and builds and tests alone. Tests cover the success path, developer misuse, and adversarial cases where they apply. Those cases include races, teardown, runs exactly once, and bounded memory.
+
+11. Time, clock, random, network, file system, secrets, and storage reach code only through protocols. Tests use doubles and never call a real service.
+
+12. Modules depend only inward. An automated architecture test should enforce this. It does not exist yet. An outward or sideways dependency is still a violation.
+
+13. No published API is removed or changed in behaviour without a documented breaking change and a matching version bump. Record that break in `CHANGELOG.md`. New public surface has docs. No new third-party dependency without the owner's approval.
+
+14. Tests read flows with `probing` or a `TestClock` and never use wall-clock sleeps as the pass condition. Time-based operators are driven by the injected clock. An operator that has its answer cancels upstream. `first`, `prefix`, and the like are that case. When a test has to prove that a flow stayed quiet, pass a `TestClock` to `test(timeout:clock:_:)`, `TestScope.run(timeout:clock:_:)`, `withThrowingTimeout(_:clock:_:)`, or `waitUntil(timeout:clock:_:)`. `Flow` and `FlowTesting` keep building for the Android triples when a change touches them. `FlowUI` stays Apple-only.
 
 ## Architecture
-
-A module depends only inward. Nothing in an inner ring imports an outer ring.
 
 The products are `Flow`, `FlowTesting`, and `FlowUI`. `Flow` is the core. `FlowTesting` and `FlowUI` depend on it. `Flow` does not depend on either of them. `FlowTesting` and `FlowUI` do not depend on each other.
 
@@ -48,9 +58,7 @@ The targets inside those products, as `Package.swift` declares them:
 
 `FlowSharedModels` holds `Mutex`, `BufferOverflow`, `SharingStrategy`, and `FlowTestError`. `FlowTestError` is part of the `Flow` product because the umbrella re-exports `FlowSharedModels`. Its doc comment says why it lives there.
 
-An automated architecture test that fails the build when a target imports outward is not in the repo.
-
-One public type per file, and the file is named after that type. There is no hidden global state. A required dependency is an argument of the initializer or the method that uses it, and that argument has no default. Time passes only through a `Clock`. One type owns each decision: `MutableStateFlow` owns its current value, `MutableSharedFlow` owns its replay buffer, `SharingCoordinator` owns when a shared upstream starts and stops, `FlowScope` owns the tasks launched in it, and `TestClock` owns its instant. A new third-party dependency needs the owner's approval before it is added.
+One public type per file, and the file is named after that type. There is no hidden global state. A required dependency is an argument of the initializer or the method that uses it, and that argument has no default. One type owns each decision: `MutableStateFlow` owns its current value, `MutableSharedFlow` owns its replay buffer, `SharingCoordinator` owns when a shared upstream starts and stops, `FlowScope` owns the tasks launched in it, and `TestClock` owns its instant.
 
 The third-party packages already in `Package.swift` are `swift-async-algorithms` 1.1.5 (used by `FlowOperators`), `swift-docc-plugin` 1.5.0 (documentation tooling), and `swift-crypto` 5.0.0 (the `FlowSimulationTests` target only).
 
@@ -58,15 +66,11 @@ The third-party packages already in `Package.swift` are `swift-async-algorithms`
 
 Follow the [Swift API Design Guidelines](https://www.swift.org/documentation/api-design-guidelines/). The name is clear at the call site. Names are roles. A Boolean reads as an assertion. A capability protocol ends in `-ing` or `-able`. Every public declaration has a one-sentence doc comment. The public surface stays as small as the job allows.
 
-Published API stays stable across releases. Do not remove published API, and do not change its behaviour, without a documented breaking change and a version bump that matches that change. Record the break in `CHANGELOG.md`.
-
-`Flow` and `FlowTesting` keep building for Android. `FlowUI` is Apple-only. Its sources compile only where SwiftUI, Observation, UIKit, or AppKit can be imported. A green Android build of `FlowUI` would be an empty module, so it is not a product there.
+`FlowUI` sources compile only where SwiftUI, Observation, UIKit, or AppKit can be imported. A green Android build of `FlowUI` would be an empty module, so it is not a product there.
 
 ## Pull requests
 
-A pull request is small enough to review in one sitting, and the body shows how it was checked.
-
-The body includes the real output of `swift test` and `swift test -c release`. It also includes the real output of any platform build the change touches. A change to `Flow` or `FlowTesting` includes the Android cross-compile. A change to `FlowUI` says whether the Apple UI tests ran. A docs-only change still runs both test commands and says that no platform build was touched.
+A pull request is small enough to review in one sitting. What the body must show is rule 1.
 
 Sign the commit as the engineer who wrote it. Leave off a co-author trailer and a generated-by trailer.
 
@@ -108,12 +112,26 @@ Operator and builder files group many public methods by behaviour. They are `Flo
 
 ### Dependency declared in source and not in the package manifest
 
-Every import below points inward. `Package.swift` does not list the imported target on the importing target. An architecture test would catch these, and none is in the repo.
+Every import of a package target that `Package.swift` does not declare is listed here, for `Sources/` and for `Tests/`. Each one points inward. `Testing`, `Foundation`, `SwiftUI`, `UIKit`, `AppKit`, and `Observation` are not package targets. An architecture test would catch these, and none is in the repo.
 
 - `FlowUIKitBridge` imports `FlowOperators` from `Sources/UI/FlowUIKitBridge/UIViewControllerExtensions.swift` and `Sources/UI/FlowUIKitBridge/AppKitExtensions.swift`, so those files can call `onEach`. The declared dependencies are `FlowCore` and `FlowHotStreams`. Those files are compiled only where UIKit or AppKit is present.
 - `FlowOperators` imports `FlowSharedModels` from `Timeout.swift`, `Buffering.swift`, `Lifecycle.swift`, `Terminal.swift`, `Transform.swift`, and `RateLimiting.swift`. The declared dependencies are `FlowCore` and AsyncAlgorithms.
 - `Sources/Testing/FlowTesting/FlowTesting.swift` has `@_exported import FlowSharedModels`. The declared dependencies are `FlowTestClock` and `FlowTestingCore`.
 - `FlowTestingCore` imports `FlowSharedModels` from `TimeoutHelpers.swift`, `Testers/FlowTester.swift`, `Testers/FlowTesterBase.swift`, and `Testers/ThrowingFlowTester.swift`. The same target imports `FlowCore` from `TestScope.swift`, `Testers/FlowProbe.swift`, `Testers/FlowReader.swift`, `Testers/FlowTestExtensions.swift`, `Testers/FlowTester.swift`, and `Testers/ThrowingFlowTester.swift`. The declared dependencies are `Flow` and `FlowTestClock`. `Flow` re-exports both modules.
+
+`FlowTestSupport` declares `FlowTesting`, `FlowTestClock`, and `FlowSharedModels`.
+
+- `Tests/Support/FlowTestSupport/ProbeScope.swift` has `package import FlowCore` and `@testable import FlowTestingCore`.
+
+Test targets. `FlowSharedModelsTests`, `FlowSimulationTests`, and `FlowPublicAPITests` import only modules `Package.swift` lists for them.
+
+- `FlowCoreTests` declares `FlowCore`, `FlowTesting`, and `FlowTestSupport`. It imports `FlowSharedModels` from every `Flow` and `ThrowingFlow` test file except `Flow/RingBufferTests.swift`. It imports `FlowTestingCore` from `Flow/FlowLaunchTests.swift`, `Flow/FlowScopeTests.swift`, and `Flow/MemoryLeakTests.swift`.
+- `FlowOperatorsTests` declares `FlowOperators`, `FlowHotStreams`, `FlowTesting`, `FlowTestClock`, and `FlowTestSupport`. Every test file imports `FlowCore`. Twenty-three of the thirty-seven test files also import `FlowSharedModels`.
+- `FlowHotStreamsTests` declares `FlowHotStreams`, `FlowTesting`, and `FlowTestSupport`. It imports `FlowCore` from every test file except `SharedFlow/MulticastSubscriptionTests.swift`. It imports `FlowSharedModels` from every test file except that file and `StateFlow/StateFlowAtomicsTests.swift`. `SharedFlow/ReplayExpirationTests.swift`, `SharedFlow/SharingCoordinatorTests.swift`, and `WhileSubscribedDefaultTests.swift` also import `FlowTestClock` and `FlowTestingCore`.
+- `FlowTestClockTests` declares `FlowTestClock`, `FlowTestingCore`, and `FlowTestSupport`. `TestClockSleeperWaiterTests.swift` imports `FlowSharedModels`.
+- `FlowTestingCoreTests` declares `FlowTestingCore` and `FlowTestSupport`. It imports `FlowCore` from `TestScopeTests.swift`, `Testers/FlowProbeTests.swift`, `Testers/FlowReaderTests.swift`, `Testers/FlowTestExtensionsTests.swift`, `Testers/FlowTesterTests.swift`, and `Testers/ThrowingFlowTesterTests.swift`. It imports `FlowSharedModels` from those files except `Testers/FlowProbeTests.swift`, and also from `TimeoutHelpersTests.swift` and `WaitUntilTests.swift`. `Testers/FlowReaderTests.swift` imports `FlowHotStreams`. `TestScopeTests.swift`, `Testers/FlowTestExtensionsTests.swift`, `TimeoutHelpersTests.swift`, and `WaitUntilTests.swift` import `FlowTestClock`.
+- `FlowTestingPublicAPITests` declares `FlowTesting`. `FlowTestingReachabilityTests.swift` imports `Flow`.
+- `FlowUITests` declares `FlowUI`, `FlowTesting`, and `FlowTestSupport`. `AppKitBridgeTests.swift`, `UIKitBridgeTests.swift`, `FlowObservingTests.swift`, `ObservedStateFlowTests.swift`, and `ViewExtensionsTests.swift` import `FlowCore`. `AppKitBridgeTests.swift`, `UIKitBridgeTests.swift`, and `ObservedStateFlowTests.swift` import `FlowHotStreams`. `ViewExtensionsTests.swift` imports `FlowSharedModels`. `FlowObservingTests.swift`, `ObservedStateFlowTests.swift`, and `ViewExtensionsTests.swift` import `FlowSwiftUI`. `AppKitBridgeTests.swift` and `UIKitBridgeTests.swift` import `FlowUIKitBridge`.
 
 ### Clock arguments that default to ContinuousClock
 
@@ -153,4 +171,4 @@ A doc comment on the type, or on a sibling overload, does not cover the declarat
 
 ### Known gap
 
-No test in `Tests/` walks the target graph. Nothing fails the build when a module imports outward, or when a file imports a target that `Package.swift` does not list.
+Nothing fails the build when a file imports a target that `Package.swift` does not list.
