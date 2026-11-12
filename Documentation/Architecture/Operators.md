@@ -2,24 +2,26 @@
 
 Operators live in `Sources/Core/FlowOperators`. The target depends on `FlowCore` and on AsyncAlgorithms. An operator returns a new `Flow` or `ThrowingFlow`. Its body collects the upstream and emits downstream. Nothing in the chain runs until some outer `collect`.
 
-Most operators exist on both `Flow` and `ThrowingFlow`. The terminal operations `first`, `first(where:)`, `contains(where:)`, `allSatisfy`, `toArray`, `reduce`, `exactlyOne`, `collectLatest`, `last`, and `count` are on `Flow`. `prefix` is on both.
+Most operators exist on both `Flow` and `ThrowingFlow`. The terminal operations `first`, `first(where:)`, `contains(where:)`, `allSatisfy`, `toArray`, `reduce`, `exactlyOne`, `collectLatest`, `last`, and `count` are on `Flow`. So are `flatMap(maxConcurrent:)`, `buffer(size:policy:)`, `bufferUnbounded()`, and `keepingLatest()`. `prefix` is on both.
 
 The name-by-name map from Kotlin Flow is the catalogue article [Kotlin Flow migration](https://developerbeau.github.io/FlowKit/documentation/flow/kotlinflowmigration). The groups below are the files.
 
 | File | Operations |
 |---|---|
 | `Transform.swift` | `map`, `mapThrowing`, `compactMap`, `filter`, `filterIsInstance`, `transform`, `prefix`, `prefix(while:)`, `drop`, `dropFirst`, `scan`, `enumerated`, `chunks(ofCount:)` |
-| `Flattening.swift` | `flatMap`, `flatMap(maxConcurrent:)`, `flatMapLatest`, `mapLatest`, `transformLatest` |
-| `Combining.swift` | `zip`, `combineLatest` (two through six upstreams), `merge` |
+| `Flattening.swift` | `flatMap`, `flatMapLatest`, `mapLatest`, `transformLatest` on both. `flatMap(maxConcurrent:)` on `Flow` only |
+| `Combining.swift` | `zip`, `combineLatest` (two through six upstreams), `merge`. This file is the one that imports AsyncAlgorithms |
 | `Lifecycle.swift` | `onStart`, `onEach`, `onCompletion`, `onEmpty` |
 | `ErrorHandling.swift` | `catch`, `retry`, `retryWhen` |
 | `RateLimiting.swift` | `debounce`, `throttle`, `removeDuplicates`, `sample` |
-| `Buffering.swift` | `buffer(size:policy:)`, `bufferUnbounded`, `keepingLatest` |
+| `Buffering.swift` | `buffer(size:policy:)`, `bufferUnbounded()`, `keepingLatest()`, all on `Flow` only |
 | `Timeout.swift` | `timeout(for:clock:)` |
 | `Terminal.swift` | the `Flow` terminals listed above, plus `ExactlyOneError` |
 | `MigrationShims.swift` | unavailable RxSwift and Combine names |
 
 `debounce`, `throttle`, `sample`, and `timeout` take a `Clock` and default it to `ContinuousClock()`. `retry` and `retryWhen` do not take a clock. A backoff delay is whatever the `retryWhen` predicate does.
+
+`Combining.swift` is the only operator file that imports AsyncAlgorithms (`internal import AsyncAlgorithms`). It uses that for `zip` and `combineLatest`. That import is why `FlowOperators` depends on the package. `import Flow` still links it, because the umbrella re-exports `FlowOperators`. `AsyncSequenceBridge.swift` does not import it.
 
 `timeout(for:clock:)` on `Flow` returns a `ThrowingFlow` and fails with `FlowTimeoutError` when the gap between values, including the gap before the first value, exceeds `duration`. On `ThrowingFlow` the upstream error still propagates.
 

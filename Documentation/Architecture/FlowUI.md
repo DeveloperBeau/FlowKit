@@ -22,6 +22,6 @@ The collection task captures the source and a weak reference to the observer. A 
 
 `UIViewController.flowScope` is a `FlowScope` stored as an associated object, created on first access. The key is a private stateless global. Releasing the view controller releases the scope, and the scope's `deinit` cancels its tasks. The file is compiled where UIKit exists and the target is not watchOS.
 
-`collect` on a `StateFlow` or a `Flow` runs `onEach`, hops the action to the main actor, and `launch`es in `flowScope`. The `onEach` call is why these files import `FlowOperators`.
+On `UIViewController` and `NSViewController`, `collect` for a `StateFlow` or a `Flow` runs `onEach`, hops the action to the main actor, and `launch`es in `flowScope`. The `onEach` call is why these files import `FlowOperators`.
 
-`NSViewController` and `NSWindowController` have the same `flowScope` and `collect` surface, compiled where AppKit exists and the target is not Mac Catalyst. Each controller type has its own associated-object key.
+`NSViewController` has `flowScope` and `collect`. `NSWindowController` has `flowScope` only. Both are compiled where AppKit exists and the target is not Mac Catalyst. Each controller type has its own associated-object key.

@@ -50,7 +50,7 @@ The targets inside those products, as `Package.swift` declares them:
 
 An automated architecture test that fails the build when a target imports outward is not in the repo.
 
-One public type per file, and the file is named after that type. There is no hidden global state. A required dependency is an argument of the initializer or the method that uses it. Time passes only through a `Clock`. One type owns each decision: `MutableStateFlow` owns its current value, `MutableSharedFlow` owns its replay buffer, `SharingCoordinator` owns when a shared upstream starts and stops, `FlowScope` owns the tasks launched in it, and `TestClock` owns its instant. A new third-party dependency needs the owner's approval before it is added.
+One public type per file, and the file is named after that type. There is no hidden global state. A required dependency is an argument of the initializer or the method that uses it, and that argument has no default. Time passes only through a `Clock`. One type owns each decision: `MutableStateFlow` owns its current value, `MutableSharedFlow` owns its replay buffer, `SharingCoordinator` owns when a shared upstream starts and stops, `FlowScope` owns the tasks launched in it, and `TestClock` owns its instant. A new third-party dependency needs the owner's approval before it is added.
 
 The third-party packages already in `Package.swift` are `swift-async-algorithms` 1.1.5 (used by `FlowOperators`), `swift-docc-plugin` 1.5.0 (documentation tooling), and `swift-crypto` 5.0.0 (the `FlowSimulationTests` target only).
 
@@ -108,7 +108,21 @@ Operator and builder files group many public methods by behaviour. They are `Flo
 
 ### Dependency declared in source and not in the package manifest
 
-`Sources/UI/FlowUIKitBridge/UIViewControllerExtensions.swift` and `Sources/UI/FlowUIKitBridge/AppKitExtensions.swift` import `FlowOperators` so they can call `onEach`. `Package.swift` does not list `FlowOperators` on `FlowUIKitBridge`. The import points inward. Those files are compiled only where UIKit or AppKit is present.
+Every import below points inward. `Package.swift` does not list the imported target on the importing target. An architecture test would catch these, and none is in the repo.
+
+- `FlowUIKitBridge` imports `FlowOperators` from `Sources/UI/FlowUIKitBridge/UIViewControllerExtensions.swift` and `Sources/UI/FlowUIKitBridge/AppKitExtensions.swift`, so those files can call `onEach`. The declared dependencies are `FlowCore` and `FlowHotStreams`. Those files are compiled only where UIKit or AppKit is present.
+- `FlowOperators` imports `FlowSharedModels` from `Timeout.swift`, `Buffering.swift`, `Lifecycle.swift`, `Terminal.swift`, `Transform.swift`, and `RateLimiting.swift`. The declared dependencies are `FlowCore` and AsyncAlgorithms.
+- `Sources/Testing/FlowTesting/FlowTesting.swift` has `@_exported import FlowSharedModels`. The declared dependencies are `FlowTestClock` and `FlowTestingCore`.
+- `FlowTestingCore` imports `FlowSharedModels` from `TimeoutHelpers.swift`, `Testers/FlowTester.swift`, `Testers/FlowTesterBase.swift`, and `Testers/ThrowingFlowTester.swift`. The declared dependencies are `Flow` and `FlowTestClock`.
+
+### Clock arguments that default to ContinuousClock
+
+A required clock is an argument, and the rule gives that argument no default. Removing these defaults would change published call sites, so they stay.
+
+- `Flow.asStateFlow(initialValue:strategy:clock:)` and `Flow.asSharedFlow(replay:strategy:clock:)` in `Sources/Core/FlowHotStreams/Sharing.swift` default `clock` to `ContinuousClock()`.
+- `debounce(for:clock:)`, `throttle(for:latest:clock:)`, and `sample(every:clock:)` on `Flow` and on `ThrowingFlow`, in `Sources/Core/FlowOperators/RateLimiting.swift`, default `clock` to `ContinuousClock()`.
+- `timeout(for:clock:)` on `Flow` and on `ThrowingFlow`, in `Sources/Core/FlowOperators/Timeout.swift`, defaults `clock` to `ContinuousClock()`.
+- The deprecated real-clock helpers do not take a clock. They pass `ContinuousClock()` inside the method: `Flow.test(timeout:_:)`, `ThrowingFlow.test(timeout:_:)`, `TestScope.run(timeout:_:)`, `withThrowingTimeout(_:_:)`, and `waitUntil(timeout:_:)`. The `clock:` overloads of those helpers require the clock.
 
 ### Public declarations with no doc comment of their own
 
@@ -139,4 +153,4 @@ A doc comment on the type, or on a sibling overload, does not cover the declarat
 
 ### Known gap
 
-No test in `Tests/` walks the target graph and fails when a module imports outward.
+No test in `Tests/` walks the target graph. Nothing fails the build when a module imports outward, or when a file imports a target that `Package.swift` does not list.

@@ -18,4 +18,4 @@ The stream has one consumer, like any `AsyncStream`. Iterate it inside structure
 
 Cancellation follows the sequence's iterator. A sequence that never suspends and never checks cancellation is not interrupted mid-iteration.
 
-This bridge is why `FlowOperators` depends on AsyncAlgorithms. Callers that only need `AsyncStream` still get that dependency through the `Flow` product, because the umbrella re-exports `FlowOperators`.
+`AsyncSequenceBridge.swift` does not import AsyncAlgorithms. The package dependency is for `zip` and `combineLatest`, which is covered on the [operators](Operators.md) page.
