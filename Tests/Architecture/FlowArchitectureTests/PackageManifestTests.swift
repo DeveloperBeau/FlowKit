@@ -1,4 +1,3 @@
-import Foundation
 import Testing
 
 /// Checks that a dependency list is read in full, or the parse fails by name.
@@ -178,7 +177,7 @@ private func namelessTargetCall(in body: String) -> String {
 
 /// Swaps one call, including a nested condition, for a call that omits `name:`.
 private func replacingFirstCall(in body: String, prefix: String, with replacement: String) -> String {
-    guard let start = body.range(of: prefix) else { return body }
+    guard let start = body.firstRange(of: prefix) else { return body }
     var depth = 0
     var index = start.lowerBound
     while index < body.endIndex {
@@ -189,7 +188,9 @@ private func replacingFirstCall(in body: String, prefix: String, with replacemen
             depth -= 1
             if depth == 0 {
                 let end = body.index(after: index)
-                return body.replacingCharacters(in: start.lowerBound..<end, with: replacement)
+                var updated = body
+                updated.replaceSubrange(start.lowerBound..<end, with: replacement)
+                return updated
             }
         }
         index = body.index(after: index)
