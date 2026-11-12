@@ -67,6 +67,20 @@ struct PackageManifestTests {
         #expect(names == ["FlowSharedModels"])
     }
 
+    @Test("A block comment with a star or a nested comment hides its entries")
+    func blockCommentWithStarOrNestHidesEntries() throws {
+        let source = manifest(dependencies: """
+            "FlowSharedModels",
+            /* *old* "FlowTestClock", */
+            /* outer /* inner */ .target(name: "FlowCore"), */
+            """)
+        let names = try PackageTarget.parseManifest(source)
+            .first { $0.name == "FlowCore" }?
+            .dependencies
+            .map(\.name)
+        #expect(names == ["FlowSharedModels"])
+    }
+
     @Test("Seeded fuzz of dependency lists accepts valid forms and rejects corrupt ones")
     func seededFuzzOfDependencyLists() {
         print("Package manifest fuzz seed: \(Self.fuzzSeed)")
@@ -113,25 +127,41 @@ struct PackageManifestTests {
                     }
                 }
             }
-            let gapComment = generator.next() % 2 == 0 ? "\n// note\n" : "\n/* block\n   comment */\n"
+            let gapComment: String
+            switch Int(generator.next() % 4) {
+            case 0:
+                gapComment = "\n// note\n"
+            case 1:
+                gapComment = "\n/* *block*\n   comment */\n"
+            case 2:
+                gapComment = "\n/* outer /* inner */ note */\n"
+            default:
+                gapComment = "\n/* block\n   comment */\n"
+            }
             let listed = entries.joined(separator: ",\(gapComment)")
             let lineHidden = "SkipLine\(index)"
             let blockHidden = "SkipBlock\(index)"
+            let starHidden = "SkipStar\(index)"
+            let nestHidden = "SkipNest\(index)"
             let productHidden = "SkipProduct\(index)"
             let lineKind = Int(generator.next() % 2)
             let blockKind = Int(generator.next() % 2)
             let productComment = generator.next() % 2 == 0
                 ? "// .product(name: \"\(productHidden)\", package: \"hidden\")"
                 : "/* .product(name: \"\(productHidden)\", package: \"hidden\") */"
+            let starComment = "/* *old* \"\(starHidden)\", */"
+            let nestComment = "/* outer /* inner */ .target(name: \"\(nestHidden)\") */"
             let shaped = """
             \(commentedEntry(name: lineHidden, kind: lineKind, block: false))
             \(commentedEntry(name: blockHidden, kind: blockKind, block: true))
+            \(starComment)
+            \(nestComment)
             \(productComment)
             """
             let body = listed + ",\n" + shaped
             let trailing = generator.next() % 2 == 0 ? "," : ""
             let valid = manifest(dependencies: body + trailing)
-            let hidden = [lineHidden, blockHidden, productHidden]
+            let hidden = [lineHidden, blockHidden, starHidden, nestHidden, productHidden]
             do {
                 let parsed = try PackageTarget.parseManifest(valid)
                 let found = parsed.first { $0.name == "FlowCore" }?.dependencies.map(\.name) ?? []

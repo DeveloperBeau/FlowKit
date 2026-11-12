@@ -27,6 +27,20 @@ struct SwiftImportScannerTests {
         #expect(SwiftImport.scan(mixed).map(\.moduleName) == ["Foundation"])
     }
 
+    @Test("A block comment with a star or a nested comment hides its import")
+    func blockCommentWithStarOrNestHidesImport() {
+        let source = """
+        /* *
+        import FlowUI
+        */
+        /* outer
+        /* inner */
+        import FlowUI
+        */
+        """
+        #expect(SwiftImport.scan(source).isEmpty)
+    }
+
     @Test("Named import forms keep the module and the line")
     func namedImportForms() {
         let accepted: [(String, [String])] = [
@@ -96,8 +110,16 @@ struct SwiftImportScannerTests {
                     }
                     pieces.append(path)
                     var line = pieces.joined(separator: gap)
-                    if generator.next() % 2 == 0 {
+                    let decoy = "D\(generator.next() % 100_000)"
+                    switch Int(generator.next() % 4) {
+                    case 0:
+                        line = "/* *\nimport \(decoy)\n*/\n" + line
+                    case 1:
+                        line = "/* outer\n/* inner */\nimport \(decoy)\n*/\n" + line
+                    case 2:
                         line = "/* note */ " + line
+                    default:
+                        break
                     }
                     if generator.next() % 2 == 0 {
                         line = "// leading\n" + line
@@ -119,6 +141,8 @@ struct SwiftImportScannerTests {
             let templates = [
                 "// import \(name)",
                 "/* import \(name) */",
+                "/* *old* import \(name) */",
+                "/* outer /* inner */ import \(name) */",
                 "\"import \(name)\"",
                 "let \(name) = \"import \(name)\"",
                 "func \(name)() {}",
