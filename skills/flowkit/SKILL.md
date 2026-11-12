@@ -8,7 +8,7 @@ description: How FlowKit flows behave in code that uses them. Use when you write
 FlowKit gives Swift a cold stream type (`Flow`, `ThrowingFlow`) and two hot types
 (`MutableStateFlow`, `MutableSharedFlow`). The facts below come from the source and the tests
 of the package. Products: `Flow` (core and operators), `FlowTesting` (test helpers),
-`FlowUI` (SwiftUI and UIKit bindings).
+`FlowUI` (SwiftUI, UIKit and AppKit bindings).
 
 ## Flow is not AsyncStream
 
@@ -28,8 +28,10 @@ of the package. Products: `Flow` (core and operators), `FlowTesting` (test helpe
   `receive(on:)` and `subscribeOn` are unavailable. Isolate the collecting side with an actor
   or `@MainActor`.
 - Bridge: `flow.asAsyncStream()` collects in a new task, buffers without limit and cancels
-  the collection when the consumer stops. A `Sendable` `AsyncSequence` becomes a flow with
-  `asFlow()` (when it cannot fail) or `asThrowingFlow()`.
+  the collection when the consumer stops. A `Sendable` `AsyncSequence` of `Sendable` values
+  becomes a `ThrowingFlow` with `asThrowingFlow()`. `AsyncSequence.asFlow()` needs
+  `Failure == Never`. It is available on iOS 18+, macOS 15+, tvOS 18+, watchOS 11+ and
+  visionOS 2+.
 
 ## Operators: which return early
 
@@ -48,16 +50,18 @@ of the package. Products: `Flow` (core and operators), `FlowTesting` (test helpe
 | `flatMapLatest`, `mapLatest`, `transformLatest` | Cancel the previous inner work when a new value comes | Inner only |
 | `timeout(for:clock:)` | Throws `FlowTimeoutError` when the gap between values (and before the first) is too long. On `Flow` it returns a `ThrowingFlow` | Yes, on timeout |
 
+`first`, `contains`, `allSatisfy`, `toArray`, `last`, `count`, `reduce`, `exactlyOne` and `collectLatest` are on `Flow`.
+
 > **Note.** In 2.4.1 and earlier, `first()`, `first(where:)`, `contains(where:)`,
-> `allSatisfy(_:)`, `prefix(_:)` and `prefix(while:)` keep the first value but continue to
-> collect until the flow completes. On a flow that stays open, they never return. Since the
-> release that contains the fix, they cancel the upstream and wait for its teardown (for
-> example `awaitClose`) before they return. On an earlier version, put a timeout around them.
+> `allSatisfy(_:)`, `prefix(_:)` and `prefix(while:)` do not cancel the upstream.
+> They keep collecting until the flow completes. On a flow that stays open, they never
+> return. Since 2.4.2, they cancel the upstream and wait for its teardown (for example
+> `awaitClose`) before they return. On an earlier version, put a timeout around them.
 
 - A flow that never emits and never completes keeps `first()` suspended forever. That is a
   property of the flow. Wrap the call in a timeout when the source can stay silent.
 - Cancellation is cooperative. An operator that cancels the upstream also waits for it to
-  end, so a producer that ignores cancellation keeps the operator suspended.
+  end. A producer that ignores cancellation keeps the operator suspended.
 
 ## callbackFlow and channelFlow
 
@@ -79,7 +83,7 @@ let locations = Flow<CLLocation>.callbackFlow { scope in
   assertion fails if it returns without one of them.
 - A `callbackFlow` that emits and then parks on `awaitClose` never completes. `toArray()`,
   `last()` and a `collect` to the end never return on it. `first()` returns after one value
-  (since the fix).
+  (since 2.4.2).
 
 ## Hot flows
 
@@ -88,20 +92,22 @@ let locations = Flow<CLLocation>.callbackFlow { scope in
 | `MutableStateFlow(initial)` | One current value, read and written synchronously through `value` | The current value, then each distinct change | Never |
 | `MutableSharedFlow(replay: n)` | The last `n` values | The replay, then new values | Never |
 
-- `MutableStateFlow` needs `Element: Equatable`. Setting an equal value does nothing, so
-  collectors do not see it. Use `update`, `getAndUpdate`, `updateAndGet` or `compareAndSet`
+- `MutableStateFlow` needs `Element: Equatable`. Setting an equal value does nothing.
+  Collectors do not see it. Use `update`, `getAndUpdate`, `updateAndGet` or `compareAndSet`
   for read-modify-write.
 - `MutableSharedFlow.emit` sends only to the collectors attached at that time. With
   `replay: 0`, a value emitted before a collector attaches is lost.
 - `MutableSharedFlow` with `onBufferOverflow: .suspend` (the default) does not backpressure.
   The buffer of each subscriber is unbounded. `.dropOldest` and `.dropLatest` bound it to
-  `replay + extraBufferCapacity`.
+  `replay + extraBufferCapacity` when that sum is greater than zero. A sum of zero stays
+  unbounded.
 - Read a hot flow with `.asFlow()`. Because hot flows never complete, use `first()`,
   `prefix(_:)` or a cancelled task to stop. `toArray()` on a hot flow never returns.
-- `asStateFlow(initialValue:strategy:clock:)` and `asSharedFlow(replay:strategy:clock:)`
-  share one upstream collection between collectors. `SharingStrategy`: `.eager` starts at
-  once, `.lazy` starts on the first collector and does not stop, `.whileSubscribed(stopTimeout:replayExpiration:)`
-  (the default, both `.zero`) stops the upstream after the last collector leaves.
+- `asStateFlow(initialValue:strategy:clock:)` needs `Element: Equatable`. It and
+  `asSharedFlow(replay:strategy:clock:)` share one upstream collection between collectors.
+  `.eager` starts at once. `.lazy` starts on the first collector and does not stop.
+  `.whileSubscribed(stopTimeout:replayExpiration:)` is the default. Both durations
+  default to `.zero`. The upstream then stops when the last collector leaves.
 - With `.whileSubscribed` and `replayExpiration: .zero`, `asSharedFlow` clears its replay
   when the last collector leaves. `asStateFlow` keeps its value.
 
@@ -120,16 +126,17 @@ let locations = Flow<CLLocation>.callbackFlow { scope in
 - FlowUI actions (`ViewExtensions`, `UIViewControllerExtensions`, `AppKitExtensions`) are
   `@MainActor`. Core operators do not change isolation.
 - `FlowScope` holds tasks. `flow.launch(in: scope)` collects in a task of the scope and
-  discards the values, so put the work in `onEach`. `scope.cancel()` cancels all the tasks.
+  discards the values. Put the work in `onEach`. A `ThrowingFlow` swallows errors there.
+  Handle them with `catch` first. `scope.cancel()` cancels all the tasks.
 
 ## Testing without sleeps (`FlowTesting`)
 
 | API | What it does |
 |---|---|
 | `flow.probing { reader in ... }` | Collects in a task and gives a `FlowReader`. `expectValue`, `expectNextValue`, `expectCompletion`, `expectError` suspend on the next event of the flow, with no deadline. The collection is cancelled when the block exits. Preferred. |
-| `TestClock` | A `Clock` that moves only when the test calls `advance(by:)` or `advance(to:)`. `waitForSleepers(_:)` waits until that many sleeps are registered. Pass it to `debounce`, `throttle`, `sample`, `timeout`, `retry` and the sharing strategies. |
+| `TestClock` | A `Clock` that moves only when the test calls `advance(by:)` or `advance(to:)`. `waitForSleepers(_:)` waits until that many sleeps are registered. Pass it to `debounce`, `throttle`, `sample`, `timeout`, `asStateFlow` and `asSharedFlow`. |
 | `withThrowingTimeout(_:clock:_:)` | Runs a body and throws `FlowTestError.timeout` when the clock passes the duration. With a `TestClock` the deadline moves only on `advance`. The form without `clock:` uses real time, scaled by `FLOWKIT_TIMEOUT_SCALE`. |
-| `flow.test(timeout:clock:_:)` | Gives a `FlowTester` (`expectValue`, `expectNoValue(within:)`, `expectCompletion`, `receivedValues`). Use it when the test must prove that nothing arrived in a time. The form without `clock:` is deprecated. |
+| `flow.test(timeout:clock:_:)` | Gives a `FlowTester` (`expectValue`, `expectNoValue(within:)`, `expectCompletion`, `receivedValues`), or a `ThrowingFlowTester` for a `ThrowingFlow`. Use it when the test must prove that nothing arrived. `expectNoValue(within:)` measures that gap on the real clock. The form without `clock:` is deprecated. |
 | `TestScope.run(timeout:clock:_:)` | Collects more than one flow, each with its own tester, and cancels all of them at the end. The form without `clock:` is deprecated. |
 | `FlowProbe` | Records values and `waitForValue(where:)` suspends until one matches. `flow.tap(after: probe)` records the values that pass. |
 | `waitUntil(timeout:clock:_:)` | Polls a condition. The form without `clock:` is deprecated. Prefer `probing` or `waitForSubscribers`. |
@@ -145,7 +152,7 @@ All of these come from the source code above.
 | Trap | Wrong | Right |
 |---|---|---|
 | Wait for completion of an open flow | `await callbackFlow.toArray()` | `await callbackFlow.prefix(3).toArray()` |
-| Silent source | `await silent.first()` | `try await withThrowingTimeout(.seconds(5)) { await silent.first() }` |
+| Silent source | `await silent.first()` | Start `withThrowingTimeout(.seconds(5), clock: clock)` on a `TestClock` in a task. `try await clock.waitForSleepers(1)`, then `await clock.advance(by: .seconds(5))`. |
 | Emit before a collector attaches | `await shared.emit(1); Task { await shared.asFlow().collect { ... } }` | Start the collector, `try await shared.waitForSubscribers(1)`, then emit. |
 | Expect a repeat on a state flow | `state.value = 1; state.value = 1` and expect two values | One value. Equal values are dropped. |
 | Expect `.suspend` to slow a shared emitter | `MutableSharedFlow(onBufferOverflow: .suspend)` | Use `buffer(size:policy: .suspend)` on a cold flow, or `channelFlow(onBufferOverflow: .suspend)` with `send`. |
