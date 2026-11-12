@@ -2,17 +2,17 @@
 
 Operators live in `Sources/Core/FlowOperators`. The target depends on `FlowCore` and on AsyncAlgorithms. An operator returns a new `Flow` or `ThrowingFlow`. Its body collects the upstream and emits downstream. Nothing in the chain runs until some outer `collect`.
 
-Most operators exist on both `Flow` and `ThrowingFlow`. The terminal operations `first`, `first(where:)`, `contains(where:)`, `allSatisfy`, `toArray`, `reduce`, `exactlyOne`, `collectLatest`, `last`, and `count` are on `Flow`. So are `flatMap(maxConcurrent:)`, `buffer(size:policy:)`, `bufferUnbounded()`, and `keepingLatest()`. `prefix` is on both.
+Most operators exist on both `Flow` and `ThrowingFlow`. The terminal operations `first`, `first(where:)`, `contains(where:)`, `allSatisfy`, `toArray`, `reduce`, `exactlyOne`, `collectLatest`, `last`, and `count` are on `Flow`. So are `mapThrowing`, `flatMap(maxConcurrent:)`, `buffer(size:policy:)`, `bufferUnbounded()`, and `keepingLatest()`. `catch`, `retry`, and `retryWhen` are on `ThrowingFlow`. `prefix` is on both.
 
 The name-by-name map from Kotlin Flow is the catalogue article [Kotlin Flow migration](https://developerbeau.github.io/FlowKit/documentation/flow/kotlinflowmigration). The groups below are the files.
 
 | File | Operations |
 |---|---|
-| `Transform.swift` | `map`, `mapThrowing`, `compactMap`, `filter`, `filterIsInstance`, `transform`, `prefix`, `prefix(while:)`, `drop`, `dropFirst`, `scan`, `enumerated`, `chunks(ofCount:)` |
+| `Transform.swift` | `map`, `compactMap`, `filter`, `filterIsInstance`, `transform`, `prefix`, `prefix(while:)`, `drop`, `dropFirst`, `scan`, `enumerated`, `chunks(ofCount:)` on both. `mapThrowing` on `Flow` only |
 | `Flattening.swift` | `flatMap`, `flatMapLatest`, `mapLatest`, `transformLatest` on both. `flatMap(maxConcurrent:)` on `Flow` only |
 | `Combining.swift` | `zip`, `combineLatest` (two through six upstreams), `merge`. This file is the one that imports AsyncAlgorithms |
 | `Lifecycle.swift` | `onStart`, `onEach`, `onCompletion`, `onEmpty` |
-| `ErrorHandling.swift` | `catch`, `retry`, `retryWhen` |
+| `ErrorHandling.swift` | `catch`, `retry`, `retryWhen`, all on `ThrowingFlow` only |
 | `RateLimiting.swift` | `debounce`, `throttle`, `removeDuplicates`, `sample` |
 | `Buffering.swift` | `buffer(size:policy:)`, `bufferUnbounded()`, `keepingLatest()`, all on `Flow` only |
 | `Timeout.swift` | `timeout(for:clock:)` |

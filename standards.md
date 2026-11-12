@@ -113,7 +113,7 @@ Every import below points inward. `Package.swift` does not list the imported tar
 - `FlowUIKitBridge` imports `FlowOperators` from `Sources/UI/FlowUIKitBridge/UIViewControllerExtensions.swift` and `Sources/UI/FlowUIKitBridge/AppKitExtensions.swift`, so those files can call `onEach`. The declared dependencies are `FlowCore` and `FlowHotStreams`. Those files are compiled only where UIKit or AppKit is present.
 - `FlowOperators` imports `FlowSharedModels` from `Timeout.swift`, `Buffering.swift`, `Lifecycle.swift`, `Terminal.swift`, `Transform.swift`, and `RateLimiting.swift`. The declared dependencies are `FlowCore` and AsyncAlgorithms.
 - `Sources/Testing/FlowTesting/FlowTesting.swift` has `@_exported import FlowSharedModels`. The declared dependencies are `FlowTestClock` and `FlowTestingCore`.
-- `FlowTestingCore` imports `FlowSharedModels` from `TimeoutHelpers.swift`, `Testers/FlowTester.swift`, `Testers/FlowTesterBase.swift`, and `Testers/ThrowingFlowTester.swift`. The declared dependencies are `Flow` and `FlowTestClock`.
+- `FlowTestingCore` imports `FlowSharedModels` from `TimeoutHelpers.swift`, `Testers/FlowTester.swift`, `Testers/FlowTesterBase.swift`, and `Testers/ThrowingFlowTester.swift`. The same target imports `FlowCore` from `TestScope.swift`, `Testers/FlowProbe.swift`, `Testers/FlowReader.swift`, `Testers/FlowTestExtensions.swift`, `Testers/FlowTester.swift`, and `Testers/ThrowingFlowTester.swift`. The declared dependencies are `Flow` and `FlowTestClock`. `Flow` re-exports both modules.
 
 ### Clock arguments that default to ContinuousClock
 
@@ -122,7 +122,7 @@ A required clock is an argument, and the rule gives that argument no default. Re
 - `Flow.asStateFlow(initialValue:strategy:clock:)` and `Flow.asSharedFlow(replay:strategy:clock:)` in `Sources/Core/FlowHotStreams/Sharing.swift` default `clock` to `ContinuousClock()`.
 - `debounce(for:clock:)`, `throttle(for:latest:clock:)`, and `sample(every:clock:)` on `Flow` and on `ThrowingFlow`, in `Sources/Core/FlowOperators/RateLimiting.swift`, default `clock` to `ContinuousClock()`.
 - `timeout(for:clock:)` on `Flow` and on `ThrowingFlow`, in `Sources/Core/FlowOperators/Timeout.swift`, defaults `clock` to `ContinuousClock()`.
-- The deprecated real-clock helpers do not take a clock. They pass `ContinuousClock()` inside the method: `Flow.test(timeout:_:)`, `ThrowingFlow.test(timeout:_:)`, `TestScope.run(timeout:_:)`, `withThrowingTimeout(_:_:)`, and `waitUntil(timeout:_:)`. The `clock:` overloads of those helpers require the clock.
+- The deprecated real-clock helpers do not take a clock. They pass `ContinuousClock()` inside the method: `Flow.test(timeout:_:)`, `ThrowingFlow.test(timeout:_:)`, `TestScope.run(timeout:_:)`, `withThrowingTimeout(_:_:)`, and `waitUntil(timeout:_:)`. The `clock:` overloads of those helpers require the clock. No other public `clock` parameter defaults to `ContinuousClock()`.
 
 ### Public declarations with no doc comment of their own
 
