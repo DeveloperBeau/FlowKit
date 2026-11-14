@@ -136,15 +136,15 @@ let locations = Flow<CLLocation>.callbackFlow { scope in
 
 ## FlowUI
 
-Add `import FlowUI`. The APIs are `@MainActor`, and the action closures run on the main actor.
+Add `import FlowUI`. The SwiftUI and controller APIs are `@MainActor`, and their action closures run on the main actor. `Flow(observing:)` is not `@MainActor`. It uses the isolation of the caller.
 
 | API | Use it when |
 |---|---|
-| `@CollectedState(stateFlow, animation:)` | A SwiftUI view shows the current value of a `StateFlow`. Give an initial value. `animation` is optional. |
+| `@CollectedState(stateFlow, animation:)` | A SwiftUI view shows the current value of a `StateFlow`. Give an initial value. `animation` is optional. It needs iOS 17, macOS 14, tvOS 17, watchOS 10 or visionOS 1 or later (`@available`). |
 | `View.collecting(_ flow:priority:action:)` | A SwiftUI view reacts to each value of a cold `Flow` (a side effect, not state). It collects while the view is on screen and cancels on disappear. |
 | `Flow(observing: root, \.keyPath)` | You need a `Flow` of an `@Observable` object's property. `Element: Equatable`. It observes on the actor that makes it. |
-| `UIViewController` / `NSViewController` `collect(_:action:)` | UIKit or AppKit code collects a `StateFlow` or a `Flow`. The work stops when the controller deallocates. |
-| `flowScope` on `UIViewController`, `NSViewController`, `NSWindowController` | You need a `FlowScope` tied to the controller: `flow.launch(in: flowScope)`. |
+| `UIViewController` / `NSViewController` `collect(_:action:)` | UIKit or AppKit code collects a `StateFlow` or a `Flow`. The work stops when the controller deallocates. The controller holds the scope, the scope holds the task, and the task holds the action, so capture `[weak self]` in the action. A strong `self` keeps the controller alive and the collection never stops. |
+| `flowScope` on `UIViewController`, `NSViewController`, `NSWindowController` | You need a `FlowScope` tied to the controller: `flow.launch(in: flowScope)`. The same cycle applies, so capture `[weak self]` in `onEach`. |
 
 ```swift
 struct SessionView: View {
