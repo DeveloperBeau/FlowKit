@@ -2,6 +2,34 @@
 
 All notable changes to FlowKit are documented here.
 
+## 2.4.3 - 2026-11-15
+
+### Changed
+
+- Linux CI and both Android jobs use Swift 6.4.2. The Linux job moved from Swift 6.3.
+  The Android cross-compile job and the nightly emulator moved from Swift 6.3.3. Swift
+  6.3.3 has no Ubuntu 26.04 toolchain, so resolve-swift and swift-android-action fail on
+  ubuntu-latest. 6.4.2 is the newest stable release that publishes that toolchain and an
+  Android SDK bundle. The cross-compile job reads its build directory from
+  `swift build --show-bin-path` instead of `.build/<triple>/release`, which Swift 6.4
+  no longer writes. The public API is unchanged.
+
+### Added
+
+- `FlowArchitectureTests` reads `Package.swift` and the source imports. It fails the suite
+  when a target depends outward or sideways across the module rings.
+- `standards.md` states the project rules. `Documentation/Architecture/` describes how the
+  modules fit together, one page per subsystem. `Documentation/Learnings/` records traps
+  taken from the changelog. The README points at these notes. The DocC catalogue stays the
+  API reference.
+
+### Fixed
+
+- `skills/flowkit/SKILL.md` matches the 2.4.2 API. It names 2.4.2 as the release where
+  `first()`, `first(where:)`, `contains(where:)`, `allSatisfy(_:)`, `prefix(_:)` and
+  `prefix(while:)` cancel the upstream, marks the APIs that exist only on `Flow`, and
+  corrects the testing and bridge notes. The silent-source timeout example compiles again.
+
 ## 2.4.2 — 2026-11-04
 
 ### Fixed
