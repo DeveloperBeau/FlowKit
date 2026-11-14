@@ -204,6 +204,14 @@ let package = Package(
             dependencies: ["FlowUI", "FlowTesting", "FlowTestSupport"],
             path: "Tests/UI/FlowUITests",
             swiftSettings: strictSettings
+        ),
+
+        // Fails the suite when a target depends outward or sideways.
+        .testTarget(
+            name: "FlowArchitectureTests",
+            dependencies: [],
+            path: "Tests/Architecture/FlowArchitectureTests",
+            swiftSettings: strictSettings
         )
     ]
 )
