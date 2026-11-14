@@ -53,7 +53,7 @@ jobs:
           persist-credentials: false
       - uses: DeveloperBeau/resolve-swift@f4122380a88b950040d16c59b9dacec63b4f482c  # v2
         with:
-          swift-version: '6.3'
+          swift-version: '6.4.2'
       - name: Show Swift version
         run: swift --version
       - name: Build non-UI targets (release config)
@@ -78,16 +78,16 @@ jobs:
   #
   # The Swift SDK for Android requires an open-source host toolchain whose
   # version matches the SDK bundle EXACTLY. resolve-swift short-circuits on a
-  # prefix match, so '6.3' could leave a 6.3.1 image toolchain in place against
-  # a 6.3.3 bundle; the pin below is exact and the next step asserts it, because
+  # prefix match, so '6.4' could leave a 6.4.1 image toolchain in place against
+  # a 6.4.2 bundle; the pin below is exact and the next step asserts it, because
   # the mismatch surfaces as an unrelated-looking module-format error.
   android:
     name: Android (cross-compile)
     runs-on: ubuntu-latest
     env:
-      SWIFT_VERSION: '6.3.3'
-      ANDROID_SDK_URL: 'https://download.swift.org/swift-6.3.3-release/android-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_android.artifactbundle.tar.gz'
-      ANDROID_SDK_CHECKSUM: 'd160cc3206dd1886dae3fef2337af5e25ec034692cd0ec225721c56cc69da7f5'
+      SWIFT_VERSION: '6.4.2'
+      ANDROID_SDK_URL: 'https://download.swift.org/swift-6.4.2-release/android-sdk/swift-6.4.2-RELEASE/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz'
+      ANDROID_SDK_CHECKSUM: '4d6ad63ea74becd58e123ff58b1b48c3be5ec0db0dff0ea5abe37ac007dd3233'
       NDK_VERSION: 'r27d'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -95,11 +95,11 @@ jobs:
           persist-credentials: false
       - uses: DeveloperBeau/resolve-swift@f4122380a88b950040d16c59b9dacec63b4f482c  # v2
         with:
-          swift-version: '6.3.3'
+          swift-version: '6.4.2'
       - name: Show Swift version
         run: swift --version
       # Substring match anchored on the literal "Swift version " prefix. Safe
-      # while the pin is 6.3.3, which is not a prefix of any other release; if
+      # while the pin is 6.4.2, which is not a prefix of any other release; if
       # the pin ever becomes one that is (e.g. 6.4 vs 6.4.1), add a trailing
       # space inside the quotes.
       - name: Require exact toolchain match
