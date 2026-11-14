@@ -154,8 +154,13 @@ jobs:
             echo "::group::$triple"
             swift build -j 2 -c release --swift-sdk "$triple" \
               --swift-sdks-path "$SWIFT_SDKS_PATH" --target Flow --target FlowTesting
-            obj="$(find ".build/$triple/release" -name '*.o' -print -quit)"
-            [ -n "$obj" ] || { echo "::error::no objects under .build/$triple/release — did --swift-sdk apply?"; exit 1; }
+            # 6.4 writes products under the path --show-bin-path reports, not
+            # .build/<triple>/release. Same flags as the build above.
+            bin="$(swift build -j 2 -c release --swift-sdk "$triple" \
+              --swift-sdks-path "$SWIFT_SDKS_PATH" --target Flow --target FlowTesting \
+              --show-bin-path)"
+            obj="$(find "$bin" -name '*.o' -print -quit || true)"
+            [ -n "$obj" ] || { echo "::error::no objects under $bin; did --swift-sdk apply?"; exit 1; }
             echo "$obj"
             file "$obj"
             file "$obj" | grep -q "$expected" || {
