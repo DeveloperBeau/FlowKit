@@ -43,7 +43,7 @@ jobs:
           persist-credentials: false
       - uses: skiptools/swift-android-action@2044b79660f201ccef8cbce62877e4ec5409f9c8  # v2.9.5
         with:
-          swift-version: '6.3.3'
+          swift-version: '6.4.2'
           # Must be the NDK's numeric directory version, not its release name:
           # the action resolves it with `ls $ANDROID_NDK_HOME/../<value>*`, and the
           # runner installs NDKs under numeric names. 'r27d' matched nothing, which
