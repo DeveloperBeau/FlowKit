@@ -28,7 +28,8 @@ All notable changes to FlowKit are documented here.
 - `skills/flowkit/SKILL.md` matches the 2.4.2 API. It names 2.4.2 as the release where
   `first()`, `first(where:)`, `contains(where:)`, `allSatisfy(_:)`, `prefix(_:)` and
   `prefix(while:)` cancel the upstream, marks the APIs that exist only on `Flow`, and
-  corrects the testing and bridge notes. The silent-source timeout example compiles again.
+  corrects the testing and bridge notes. The silent-source example uses a `TestClock` instead
+  of a real-clock timeout.
 
 ## 2.4.2 — 2026-11-04
 
