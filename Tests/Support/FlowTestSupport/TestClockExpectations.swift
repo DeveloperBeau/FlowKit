@@ -2,15 +2,16 @@ import FlowTestClock
 
 extension TestClock {
     /// Waits for `count` sleepers in its own task and reports whether the wait returned. The
-    /// bound is hops, not time, so a `waitForSleepers` that parks although the sleepers are
-    /// registered fails the assertion by name instead of hanging the run.
+    /// check parks on the push wait, so the scheduler can start the sleeper tasks as late as
+    /// it likes. A wall-clock safety net turns a `waitForSleepers` that never returns into a
+    /// named assertion failure instead of a hung run.
     package func registersSleepers(_ count: Int) async -> Bool {
         let returned = Signal()
         let waiter = Task {
             try await waitForSleepers(count)
             returned.fire()
         }
-        let didReturn = await returned.firesWithinHops()
+        let didReturn = await returned.fires()
         waiter.cancel()
         return didReturn
     }

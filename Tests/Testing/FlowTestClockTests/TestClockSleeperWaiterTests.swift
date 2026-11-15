@@ -25,6 +25,20 @@ struct TestClockSleeperWaiterTests {
         try await second.value
     }
 
+    @Test("registersSleepers waits for a sleeper that registers after many scheduler hops")
+    func registersLateSleeper() async throws {
+        let clock = TestClock()
+        // The sleeper yields 10 times the old hop budget before it registers. A wait that
+        // counts hops gives up first, and a wait that parks on the clock does not.
+        let late = Task {
+            for _ in 0..<10_000 { await Task.yield() }
+            try await clock.sleep(until: TestClock.Instant(offset: .seconds(1)), tolerance: nil)
+        }
+        try #require(await clock.registersSleepers(1), "the late sleeper never registered")
+        await clock.run()
+        try await late.value
+    }
+
     @Test("A count of zero or less returns with no sleepers")
     func zeroReturnsImmediately() async throws {
         let clock = TestClock()
@@ -144,9 +158,9 @@ struct TestClockSleeperWaiterTests {
     func noSleepersReturnsImmediately() async {
         let clock = TestClock()
         let waiter = startWaiter { try await clock.waitForNoSleepers() }
-        #expect(await waiter.returned.firesWithinHops(), "an empty clock kept the waiter parked")
+        #expect(await waiter.returned.fires(), "an empty clock kept the waiter parked")
         let atMost = startWaiter { try await clock.waitForSleepers(atMost: 3) }
-        #expect(await atMost.returned.firesWithinHops(), "atMost 3 parked on an empty clock")
+        #expect(await atMost.returned.fires(), "atMost 3 parked on an empty clock")
     }
 
     @Test("waitForNoSleepers resumes when an advance wakes the last sleeper")
@@ -162,11 +176,11 @@ struct TestClockSleeperWaiterTests {
         #expect(!(await atMostOne.returned.firesWithinHops()), "atMost 1 returned with 2 sleepers")
 
         await clock.advance(by: .seconds(1))
-        #expect(await atMostOne.returned.firesWithinHops(), "atMost 1 did not return after one sleeper woke")
+        #expect(await atMostOne.returned.fires(), "atMost 1 did not return after one sleeper woke")
         #expect(!(await none.returned.firesWithinHops()), "returned with 1 sleeper left")
 
         await clock.advance(by: .seconds(1))
-        #expect(await none.returned.firesWithinHops(), "did not return after the last sleeper woke")
+        #expect(await none.returned.fires(), "did not return after the last sleeper woke")
         try await first.value
         try await second.value
     }
@@ -181,7 +195,7 @@ struct TestClockSleeperWaiterTests {
         #expect(!(await none.returned.firesWithinHops()), "returned with a live sleeper")
 
         only.cancel()
-        #expect(await none.returned.firesWithinHops(), "did not return after the sleeper was cancelled")
+        #expect(await none.returned.fires(), "did not return after the sleeper was cancelled")
     }
 
     @Test("Cancelling a waitForNoSleepers waiter throws CancellationError")
@@ -200,7 +214,7 @@ struct TestClockSleeperWaiterTests {
         // rather than the cancelled-before-waiting check.
         for _ in 0..<200 { await Task.yield() }
         task.cancel()
-        #expect(await ended.firesWithinHops(), "a cancelled waiter stayed parked")
+        #expect(await ended.fires(), "a cancelled waiter stayed parked")
         #expect(thrown.withLock { $0 } is CancellationError)
 
         await clock.run()
