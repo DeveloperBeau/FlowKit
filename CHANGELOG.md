@@ -2,6 +2,27 @@
 
 All notable changes to FlowKit are documented here.
 
+## 2.4.4 - 2026-11-15
+
+### Fixed
+
+- `skills/flowkit/SKILL.md` covers FlowUI. A new section lists `@CollectedState`,
+  `View.collecting`, `Flow(observing:_:)`, and the controller `collect(_:action:)` and
+  `flowScope`. It has a SwiftUI example and a UIKit example. Both inject the model. The
+  section says which APIs are `@MainActor`. `Flow(observing:)` uses the caller's isolation.
+  It gives the `CollectedState` availability: iOS 17, macOS 14, tvOS 17, watchOS 10 and
+  visionOS 1. It warns to capture `[weak self]` in controller collection.
+  It also lists `TestClock.waitForSleepers(atMost:)` and `waitForNoSleepers()`. It adds
+  `first(where:)` to the APIs that exist only on `Flow`. It names the `Flow(of:)`,
+  `Flow.empty` and `Flow.never` builders.
+- The DocC articles match the current API. The examples lift to a `ThrowingFlow` with
+  `mapThrowing` before `flatMapLatest`. They use `buffer(size:policy:)`. They show a view
+  controller that owns its own `FlowScope`, and they cover `replayExpiration`. The Kotlin
+  migration guide notes that `MutableStateFlow.value` is settable. It also notes that
+  `combineLatest` takes 2 to 6 flows.
+
+The public API is unchanged.
+
 ## 2.4.3 - 2026-11-15
 
 ### Changed
