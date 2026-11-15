@@ -94,11 +94,11 @@ struct SubscriberWaiterTests {
         try await stream.withSubject { subject in
             // Zero is met by an empty stream.
             let none = startWaiter { try await subject.waitAtLeast(0) }
-            #expect(await none.returned.firesWithinHops(), "wait for 0 did not return on an empty stream")
+            #expect(await none.returned.fires(), "wait for 0 did not return on an empty stream")
 
             _ = await subject.attach()
             let exact = startWaiter { try await subject.waitAtLeast(1) }
-            #expect(await exact.returned.firesWithinHops(), "wait for 1 did not return with exactly 1 attached")
+            #expect(await exact.returned.fires(), "wait for 1 did not return with exactly 1 attached")
         }
     }
 
@@ -110,7 +110,7 @@ struct SubscriberWaiterTests {
             #expect(!(await waiter.returned.firesWithinHops()), "returned with 1 of 2 collectors")
 
             _ = await subject.attach()
-            #expect(await waiter.returned.firesWithinHops(), "did not return once the second collector attached")
+            #expect(await waiter.returned.fires(), "did not return once the second collector attached")
         }
     }
 
@@ -122,8 +122,8 @@ struct SubscriberWaiterTests {
             let three = startWaiter { try await subject.waitAtLeast(3) }
 
             _ = await subject.attach()
-            #expect(await one.returned.firesWithinHops(), "first waiter for 1 stayed parked")
-            #expect(await oneToo.returned.firesWithinHops(), "second waiter for 1 stayed parked")
+            #expect(await one.returned.fires(), "first waiter for 1 stayed parked")
+            #expect(await oneToo.returned.fires(), "second waiter for 1 stayed parked")
             #expect(!(await three.returned.firesWithinHops()), "waiter for 3 returned with 1 collector")
             three.task.cancel()
         }
@@ -133,11 +133,11 @@ struct SubscriberWaiterTests {
     func atMostAlreadyMet(stream: HotStream) async throws {
         try await stream.withSubject { subject in
             let empty = startWaiter { try await subject.waitAtMost(0) }
-            #expect(await empty.returned.firesWithinHops(), "atMost 0 did not return on an empty stream")
+            #expect(await empty.returned.fires(), "atMost 0 did not return on an empty stream")
 
             _ = await subject.attach()
             let exact = startWaiter { try await subject.waitAtMost(1) }
-            #expect(await exact.returned.firesWithinHops(), "atMost 1 did not return with exactly 1 attached")
+            #expect(await exact.returned.fires(), "atMost 1 did not return with exactly 1 attached")
         }
     }
 
@@ -151,11 +151,11 @@ struct SubscriberWaiterTests {
             #expect(!(await toOne.returned.firesWithinHops()), "returned with 2 attached")
 
             second.cancel()
-            #expect(await toOne.returned.firesWithinHops(), "did not return once the count fell to 1")
+            #expect(await toOne.returned.fires(), "did not return once the count fell to 1")
             #expect(!(await toZero.returned.firesWithinHops()), "waiter for 0 returned with 1 attached")
 
             first.cancel()
-            #expect(await toZero.returned.firesWithinHops(), "did not return once the count fell to 0")
+            #expect(await toZero.returned.fires(), "did not return once the count fell to 0")
         }
     }
 
@@ -179,7 +179,7 @@ struct SubscriberWaiterTests {
                 // handler rather than the cancelled-before-waiting check.
                 for _ in 0..<200 { await Task.yield() }
                 task.cancel()
-                #expect(await ended.firesWithinHops(), "a cancelled waiter stayed parked")
+                #expect(await ended.fires(), "a cancelled waiter stayed parked")
                 #expect(thrown.withLock { $0 } is CancellationError)
             }
         }
