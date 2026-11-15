@@ -51,7 +51,7 @@ of the package. Products: `Flow` (core and operators), `FlowTesting` (test helpe
 | `flatMapLatest`, `mapLatest`, `transformLatest` | Cancel the previous inner work when a new value comes | Inner only |
 | `timeout(for:clock:)` | Throws `FlowTimeoutError` when the gap between values (and before the first) is too long. On `Flow` it returns a `ThrowingFlow` | Yes, on timeout |
 
-`first()`, `contains(where:)`, `allSatisfy(_:)`, `toArray()`, `last()`, `count()`, `reduce`, `exactlyOne()` and `collectLatest` are on `Flow` only, not `ThrowingFlow`. `prefix(_:)` and `prefix(while:)` are on both. `collect` is on both.
+`first()`, `first(where:)`, `contains(where:)`, `allSatisfy(_:)`, `toArray()`, `last()`, `count()`, `reduce`, `exactlyOne()` and `collectLatest` are on `Flow` only, not `ThrowingFlow`. `prefix(_:)` and `prefix(while:)` are on both. `collect` is on both.
 
 > **Note.** In 2.4.1 and earlier, `first()`, `first(where:)`, `contains(where:)`,
 > `allSatisfy(_:)`, `prefix(_:)` and `prefix(while:)` do not cancel the upstream.
@@ -73,6 +73,8 @@ let locations = Flow<CLLocation>.callbackFlow { scope in
 }
 ```
 
+- Other builders: `Flow(of: 1, 2, 3)` emits the values and completes. `Flow.empty` completes
+  at once. `Flow.never` never emits and never completes until the task is cancelled.
 - `trySend` does not suspend and returns `.enqueued`, `.dropped` or `.closed`.
 - `send` suspends only with `onBufferOverflow: .suspend` and a positive `bufferCapacity`.
   Otherwise it is the same as `trySend`.
@@ -132,12 +134,59 @@ let locations = Flow<CLLocation>.callbackFlow { scope in
   discards the values. Put the work in `onEach`. A `ThrowingFlow` swallows errors there.
   Handle them with `catch` first. `scope.cancel()` cancels all the tasks.
 
+## FlowUI
+
+Add `import FlowUI`. The SwiftUI and controller APIs are `@MainActor`, and their action closures run on the main actor. `Flow(observing:)` is not `@MainActor`. It uses the isolation of the caller.
+
+| API | Use it when |
+|---|---|
+| `@CollectedState(stateFlow, animation:)` | A SwiftUI view shows the current value of a `StateFlow`. Give an initial value. `animation` is optional. It needs iOS 17, macOS 14, tvOS 17, watchOS 10 or visionOS 1 or later (`@available`). |
+| `View.collecting(_ flow:priority:action:)` | A SwiftUI view reacts to each value of a cold `Flow` (a side effect, not state). It collects while the view is on screen and cancels on disappear. |
+| `Flow(observing: root, \.keyPath)` | You need a `Flow` of an `@Observable` object's property. `Element: Equatable`. It observes on the actor that makes it. |
+| `UIViewController` / `NSViewController` `collect(_:action:)` | UIKit or AppKit code collects a `StateFlow` or a `Flow`. The work stops when the controller deallocates. The controller holds the scope, the scope holds the task, and the task holds the action, so capture `[weak self]` in the action. A strong `self` keeps the controller alive and the collection never stops. |
+| `flowScope` on `UIViewController`, `NSViewController`, `NSWindowController` | You need a `FlowScope` tied to the controller: `flow.launch(in: flowScope)`. The same cycle applies, so capture `[weak self]` in `onEach`. |
+
+```swift
+struct SessionView: View {
+    @CollectedState var session: SessionState
+
+    init(model: SessionModel) {
+        _session = CollectedState(wrappedValue: .signedOut, model.sessionState)
+    }
+
+    var body: some View {
+        Text(String(describing: session))
+    }
+}
+
+final class SessionViewController: UIViewController {
+    let model: SessionModel
+
+    init(model: SessionModel) {
+        self.model = model
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is unavailable")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        collect(model.sessionState) { [weak self] state in
+            self?.title = String(describing: state)
+        }
+    }
+}
+```
+
 ## Testing without sleeps (`FlowTesting`)
 
 | API | What it does |
 |---|---|
 | `flow.probing { reader in ... }` | Collects in a task and gives a `FlowReader`. `expectValue`, `expectNextValue`, `expectCompletion`, `expectError` suspend on the next event of the flow, with no deadline. The collection is cancelled when the block exits. Preferred. |
-| `TestClock` | A `Clock` that moves only when the test calls `advance(by:)` or `advance(to:)`. `waitForSleepers(_:)` waits until that many sleeps are registered. Pass it to `debounce`, `throttle`, `sample`, `timeout`, `asStateFlow` and `asSharedFlow`. |
+| `TestClock` | A `Clock` that moves only when the test calls `advance(by:)` or `advance(to:)`. `waitForSleepers(_:)` waits until that many sleeps are registered. `waitForSleepers(atMost:)` waits until at most that many remain, and `waitForNoSleepers()` waits until none remain (for example after a cancelled operator tears down its sleep). Pass it to `debounce`, `throttle`, `sample`, `timeout`, `asStateFlow` and `asSharedFlow`. |
 | `withThrowingTimeout(_:clock:_:)` | Runs a body and throws `FlowTestError.timeout` when the clock passes the duration. With a `TestClock` the deadline moves only on `advance`. The form without `clock:` uses real time, scaled by `FLOWKIT_TIMEOUT_SCALE`. |
 | `flow.test(timeout:clock:_:)` | Gives a `FlowTester` (`expectValue`, `expectNoValue(within:)`, `expectCompletion`, `receivedValues`), or a `ThrowingFlowTester` for a `ThrowingFlow`. Use it when the test must prove that nothing arrived. `expectNoValue(within:)` measures that gap on the real clock. The form without `clock:` is deprecated. |
 | `TestScope.run(timeout:clock:_:)` | Collects more than one flow, each with its own tester, and cancels all of them at the end. The form without `clock:` is deprecated. |
