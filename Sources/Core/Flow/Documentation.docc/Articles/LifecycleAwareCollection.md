@@ -111,23 +111,30 @@ final class ChatViewController: UIViewController {
 
 ### When the view controller stays in memory but should stop
 
-If your architecture keeps view controllers in a stack and you want to stop collection when they leave the screen (not just when they deallocate), cancel and recreate the scope manually:
+If your architecture keeps view controllers in a stack and you want to stop collection when they leave the screen (not just when they deallocate), use a scope that you own and replace it on each appearance. Do not cancel `flowScope` for this: after `cancel()` the scope stays cancelled, so every later `launch` returns an already-cancelled task.
 
 ```swift
-override func viewWillDisappear(_ animated: Bool) {
-    super.viewWillDisappear(animated)
-    flowScope.cancel()
-}
+private var appearanceScope: FlowScope?
 
 override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
-    // Re-attach flows; flowScope.cancel() means a new scope is needed.
-    // In practice, consider using a separate scope property for this pattern.
-    startCollecting()
+    let scope = FlowScope()
+    appearanceScope = scope
+    viewModel.typingIndicators
+        .onEach { [weak self] users in
+            await MainActor.run { self?.updateTypingBanner(users) }
+        }
+        .launch(in: scope)
+}
+
+override func viewWillDisappear(_ animated: Bool) {
+    super.viewWillDisappear(animated)
+    appearanceScope?.cancel()
+    appearanceScope = nil
 }
 ```
 
-For most cases, letting deallocation handle it is simpler and correct.
+Each appearance gets a fresh `FlowScope`, so the new `launch` calls run. For most cases, letting deallocation of `flowScope` handle it is simpler and correct.
 
 ## AppKit: NSViewController.flowScope and NSWindowController.flowScope
 

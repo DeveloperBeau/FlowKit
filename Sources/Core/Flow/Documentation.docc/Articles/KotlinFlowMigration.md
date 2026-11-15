@@ -90,10 +90,13 @@ FlowKit is designed so Kotlin Flow knowledge transfers directly. The mental mode
 | `.collectLatest { }` | `.collectLatest { }` | Cancels previous action on new value |
 | `.first()` | `.first()` | Returns optional; `nil` if flow is empty |
 | `.firstOrNull { }` | `.first(where:)` | Predicate variant |
+| `.any { }` / `.all { }` | `.contains(where:)` / `.allSatisfy(_:)` | Return `Bool` |
 | `.single()` | `.exactlyOne()` | Throws if zero or multiple values |
 | `.toList()` | `.toArray()` | Collects all values |
 | `.fold(initial) { acc, v -> }` | `.reduce(initial) { acc, v in }` | Left fold |
 | `.launchIn(scope)` | `.launch(in: scope)` | Fire-and-forget; returns `Task` handle |
+
+Since 2.4.2, `first()`, `first(where:)`, `contains(where:)`, `allSatisfy(_:)`, `prefix(_:)` and `prefix(while:)` cancel the upstream as soon as they have their answer. They return even when the upstream stays open, for example a `callbackFlow` that waits in `awaitClose`. A flow that never emits and never completes still keeps `first()` suspended, so wrap the call in a timeout when the source can stay silent.
 
 ## Hot streams
 
@@ -164,17 +167,18 @@ final class SearchViewModel {
             .debounce(for: .milliseconds(300))
             .removeDuplicates()
             .filter { !$0.isEmpty }
+            .mapThrowing { $0 }  // Flow -> ThrowingFlow, so flatMapLatest can return a ThrowingFlow
             .flatMapLatest { q -> ThrowingFlow<[Product]> in repo.search(q) }
             .map { SearchState.loaded($0) }
             .catch { _, collector in await collector.emit(.error("Search failed")) }
             .asStateFlow(initialValue: .idle, strategy: .whileSubscribed(stopTimeout: .seconds(5)))
     }
 
-    func update(query text: String) async { await query.send(text) }
+    func update(query text: String) { query.value = text }
 }
 ```
 
-Key differences: `flatMapLatest` over a `ThrowingFlow` requires an explicit return type annotation in Swift 6; `catch` receives the collector explicitly rather than using `emit` via `this`; `stateIn` becomes `asStateFlow` with a separate `FlowScope`.
+Key differences: `flatMapLatest` over a `ThrowingFlow` needs a `Flow` converted with `mapThrowing` first, and an explicit return type annotation in Swift 6; `catch` receives the collector explicitly rather than using `emit` via `this`; `stateIn` becomes `asStateFlow` with a separate `FlowScope`.
 
 ---
 
@@ -211,9 +215,9 @@ actor SessionManager {
         Task {
             await authService.events.collect { event in
                 switch event {
-                case .signedIn(let user): await _state.send(.signedIn(user))
-                case .signedOut: await _state.send(.signedOut)
-                case .error(let message): await _state.send(.error(message))
+                case .signedIn(let user): _state.value = .signedIn(user)
+                case .signedOut: _state.value = .signedOut
+                case .error(let message): _state.value = .error(message)
                 }
             }
         }
@@ -221,7 +225,7 @@ actor SessionManager {
 }
 ```
 
-Key differences: `actor` replaces `@HiltViewModel`/`class`; `_state.value = ` becomes `await _state.send()`; `launchIn` becomes `Task { }` or `launch(in: scope)` for proper cancellation.
+Key differences: `actor` replaces `@HiltViewModel`/`class`; `_state.value = ` stays the same, because `MutableStateFlow` has a synchronous `value` setter; `launchIn` becomes `Task { }` or `launch(in: scope)` for proper cancellation.
 
 ---
 
@@ -236,16 +240,15 @@ val isFormValid: StateFlow<Boolean> = combine(username, password, email) { u, p,
 
 **FlowKit:**
 ```swift
-// FlowKit uses combineLatest chaining (no variadic combine yet):
+// combineLatest takes the other flows as arguments, for 2 to 6 flows in total:
 let isFormValid: any StateFlow<Bool> = username
-    .combineLatest(password) { u, p in (u, p) }
-    .combineLatest(email) { (u, p), e in
+    .combineLatest(password, email) { u, p, e in
         u.count >= 3 && p.count >= 8 && e.contains("@")
     }
     .asStateFlow(initialValue: false, strategy: .eager)
 ```
 
-Key difference: FlowKit's `combineLatest` is binary (pairs two flows); chain multiple calls to combine three or more. A variadic `combine` operator is planned for a future release.
+Key difference: FlowKit has no free `combine` function. `combineLatest` is a method on the first flow, and it has overloads that take 1 to 5 more flows (2 to 6 flows in total). Each overload has a variant without a transform closure that emits a tuple, and a variant with a transform closure. For more than six flows, chain `combineLatest` calls.
 
 ## Conceptual differences
 
@@ -255,7 +258,7 @@ Key difference: FlowKit's `combineLatest` is binary (pairs two flows); chain mul
 
 **Errors require `ThrowingFlow`.** Kotlin `Flow` can carry errors (the flow itself is always non-throwing; errors surface via `catch`). FlowKit uses separate `Flow` and `ThrowingFlow` types. The compiler enforces which is which at every call site.
 
-**No `StateFlow.value` direct set.** Kotlin allows `_state.value = newValue` synchronously. FlowKit requires `await _state.send(newValue)` because `MutableStateFlow` is an `actor`.
+**`MutableStateFlow.value` is settable.** As in Kotlin, `_state.value = newValue` is synchronous. `MutableStateFlow` is a `Sendable` class, not an actor, so no `await` is needed. `_state.send(newValue)` does the same thing. Only the read-only `StateFlow` view has no setter.
 
 ## Related concepts
 

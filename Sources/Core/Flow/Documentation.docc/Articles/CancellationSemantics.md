@@ -34,7 +34,7 @@ After `cancel()`, any subsequent `launch` calls immediately produce cancelled ta
 
 ## How flow bodies observe cancellation
 
-A ``FlowCore/Flow`` body is an `async` closure. When its owning task is cancelled, the next suspension point inside the body sees `Task.isCancelled == true`. Operators that use `Task` internally, such as `flatMapLatest`, `debounce`, and `buffer(.suspend)`, all check cancellation and exit cleanly at their natural suspension points.
+A ``FlowCore/Flow`` body is an `async` closure. When its owning task is cancelled, the next suspension point inside the body sees `Task.isCancelled == true`. Operators that use `Task` internally, such as `flatMapLatest`, `debounce`, and `buffer(size:policy:)` with `policy: .suspend`, all check cancellation and exit cleanly at their natural suspension points.
 
 For flows that wrap external resources (e.g., a WebSocket connection), use `withTaskCancellationHandler` to schedule synchronous cleanup before the cooperative check can run:
 

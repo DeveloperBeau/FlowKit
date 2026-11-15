@@ -26,6 +26,7 @@ final class SearchViewModel {
         self.results = query.asFlow()
             .debounce(for: .milliseconds(300))
             .removeDuplicates()
+            .mapThrowing { $0 }  // Flow -> ThrowingFlow, so flatMapLatest can return a ThrowingFlow
             .flatMapLatest { query -> ThrowingFlow<[Product]> in
                 query.isEmpty ? .empty : repository.search(query)
             }
@@ -36,8 +37,8 @@ final class SearchViewModel {
             .asStateFlow(initialValue: .idle, strategy: .whileSubscribed(stopTimeout: .seconds(5)))
     }
 
-    func update(query text: String) async {
-        await query.send(text)
+    func update(query text: String) {
+        query.value = text
     }
 }
 
@@ -50,7 +51,7 @@ struct SearchView: View {
         VStack {
             TextField("Search", text: $query)
                 .onChange(of: query) { _, new in
-                    Task { await viewModel.update(query: new) }
+                    viewModel.update(query: new)
                 }
             switch state {
             case .idle: ContentUnavailableView("Start typing", systemImage: "magnifyingglass")
@@ -62,7 +63,7 @@ struct SearchView: View {
 }
 ```
 
-Every piece, from cold ``FlowCore/Flow`` composition, debouncing, and error handling to hot ``FlowHotStreams/StateFlow`` sharing and SwiftUI binding, is 0.1.0-through-0.4.0 API.
+Every piece, from cold ``FlowCore/Flow`` composition, debouncing, and error handling to hot ``FlowHotStreams/StateFlow`` sharing and SwiftUI binding, is public FlowKit API.
 
 ## Topics
 

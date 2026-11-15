@@ -130,12 +130,13 @@ When a non-failing operation precedes a potentially-failing one, `flatMapLatest`
 // searchQuery is Flow<String>. Text field, cannot fail.
 // productRepository.search returns ThrowingFlow<[Product]>. Network, can fail.
 let results: ThrowingFlow<[Product]> = searchQuery
+    .mapThrowing { $0 }
     .flatMapLatest { query -> ThrowingFlow<[Product]> in
         query.isEmpty ? .empty : productRepository.search(query)
     }
 ```
 
-The `flatMapLatest` overload on `Flow` that returns a `ThrowingFlow` produces a `ThrowingFlow<U>`, and the type system tracks the boundary automatically.
+`mapThrowing` is the explicit bridge from `Flow` to `ThrowingFlow`. `Flow.flatMapLatest` only accepts a closure that returns a `Flow`, so convert first. After that, the `ThrowingFlow.flatMapLatest` overload produces a `ThrowingFlow<U>`, and the type system tracks the boundary.
 
 ## Pair example: form validation and submission
 
@@ -161,6 +162,7 @@ func submit(username: String, password: String) -> ThrowingFlow<AuthSession> {
 
 // ViewModel wires it all together, recovering to non-failing for the UI.
 let authState: any StateFlow<AuthState> = submitTap
+    .mapThrowing { $0 }
     .flatMapLatest { _ -> ThrowingFlow<AuthState> in
         submit(username: currentUsername, password: currentPassword)
             .map { AuthState.signedIn($0) }

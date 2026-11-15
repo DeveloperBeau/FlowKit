@@ -67,9 +67,9 @@ actor SessionManager {
         Task {
             for await event in authService.events {
                 switch event {
-                case .signedIn(let session): await _state.send(.signedIn(session))
-                case .tokenRefreshFailed: await _state.send(.error("Session expired"))
-                case .signedOut: await _state.send(.signedOut)
+                case .signedIn(let session): _state.value = .signedIn(session)
+                case .tokenRefreshFailed: _state.value = .error("Session expired")
+                case .signedOut: _state.value = .signedOut
                 }
             }
         }
@@ -185,9 +185,21 @@ When you convert a cold flow to a hot stream, the `SharingStrategy` controls whe
 |----------|----------------|----------------|----------|
 | `.eager` | When the hot flow is created | When scope ends | Pre-warm auth state at app launch |
 | `.lazy` | When first subscriber attaches | When scope ends | Background sync that should keep running once started |
-| `.whileSubscribed(stopTimeout:)` | When first subscriber attaches | `stopTimeout` after last subscriber leaves | UI state that should pause when no views are showing it |
+| `.whileSubscribed(stopTimeout:replayExpiration:)` | When first subscriber attaches | `stopTimeout` after last subscriber leaves | UI state that should pause when no views are showing it |
 
 The recommended default for UI state is `.whileSubscribed(stopTimeout: .seconds(5))`. The 5-second window handles configuration changes (iPad split-view), tab switches, and brief navigation stack pops without tearing down and re-establishing the upstream pipeline.
+
+`replayExpiration` (default `.zero`) controls the replay cache of a `SharedFlow` made with `asSharedFlow(replay:strategy:)`. The cache is cleared `replayExpiration` after the last subscriber leaves. It counts from the same moment as `stopTimeout`, so the cache can be cleared before or after the upstream stops. A subscriber that arrives in time cancels both delays. With the default `.zero`, the cache is cleared before the leaving collection returns, so a later subscriber never receives old values. Set a longer duration to let a returning subscriber still replay recent values:
+
+```swift
+let recentMessages: any SharedFlow<ChatMessage> = messageStream
+    .asSharedFlow(
+        replay: 50,
+        strategy: .whileSubscribed(stopTimeout: .seconds(30), replayExpiration: .seconds(60))
+    )
+```
+
+`replayExpiration` has no effect on a `StateFlow`, because a `StateFlow` always holds a value and keeps it.
 
 ```swift
 // Location tracking: keep alive for 5s after last collector leaves,
