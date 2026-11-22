@@ -57,13 +57,19 @@ struct FlowTestingReachabilityTests {
     func pushWaitersReachable() async throws {
         let clock = TestClock()
         let sleeper = Task { try await clock.sleep(for: .seconds(1)) }
-        try await clock.waitForSleepers(1)
+        try await withThrowingTimeout(.seconds(30)) {
+            try await clock.waitForSleepers(1)
+        }
         await clock.advance(by: .seconds(1))
-        try await sleeper.value
+        try await withThrowingTimeout(.seconds(30)) {
+            try await sleeper.value
+        }
 
         let probe = FlowProbe<Int>()
         await probe.record(3)
-        try await probe.waitForValue { $0 == 3 }
+        try await withThrowingTimeout(.seconds(30)) {
+            try await probe.waitForValue { $0 == 3 }
+        }
     }
 
     @Test("withThrowingTimeout and waitUntil accept a clock")

@@ -22,7 +22,7 @@ private func waitForSleeper(_ clock: TestClock) async throws {
 /// Yields until the clock has no sleepers, i.e. a cancelled stop's sleep has
 /// been torn down before the next one is scheduled.
 private func waitForNoSleepers(_ clock: TestClock) async throws {
-    try await clock.waitForNoSleepers()
+    try #require(await clock.registersNoSleepers(), "the cancelled stop's sleep teardown")
 }
 
 @Suite("SharingCoordinator")
