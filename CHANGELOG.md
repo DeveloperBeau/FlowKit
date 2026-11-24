@@ -2,6 +2,48 @@
 
 All notable changes to FlowKit are documented here.
 
+## 2.5.0 - 2026-11-25
+
+### Added
+
+- `MutableSharedFlow.tryEmit(_:)` publishes to the current subscribers and the replay cache from
+  synchronous code, with no `await`. Calls made in order from one thread arrive in that order.
+  It returns `false` only after the flow is closed. (#58)
+- `MutableSharedFlow.subscribed()` and `MutableStateFlow.subscribed()` register a subscriber before
+  they return. The returned flow delivers every value published after the call, even when a task
+  collects it later. It can be collected once, and releasing it without a collection removes the
+  subscriber. `asFlow()` still registers when it is collected. (#59)
+- `MutableStateFlow.close()` and `MutableSharedFlow.close()` end a hot flow. Each collector receives
+  the values already sent to it, then its `collect` returns. Close is final and safe to call twice.
+  Publishing after close does nothing, and `value` keeps the last value. A collector that attaches
+  to a closed shared flow returns at once without the replay. A collector that attaches to a closed
+  state flow receives the last value, then returns. (#60)
+- `ThrowingFlow.channelFlow` and `ThrowingFlow.callbackFlow` bridge a callback or delegate API that
+  can fail. The block receives a `ThrowingProducerScope`, which adds `close(throwing:)` to the
+  `ProducerScope` surface. The collector receives every value sent before the failure, then
+  `collect` throws the error. The first close wins, and a cancelled collector is not a failure.
+  (#61)
+- `first()` and `first(where:)` on `ThrowingFlow` cancel the upstream after the first match and wait
+  for its teardown, as `Flow.first()` does. An error before the value is rethrown. An error that the
+  upstream throws after the value is taken is dropped. A caller cancelled before a value gets
+  `CancellationError`. The predicate of `first(where:)` can be `async` and can throw. (#62)
+- `FlowRecording`, a new library product with `FlowRecorder`. It collects a `Flow` or a
+  `ThrowingFlow` in the background and records every value in order, with `values(atLeast:)` to
+  wait for a count. The product depends on `Flow` only and does not link `Testing`, so a UI-test
+  host app, a preview target or a fixture can use it. (#63)
+
+### Fixed
+
+- `MutableSharedFlow.asFlow()` registered a collector and read the replay cache in two separate
+  steps. A value published between the two steps could arrive twice or ahead of the replay. It now
+  registers through the same replay-aware path as `subscribed()`.
+
+### Changed
+
+- The subscriber list and the replay buffer of `MutableSharedFlow` moved from actor isolation to
+  locks, so that `tryEmit` can publish synchronously. The public API of existing members is
+  unchanged. `emit` keeps its signature and delivery order.
+
 ## 2.4.4 - 2026-11-15
 
 ### Fixed
