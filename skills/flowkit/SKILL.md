@@ -88,6 +88,31 @@ let locations = Flow<CLLocation>.callbackFlow { scope in
   `last()` and a `collect` to the end never return on it. `first()` returns after one value
   (since 2.4.2).
 
+### A source that can fail
+
+```swift
+let chunks = ThrowingFlow<Data>.callbackFlow(bufferCapacity: 0) { scope in
+    let relay = Relay(
+        onChunk: { scope.trySend($0) },
+        onComplete: { error in
+            if let error { scope.close(throwing: error) } else { scope.close() }
+        }
+    )
+    let task = session.start(request, delegate: relay)
+    await scope.awaitClose { task.cancel() }
+}
+```
+
+- `ThrowingFlow.channelFlow` and `ThrowingFlow.callbackFlow` take the same parameters and
+  defaults as the `Flow` builders. The block can throw and receives a `ThrowingProducerScope`.
+- `close(throwing:)` ends the flow with an error. The collector receives every value sent
+  before it, then `collect` throws the error. An error thrown from the block does the same.
+- The first close wins. A later `close()` or `close(throwing:)` is ignored. `trySend` and
+  `send` return `.closed` after it.
+- A cancelled collector is not a failure. `onClose` runs one time, `collect` returns without
+  an error, and an error the block throws while it tears down is dropped.
+- `Flow.callbackFlow` and `ProducerScope` have no `close(throwing:)`. A `Flow` cannot fail.
+
 ## Hot flows
 
 | Type | Holds | New collector receives | Completes |
@@ -210,6 +235,7 @@ All of these come from the source code above.
 | Expect `.suspend` to slow a shared emitter | `MutableSharedFlow(onBufferOverflow: .suspend)` | Use `buffer(size:policy: .suspend)` on a cold flow, or `channelFlow(onBufferOverflow: .suspend)` with `send`. |
 | Real time in a test | `try await Task.sleep(for: .milliseconds(300))` | `await clock.advance(by: .milliseconds(300))` with a `TestClock` |
 | Callback bridge with no teardown | `callbackFlow { scope in register { scope.trySend($0) } }` | End the block with `await scope.awaitClose { unregister() }` |
+| Failure from a callback bridge | `Flow<Result<Data, any Error>>.callbackFlow { ... }` and unwrap downstream | `ThrowingFlow<Data>.callbackFlow` and `scope.close(throwing: error)` |
 | Share by collecting twice | Two `collect` calls on one cold `Flow` | Two runs of the body. `asSharedFlow` and `asStateFlow` are on `Flow` only. A `ThrowingFlow` must `catch` first. |
 
 A silent source. `silent` is the flow that never emits. `clock` is a `TestClock`.
