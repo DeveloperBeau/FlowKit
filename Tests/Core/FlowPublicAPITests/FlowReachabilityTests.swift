@@ -59,6 +59,26 @@ struct FlowReachabilityTests {
         #expect(received.withLock { $0 } == ["ok"])
     }
 
+    @Test("Throwing channelFlow and callbackFlow are reachable")
+    func throwingChannelBuildersReachable() async {
+        struct Failed: Error {}
+        let channel = ThrowingFlow<Int>.channelFlow { scope in
+            scope.trySend(1)
+            scope.close()
+        }
+        let callback = ThrowingFlow<Int>.callbackFlow { (scope: ThrowingProducerScope<Int>) in
+            await scope.send(2)
+            scope.close(throwing: Failed())
+            await scope.awaitClose()
+        }
+        let received = Mutex<[Int]>([])
+        await #expect(throws: Failed.self) {
+            try await channel.collect { value in received.withLock { $0.append(value) } }
+            try await callback.collect { value in received.withLock { $0.append(value) } }
+        }
+        #expect(received.withLock { $0 } == [1, 2])
+    }
+
     @Test("Transform operators are reachable")
     func operatorsReachable() async {
         let flow = Flow(of: 1, 2, 3, 4, 5)

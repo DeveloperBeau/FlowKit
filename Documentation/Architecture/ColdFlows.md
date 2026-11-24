@@ -16,6 +16,7 @@ Choose `Flow` when the source cannot fail and `ThrowingFlow` when it can. There 
 | `ThrowingCollector` | `Sources/Core/FlowCore/ThrowingFlow/ThrowingCollector.swift` | Same handle, allowed to throw |
 | `FlowScope` | `Sources/Core/FlowCore/Flow/FlowScope.swift` | Owns collection tasks for an object's lifetime |
 | `ProducerScope` | `Sources/Core/FlowCore/Flow/ChannelFlow.swift` | Push handle for `channelFlow` and `callbackFlow` |
+| `ThrowingProducerScope` | `Sources/Core/FlowCore/ThrowingFlow/ThrowingProducerScope.swift` | Push handle for the throwing `channelFlow` and `callbackFlow`, with `close(throwing:)` |
 | `ChannelSendResult` | `Sources/Core/FlowCore/Flow/ChannelFlow.swift` | `.enqueued`, `.dropped`, or `.closed` |
 
 `Collector.emit` calls the downstream action and suspends until that action returns. With no buffer, a slow collector slows the producer. `Collector` is a wrapper over `ThrowingCollector` whose action cannot throw.
@@ -29,6 +30,10 @@ Builders on `Flow` are `init(_:)`, `init(of:)`, a `Sequence` initializer, `empty
 The defaults are `bufferCapacity: 64` and `onBufferOverflow: .dropOldest`. A capacity of zero or less is unbounded. Under `.suspend`, `trySend` cannot backpressure, so it buffers without a bound. `send` is what applies the bound, through `SendGate`.
 
 The flow ends when the block calls `close()`, returns, or the collector is cancelled. `awaitClose` parks the block until then and runs its cleanup once. `callbackFlow` is `channelFlow` plus a debug assertion that the block parked on `awaitClose` or closed. A callback bridge that returns immediately would leave the callback writing into a finished channel.
+
+`ThrowingFlow.channelFlow` and `ThrowingFlow.callbackFlow` in `Sources/Core/FlowCore/ThrowingFlow/ThrowingChannelFlow.swift` are the same bridge for a source that can fail. The block may throw, and it receives a `ThrowingProducerScope`. That scope wraps a `ProducerScope` and adds `close(throwing:)`. Buffering, defaults, `send`, `trySend`, and `awaitClose` are the same as above.
+
+The first close wins. `close(throwing:)` stores the error only while the channel is still open, and it decides that under the same lock that marks the channel closed. The collector drains the values buffered before the failure, then `collect` throws the stored error. An error thrown from the block is handled as `close(throwing:)`. A cancelled collector is not a failure: `collect` returns, and an error the block raises during that teardown is dropped. An error thrown by the collector's own action stops the producer, runs the `awaitClose` cleanup, and is the error `collect` throws.
 
 ## Cancellation and scope
 
