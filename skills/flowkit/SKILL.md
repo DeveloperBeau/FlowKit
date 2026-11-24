@@ -51,7 +51,17 @@ of the package. Products: `Flow` (core and operators), `FlowTesting` (test helpe
 | `flatMapLatest`, `mapLatest`, `transformLatest` | Cancel the previous inner work when a new value comes | Inner only |
 | `timeout(for:clock:)` | Throws `FlowTimeoutError` when the gap between values (and before the first) is too long. On `Flow` it returns a `ThrowingFlow` | Yes, on timeout |
 
-`first()`, `first(where:)`, `contains(where:)`, `allSatisfy(_:)`, `toArray()`, `last()`, `count()`, `reduce`, `exactlyOne()` and `collectLatest` are on `Flow` only, not `ThrowingFlow`. `prefix(_:)` and `prefix(while:)` are on both. `collect` is on both.
+`contains(where:)`, `allSatisfy(_:)`, `toArray()`, `last()`, `count()`, `reduce`, `exactlyOne()` and `collectLatest` are on `Flow` only, not `ThrowingFlow`. `first()`, `first(where:)`, `prefix(_:)` and `prefix(while:)` are on both. `collect` is on both.
+
+On a `ThrowingFlow`, `first()` and `first(where:)` are `async throws`, and the predicate can be `async` and can throw:
+
+```swift
+let items = try await store.observeItems().first() ?? []
+```
+
+- An error from the flow or from the predicate before the value is taken is rethrown.
+- An error that the upstream throws after the value is taken is dropped. That includes the `CancellationError` of its own teardown.
+- If the caller is cancelled before a value is taken, the call throws `CancellationError`. It does not return `nil`. `Flow.first()` returns `nil` in that case.
 
 > **Note.** In 2.4.1 and earlier, `first()`, `first(where:)`, `contains(where:)`,
 > `allSatisfy(_:)`, `prefix(_:)` and `prefix(while:)` do not cancel the upstream.

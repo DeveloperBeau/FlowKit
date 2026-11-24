@@ -142,6 +142,7 @@ struct KnownDependencyException: Equatable, Sendable {
         entry("FlowOperatorsTests", "FlowCore", "Tests/Core/FlowOperatorsTests/Terminal/ParityTerminalTests.swift", 2, flowOperatorsTestsUsesFlowCore),
         entry("FlowOperatorsTests", "FlowCore", "Tests/Core/FlowOperatorsTests/Terminal/ShortCircuitTests.swift", 2, flowOperatorsTestsUsesFlowCore),
         entry("FlowOperatorsTests", "FlowCore", "Tests/Core/FlowOperatorsTests/Terminal/TerminalOperatorTests.swift", 2, flowOperatorsTestsUsesFlowCore),
+        entry("FlowOperatorsTests", "FlowCore", "Tests/Core/FlowOperatorsTests/Terminal/ThrowingFlowFirstTests.swift", 2, flowOperatorsTestsUsesFlowCore),
         entry("FlowOperatorsTests", "FlowCore", "Tests/Core/FlowOperatorsTests/ThrowingFlowOperatorTests.swift", 2, flowOperatorsTestsUsesFlowCore),
         entry("FlowOperatorsTests", "FlowCore", "Tests/Core/FlowOperatorsTests/TimeoutTests.swift", 2, flowOperatorsTestsUsesFlowCore),
         entry("FlowOperatorsTests", "FlowCore", "Tests/Core/FlowOperatorsTests/Transform/CompactMapTests.swift", 2, flowOperatorsTestsUsesFlowCore),

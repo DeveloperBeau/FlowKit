@@ -31,6 +31,50 @@ extension Flow {
     }
 }
 
+extension ThrowingFlow {
+    /// Returns the first emitted value, then cancels the collection. Returns
+    /// `nil` if the flow completes without emitting.
+    ///
+    /// An error the flow throws before its first value is rethrown. An error
+    /// it throws after the value is taken, such as the `CancellationError`
+    /// from its own teardown, is dropped. Throws `CancellationError` when the
+    /// caller is cancelled before a value arrives.
+    ///
+    /// A flow that never emits and never completes keeps this suspended. Wrap
+    /// the call in a timeout when the source may stay silent.
+    public func first() async throws -> Element? {
+        try await first(where: { _ in true })
+    }
+
+    /// Returns the first value matching `predicate`, then cancels the
+    /// collection. Returns `nil` if the flow completes without a match.
+    ///
+    /// An error thrown by the flow or by `predicate` before a match is
+    /// rethrown. Throws `CancellationError` when the caller is cancelled
+    /// before a match.
+    public func first(
+        where predicate: @escaping @Sendable (Element) async throws -> Bool
+    ) async throws -> Element? {
+        let result = Mutex<Element?>(nil)
+        try await collectUntilStopped { value in
+            // A producer can emit again before it sees the cancellation.
+            guard result.withLock({ $0 == nil }) else { return false }
+            guard try await predicate(value) else { return true }
+            result.withLock { found in
+                if found == nil { found = value }
+            }
+            return false
+        }
+        guard let found = result.withLock({ $0 }) else {
+            // A cancelled upstream can end without an error. That is not an
+            // empty flow.
+            try Task.checkCancellation()
+            return nil
+        }
+        return found
+    }
+}
+
 // MARK: - collectUntilStopped
 
 extension Flow {
