@@ -57,13 +57,38 @@ struct FlowTestingReachabilityTests {
     func pushWaitersReachable() async throws {
         let clock = TestClock()
         let sleeper = Task { try await clock.sleep(for: .seconds(1)) }
-        try await clock.waitForSleepers(1)
+        let registered = Task { try await clock.waitForSleepers(1) }
+        guard try await finishes(registered, "clock.waitForSleepers(1)") else {
+            sleeper.cancel()
+            return
+        }
         await clock.advance(by: .seconds(1))
-        try await sleeper.value
+        guard try await finishes(sleeper, "the advanced sleeper") else { return }
 
         let probe = FlowProbe<Int>()
         await probe.record(3)
-        try await probe.waitForValue { $0 == 3 }
+        let observed = Task { try await probe.waitForValue { $0 == 3 } }
+        guard try await finishes(observed, "probe.waitForValue") else { return }
+    }
+
+    /// Awaits `task` under a wall-clock safety net. A task that never returns is
+    /// cancelled and recorded as a named failure, and `false` tells the caller to
+    /// stop rather than run later steps against a broken setup.
+    private func finishes(_ task: Task<Void, any Error>, _ name: String) async throws -> Bool {
+        do {
+            try await withThrowingTimeout(.seconds(30)) {
+                try await withTaskCancellationHandler {
+                    try await task.value
+                } onCancel: {
+                    task.cancel()
+                }
+            }
+            return true
+        } catch FlowTestError.timeout {
+            task.cancel()
+            Issue.record("\(name) never returned")
+            return false
+        }
     }
 
     @Test("withThrowingTimeout and waitUntil accept a clock")

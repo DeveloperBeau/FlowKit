@@ -2,10 +2,28 @@ import Testing
 import Foundation
 import FlowSharedModels
 import FlowTestSupport
+import FlowTestingCore
 @testable import FlowTestClock
 
 @Suite("TestClock waitForSleepers")
 struct TestClockSleeperWaiterTests {
+    /// Awaits a waiter task under a wall-clock safety net. A waiter that never returns is
+    /// cancelled and recorded as a named failure instead of parking the run.
+    private func finishes(_ task: Task<Void, any Error>, _ name: String) async throws {
+        do {
+            try await withThrowingTimeout(.seconds(30)) {
+                try await withTaskCancellationHandler {
+                    try await task.value
+                } onCancel: {
+                    task.cancel()
+                }
+            }
+        } catch FlowTestError.timeout {
+            task.cancel()
+            Issue.record("\(name) never returned")
+        }
+    }
+
     private func sleeper(on clock: TestClock, seconds: Int) -> Task<Void, any Error> {
         Task { try await clock.sleep(until: TestClock.Instant(offset: .seconds(seconds)), tolerance: nil) }
     }
@@ -62,7 +80,7 @@ struct TestClockSleeperWaiterTests {
         #expect(!resumed.hasFired, "resumed with only one of two sleepers")
 
         let second = sleeper(on: clock, seconds: 2)
-        try await waiter.value
+        try await finishes(waiter, "the waiter for two sleepers")
         #expect(resumed.hasFired)
 
         await clock.run()
@@ -79,12 +97,12 @@ struct TestClockSleeperWaiterTests {
         let waiterTwo = Task { try await clock.waitForSleepers(2); two.fire() }
 
         let first = sleeper(on: clock, seconds: 1)
-        try await waiterOne.value
+        try await finishes(waiterOne, "the waiter for one sleeper")
         await clock.advance(by: .zero)
         #expect(!two.hasFired, "the waiter for two resumed with one sleeper")
 
         let second = sleeper(on: clock, seconds: 2)
-        try await waiterTwo.value
+        try await finishes(waiterTwo, "the waiter for two sleepers")
 
         await clock.run()
         try await first.value
@@ -101,11 +119,11 @@ struct TestClockSleeperWaiterTests {
         }
         await started.wait()
         waiter.cancel()
-        await #expect(throws: CancellationError.self) { try await waiter.value }
+        await #expect(throws: CancellationError.self) { try await finishes(waiter, "the cancelled waiter") }
 
         // The cancelled waiter must not be resumed a second time by a later sleeper.
         let later = sleeper(on: clock, seconds: 1)
-        try await clock.waitForSleepers(1)
+        try #require(await clock.registersSleepers(1), "the later sleeper never registered")
         await clock.run()
         try await later.value
     }
@@ -117,14 +135,14 @@ struct TestClockSleeperWaiterTests {
             withUnsafeCurrentTask { $0?.cancel() }
             try await clock.waitForSleepers(1)
         }
-        await #expect(throws: CancellationError.self) { try await task.value }
+        await #expect(throws: CancellationError.self) { try await finishes(task, "the already-cancelled waiter") }
     }
 
     @Test("A sleeper that is removed again does not satisfy a later wait")
     func removedSleeperDoesNotCount() async throws {
         let clock = TestClock()
         let cancelled = sleeper(on: clock, seconds: 1)
-        try await clock.waitForSleepers(1)
+        try #require(await clock.registersSleepers(1), "the sleeper to cancel never registered")
         cancelled.cancel()
         _ = await cancelled.result
         #expect(clock.sleeperCount == 0)
@@ -135,7 +153,7 @@ struct TestClockSleeperWaiterTests {
         #expect(!resumed.hasFired, "counted a sleeper that had already been cancelled")
 
         let live = sleeper(on: clock, seconds: 2)
-        try await waiter.value
+        try await finishes(waiter, "the waiter for the live sleeper")
         await clock.run()
         try await live.value
     }
@@ -189,7 +207,7 @@ struct TestClockSleeperWaiterTests {
     func noSleepersAfterCancellation() async throws {
         let clock = TestClock()
         let only = sleeper(on: clock, seconds: 1)
-        try await clock.waitForSleepers(1)
+        try #require(await clock.registersSleepers(1), "the only sleeper never registered")
 
         let none = startWaiter { try await clock.waitForNoSleepers() }
         #expect(!(await none.returned.firesWithinHops()), "returned with a live sleeper")
@@ -202,7 +220,7 @@ struct TestClockSleeperWaiterTests {
     func noSleepersCancellationThrows() async throws {
         let clock = TestClock()
         let live = sleeper(on: clock, seconds: 1)
-        try await clock.waitForSleepers(1)
+        try #require(await clock.registersSleepers(1), "the live sleeper never registered")
 
         let ended = Signal()
         let thrown = Mutex<(any Error)?>(nil)
