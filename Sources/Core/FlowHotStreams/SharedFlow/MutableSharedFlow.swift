@@ -91,6 +91,7 @@ public actor MutableSharedFlow<Element: Sendable>: SharedFlow, SubscriberCountWa
     }
 
     public func emit(_ value: Element) async {
+        replayToRegistrations()
         await subscription.deliver(value)
         if replayCount > 0 {
             replayBuffer.append(value)
@@ -122,6 +123,64 @@ public actor MutableSharedFlow<Element: Sendable>: SharedFlow, SubscriberCountWa
 
     private func currentReplayElements() -> [Element] {
         replayBuffer.elements
+    }
+}
+
+extension MutableSharedFlow {
+    /// Registers a subscriber before it returns, and gives the flow that
+    /// reads it.
+    ///
+    /// ``asFlow()`` registers its subscriber when a task starts to collect it,
+    /// so a value emitted before that task first runs is lost with
+    /// `replay: 0`. This method registers at the call. Every value emitted
+    /// after it returns is delivered, even when the collection starts later.
+    ///
+    /// ```swift
+    /// let incoming = events.subscribed()      // registered here
+    /// let consumer = Task {
+    ///     await incoming.collect { handle($0) }
+    /// }
+    /// connection.start()                      // nothing is missed
+    /// ```
+    ///
+    /// Values wait in the subscriber's buffer until the flow is collected. The
+    /// buffer follows the overflow policy and capacity of this shared flow,
+    /// the same as an ``asFlow()`` subscriber. A flow with a replay delivers
+    /// the replay cache first.
+    ///
+    /// The subscriber counts in ``subscriptionCount`` from the call. It is
+    /// removed when the collecting task is cancelled, and when the returned
+    /// flow is released without a collection.
+    ///
+    /// The returned flow can be collected once. A second collection completes
+    /// at once and emits nothing. If this shared flow is released first, the
+    /// collection emits the buffered values and then completes.
+    ///
+    /// - Returns: A flow of the values emitted after this call.
+    public nonisolated func subscribed() -> Flow<Element> {
+        let registration = RegisteredSubscription(in: subscription, awaitingReplay: replayCount > 0)
+        return Flow<Element> { [weak self] collector in
+            guard registration.claimCollection() else { return }
+            if let self {
+                await self.replayToRegistrations()
+            } else {
+                registration.cancel()
+            }
+
+            for await value in registration.stream {
+                await collector.emit(value)
+                if Task.isCancelled { break }
+            }
+
+            registration.cancel()
+        }
+    }
+
+    /// Yields the replay cache to each registered subscriber that has not had
+    /// it. This runs before a delivery, so the replay comes before the value.
+    private func replayToRegistrations() {
+        guard replayCount > 0 else { return }
+        subscription.replayToRegistrations { replayBuffer.elements }
     }
 }
 

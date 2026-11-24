@@ -89,6 +89,19 @@ struct FlowReachabilityTests {
         #expect(await asProtocol.subscriptionCount == 0)
     }
 
+    @Test("subscribed() is reachable on both mutable hot flows")
+    func subscribedReachable() async {
+        let shared = MutableSharedFlow<String>()
+        let events = shared.subscribed()
+        await shared.emit("event")
+        #expect(await events.first() == "event")
+
+        let state = MutableStateFlow(0)
+        let changes = state.subscribed()
+        state.send(42)
+        #expect(await changes.prefix(2).toArray() == [0, 42])
+    }
+
     @Test("SharingStrategy and BufferOverflow are reachable")
     func sharedModelsReachable() {
         let strategy: SharingStrategy = .whileSubscribed(stopTimeout: .seconds(5))

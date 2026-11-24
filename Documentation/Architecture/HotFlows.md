@@ -16,6 +16,8 @@ A single pipeline task delivers updates in the order they were applied. `asFlow(
 
 `waitForSubscribers(_:)` and `waitForSubscribers(atMost:)` suspend until the collector count crosses the bound. They are not requirements of the `StateFlow` protocol. A cancelled wait throws `CancellationError`.
 
+`subscribed()` registers a subscriber before it returns. The flow it returns emits the value that was current at that call, then every later distinct update. [Registered subscriptions](#registered-subscriptions) has the rules.
+
 ## SharedFlow
 
 `SharedFlow` exposes `subscriptionCount` and `asFlow()`. `MutableSharedFlow` is an actor. `init` takes `replay` (default 0), `extraBufferCapacity` (default 0), and `onBufferOverflow` (default `.suspend`).
@@ -25,6 +27,26 @@ A single pipeline task delivers updates in the order they were applied. `asFlow(
 `.suspend` does not backpressure this type. The per-subscriber buffer is unbounded for `.suspend` and for a capacity of zero, because the `AsyncStream` continuation cannot suspend the emitter. `.dropOldest` and `.dropLatest` bound each subscriber to `replay + extraBufferCapacity`. `BufferOverflow` in `FlowSharedModels` describes the three policies. The channel path in [Cold flows](ColdFlows.md) is where `.suspend` really suspends, and only on `send`.
 
 The same subscriber waiters as `MutableStateFlow` live here, and they are not part of the `SharedFlow` protocol.
+
+## Registered subscriptions
+
+`asFlow()` is cold. It registers its subscriber when a task starts to collect it, so a value emitted between `Task { }` and the first run of that task is lost with `replay: 0`. `subscribed()` on `MutableSharedFlow` and on `MutableStateFlow` registers the subscriber before it returns. It is synchronous and callable from any isolation. It is not a requirement of the `SharedFlow` or `StateFlow` protocol.
+
+```swift
+let incoming = events.subscribed()      // registered here
+let consumer = Task {
+    await incoming.collect { handle($0) }
+}
+connection.start()                      // nothing is missed
+```
+
+The returned flow delivers every value emitted after the call returns. Values wait in the subscriber's own buffer until a task collects the flow. That buffer follows the same overflow policy and capacity as an `asFlow()` subscriber, so the default policy keeps every value and a drop policy bounds an uncollected subscription. A `MutableSharedFlow` with a replay delivers the replay cache first. A `MutableStateFlow` delivers the value that was current at registration first.
+
+The subscriber counts in `subscriptionCount` and resumes the subscriber waiters from the moment of the call. It is removed when the collecting task is cancelled, and when the returned flow is released without a collection.
+
+The returned flow can be collected once. A second collection completes at once and emits nothing. If the hot flow is released first, the collection emits the buffered values and then completes.
+
+`MulticastSubscription` keeps these subscribers in a registry behind a `Mutex`, beside the actor-isolated subscribers of `asFlow()`. `deliver` yields to both. A registration that waits for its replay is skipped by `deliver` until `MutableSharedFlow` has yielded the replay cache to it. That happens at the start of the next `emit`, or when the collection starts, so the replay always comes before later values and no value arrives twice.
 
 ## Sharing a cold upstream
 

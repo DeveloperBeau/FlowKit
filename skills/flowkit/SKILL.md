@@ -106,6 +106,13 @@ let locations = Flow<CLLocation>.callbackFlow { scope in
   unbounded.
 - Read a hot flow with `.asFlow()`. Because hot flows never complete, use `first()`,
   `prefix(_:)` or a cancelled task to stop. `toArray()` on a hot flow never returns.
+- `.asFlow()` registers its subscriber when a task starts to collect it. `subscribed()` on
+  `MutableSharedFlow` and `MutableStateFlow` registers before it returns. It is synchronous.
+  Values emitted after the call wait in the buffer of the subscriber until a task collects
+  the returned flow. That flow can be collected one time. A second collection completes at
+  once with no values. Release the flow without a collection, or cancel the collecting
+  task, to remove the subscriber. A state flow gives the value from the time of
+  registration first. A shared flow with a replay gives the replay first.
 - `asStateFlow(initialValue:strategy:clock:)` and `asSharedFlow(replay:strategy:clock:)` are
   on `Flow` only. `asStateFlow` needs `Element: Equatable`. A `ThrowingFlow` must `catch`
   first. They share one upstream collection between collectors.
@@ -206,6 +213,7 @@ All of these come from the source code above.
 | Wait for completion of an open flow | `await callbackFlow.toArray()` | `await callbackFlow.prefix(3).toArray()` |
 | Silent source | `await silent.first()` | The snippet after this table. `silent` is that flow. |
 | Emit before a collector attaches | `await shared.emit(1); Task { await shared.asFlow().collect { ... } }` | Start the collector, `try await shared.waitForSubscribers(1)`, then emit. |
+| Start a producer after `Task { }` and expect its first event | `Task { await shared.asFlow().collect { ... } }; connection.start()` | `let incoming = shared.subscribed()`, then `Task { await incoming.collect { ... } }`, then `connection.start()`. |
 | Expect a repeat on a state flow | `state.value = 1; state.value = 1` and expect two values | One value. Equal values are dropped. |
 | Expect `.suspend` to slow a shared emitter | `MutableSharedFlow(onBufferOverflow: .suspend)` | Use `buffer(size:policy: .suspend)` on a cold flow, or `channelFlow(onBufferOverflow: .suspend)` with `send`. |
 | Real time in a test | `try await Task.sleep(for: .milliseconds(300))` | `await clock.advance(by: .milliseconds(300))` with a `TestClock` |
