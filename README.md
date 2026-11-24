@@ -259,6 +259,22 @@ To check that nothing else arrived, trigger a known emission and read for it wit
 
 `FlowReader` (via `Flow.probing(_:)`) reads a flow with no deadline. `TestClock` gives deterministic virtual time for rate-limiting and sharing operators, and `FlowTester`, `ThrowingFlowTester` and `TestScope` drive several flows at once against a deadline you measure on a `TestClock`.
 
+### Recording outside a test bundle
+
+`FlowTesting` links the `Testing` framework, so a module that uses it cannot be linked into a UI-test host app, a preview target or a fixture executable. The `FlowRecording` product depends on `Flow` only. Its `FlowRecorder` collects a flow in the background from `init` and keeps every value in order.
+
+```swift
+import Flow
+import FlowRecording
+
+let recorder = FlowRecorder(source.changes())
+source.set(.on)
+let values = await recorder.values(atLeast: 2) // [.off, .on]
+recorder.cancel()
+```
+
+`values(atLeast:)` returns as soon as that many values were recorded, and returns what it has when the flow ends first. `isFinished` and `failure` report how the flow ended. The recorder has no assertions, no timeout and no clock, and it keeps every value in memory, so it is for tests and fixtures only. In a test target, `probing` is still the better tool.
+
 ### Agent skill
 
 [`skills/flowkit/SKILL.md`](skills/flowkit/SKILL.md) is a short reference for coding agents that work in a project that uses FlowKit. It says which operators return early and which wait for the flow to complete, how `callbackFlow` and the hot flows behave, and how to test flows without sleeps. Copy the `skills/flowkit` folder into the skills folder of your agent.
