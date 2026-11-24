@@ -23,6 +23,7 @@ let package = Package(
     products: [
         .library(name: "Flow", targets: ["Flow"]),
         .library(name: "FlowTesting", targets: ["FlowTesting"]),
+        .library(name: "FlowRecording", targets: ["FlowRecording"]),
         .library(name: "FlowUI", targets: ["FlowUI"])
     ],
     dependencies: [
@@ -126,6 +127,16 @@ let package = Package(
             swiftSettings: strictSettings
         ),
 
+        // ─────────── FlowRecording library ───────────
+
+        // Depends on Flow only, so a host app or a fixture can link it.
+        .target(
+            name: "FlowRecording",
+            dependencies: ["Flow"],
+            path: "Sources/Recording/FlowRecording",
+            swiftSettings: strictSettings
+        ),
+
         // ─────────── Test targets ───────────
 
         // Helpers shared by the test targets below. Not a product.
@@ -170,6 +181,12 @@ let package = Package(
             name: "FlowTestingCoreTests",
             dependencies: ["FlowTestingCore", "FlowTestSupport"],
             path: "Tests/Testing/FlowTestingCoreTests",
+            swiftSettings: strictSettings
+        ),
+        .testTarget(
+            name: "FlowRecordingTests",
+            dependencies: ["FlowRecording", "Flow", "FlowTesting", "FlowTestSupport"],
+            path: "Tests/Recording/FlowRecordingTests",
             swiftSettings: strictSettings
         ),
 

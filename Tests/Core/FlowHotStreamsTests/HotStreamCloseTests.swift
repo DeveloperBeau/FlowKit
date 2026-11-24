@@ -144,6 +144,122 @@ struct MutableSharedFlowCloseTests {
         #expect(await flow.replayCache == [1])
     }
 
+    @Test("tryEmit after close returns false, delivers nothing and leaves the replay cache alone")
+    func tryEmitAfterCloseIsRefused() async throws {
+        let flow = MutableSharedFlow<Int>(replay: 1)
+        let gate = Signal()
+        // Held inside its action, so it is still collecting when the late tryEmit runs.
+        let collector = RunningCollector(flow.asFlow()) { _ in await gate.wait() }
+        try await flow.waitForSubscribers(1)
+        #expect(flow.tryEmit(1), "an open flow accepts the value")
+        await collector.received.wait(atLeast: 1)
+        await flow.close()
+
+        #expect(!flow.tryEmit(2), "a closed flow must refuse the value")
+        gate.fire()
+
+        #expect(await collector.returned.fires(), "collector did not return after close")
+        #expect(collector.received.elements == [1])
+        #expect(await flow.replayCache == [1])
+    }
+
+    @Test("tryEmit on a closed flow that never had a value keeps the replay cache empty")
+    func tryEmitAfterCloseKeepsEmptyReplayCache() async {
+        let flow = MutableSharedFlow<Int>(replay: 2)
+        await flow.close()
+
+        #expect(!flow.tryEmit(1))
+        #expect(await flow.replayCache.isEmpty)
+    }
+
+    @Test("tryEmit racing close reaches every collector and the replay cache, or none of them")
+    func tryEmitRacingClose() async throws {
+        for _ in 0..<20 {
+            let flow = MutableSharedFlow<Int>()
+            let collectors = (0..<4).map { _ in RunningCollector(flow.asFlow()) }
+            try await flow.waitForSubscribers(4)
+
+            let results = await withTaskGroup(of: [Bool].self) { group in
+                // One publisher, so the order of its values is fixed.
+                group.addTask { (0..<2000).map { flow.tryEmit($0) } }
+                for _ in 0..<4 {
+                    group.addTask {
+                        await flow.close()
+                        return []
+                    }
+                }
+                return await group.reduce(into: []) { $0 += $1 }
+            }
+            let accepted = results.filter { $0 }.count
+            #expect(results == (0..<2000).map { $0 < accepted }, "a value was accepted after one was refused")
+            #expect(!flow.tryEmit(-1))
+
+            for collector in collectors {
+                #expect(await collector.returned.fires(), "collector did not return after racing closes")
+                // Every accepted value arrived, and no refused value did.
+                #expect(collector.received.elements == Array(0..<accepted))
+            }
+            #expect(await flow.subscriptionCount == 0)
+        }
+    }
+
+    @Test("tryEmit racing close leaves the last accepted value in the replay cache")
+    func tryEmitRacingCloseKeepsReplayCacheAtLastAcceptedValue() async {
+        for _ in 0..<20 {
+            let flow = MutableSharedFlow<Int>(replay: 1)
+
+            let accepted = await withTaskGroup(of: Int.self) { group in
+                group.addTask { (0..<2000).filter { flow.tryEmit($0) }.count }
+                group.addTask {
+                    await flow.close()
+                    return 0
+                }
+                return await group.reduce(0, +)
+            }
+
+            #expect(!flow.tryEmit(-1))
+            #expect(await flow.replayCache == Array((0..<accepted).suffix(1)))
+        }
+    }
+
+    @Test("emit and tryEmit mixed with close reach every collector in one common order")
+    func emitAndTryEmitMixedWithClose() async throws {
+        for _ in 0..<20 {
+            let flow = MutableSharedFlow<Int>()
+            let collectors = (0..<4).map { _ in RunningCollector(flow.asFlow()) }
+            try await flow.waitForSubscribers(4)
+
+            let acceptedOdds = await withTaskGroup(of: Int.self) { group in
+                // Even values through emit, odd values through tryEmit, so
+                // each publisher has a fixed order of its own.
+                group.addTask {
+                    for value in 0..<1000 { await flow.emit(value * 2) }
+                    return 0
+                }
+                group.addTask { (0..<1000).filter { flow.tryEmit($0 * 2 + 1) }.count }
+                group.addTask {
+                    await flow.close()
+                    return 0
+                }
+                return await group.reduce(0, +)
+            }
+            await flow.emit(-2)
+            #expect(!flow.tryEmit(-1))
+
+            var sequences: [[Int]] = []
+            for collector in collectors {
+                #expect(await collector.returned.fires(), "collector did not return after close")
+                sequences.append(collector.received.elements)
+            }
+            let common = sequences.first ?? []
+            #expect(sequences.allSatisfy { $0 == common }, "collectors disagree on the order")
+            let evens = common.filter { $0.isMultiple(of: 2) }
+            let odds = common.filter { !$0.isMultiple(of: 2) }
+            #expect(evens == (0..<evens.count).map { $0 * 2 })
+            #expect(odds == (0..<acceptedOdds).map { $0 * 2 + 1 })
+        }
+    }
+
     @Test("waitForSubscribers(atMost: 0) returns after close")
     func closeReleasesAtMostWaiter() async throws {
         let flow = MutableSharedFlow<Int>()

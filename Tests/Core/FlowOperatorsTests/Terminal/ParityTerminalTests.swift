@@ -156,4 +156,34 @@ struct EmitAllTests {
         for _ in 0..<100 { await Task.yield() }
         #expect(received.elements == [1, 2], "no delivery after cancellation")
     }
+
+    @Test("first(where:) on a hot flow returns nil when the flow closes with no match")
+    func firstWhereReturnsNilWhenHotFlowCloses() async throws {
+        let shared = MutableSharedFlow<Int>()
+        let searching = Task { await shared.asFlow().first(where: { $0 > 10 }) }
+        try await shared.waitForSubscribers(1)
+        shared.tryEmit(1)
+        shared.tryEmit(2)
+        await shared.close()
+
+        let match = try await withThrowingTimeout(.seconds(30), clock: ContinuousClock()) {
+            await searching.value
+        }
+        #expect(match == nil)
+    }
+
+    @Test("first() on a closed hot flow returns at once: nil for a shared flow, the last value for a state flow")
+    func firstOnClosedHotFlow() async throws {
+        let shared = MutableSharedFlow<Int>(replay: 1)
+        shared.tryEmit(1)
+        await shared.close()
+        let state = MutableStateFlow(7)
+        state.close()
+
+        let (sharedFirst, stateFirst) = try await withThrowingTimeout(.seconds(30), clock: ContinuousClock()) {
+            (await shared.asFlow().first(), await state.asFlow().first())
+        }
+        #expect(sharedFirst == nil)
+        #expect(stateFirst == 7)
+    }
 }

@@ -238,7 +238,7 @@ To check that nothing else arrived, trigger a known emission and read for it wit
 
 ### Hot streams
 
-`StateFlow` / `MutableStateFlow` give you a current value with built-in deduplication. `SharedFlow` / `MutableSharedFlow` broadcast to multiple subscribers with concurrent delivery and a configurable replay buffer. A hot flow stays open until its owner calls `close()` on the mutable flow. Each collector then receives what was already sent to it, and its `collect` returns. Convert cold to hot with `asStateFlow(initialValue:strategy:)` or `asSharedFlow(replay:strategy:)` using `.eager`, `.lazy`, or `.whileSubscribed`.
+`StateFlow` / `MutableStateFlow` give you a current value with built-in deduplication. `SharedFlow` / `MutableSharedFlow` broadcast to multiple subscribers with concurrent delivery and a configurable replay buffer. `MutableSharedFlow.tryEmit(_:)` publishes from synchronous code such as a delegate method, with no `await`. A hot flow stays open until its owner calls `close()` on the mutable flow. Each collector then receives what was already sent to it, and its `collect` returns. Convert cold to hot with `asStateFlow(initialValue:strategy:)` or `asSharedFlow(replay:strategy:)` using `.eager`, `.lazy`, or `.whileSubscribed`.
 
 ### Operators
 
@@ -258,6 +258,22 @@ To check that nothing else arrived, trigger a known emission and read for it wit
 ### Testing
 
 `FlowReader` (via `Flow.probing(_:)`) reads a flow with no deadline. `TestClock` gives deterministic virtual time for rate-limiting and sharing operators, and `FlowTester`, `ThrowingFlowTester` and `TestScope` drive several flows at once against a deadline you measure on a `TestClock`.
+
+### Recording outside a test bundle
+
+`FlowTesting` links the `Testing` framework, so a module that uses it cannot be linked into a UI-test host app, a preview target or a fixture executable. The `FlowRecording` product depends on `Flow` only. Its `FlowRecorder` collects a flow in the background from `init` and keeps every value in order.
+
+```swift
+import Flow
+import FlowRecording
+
+let recorder = FlowRecorder(source.changes())
+source.set(.on)
+let values = await recorder.values(atLeast: 2) // [.off, .on]
+recorder.cancel()
+```
+
+`values(atLeast:)` returns as soon as that many values were recorded, and returns what it has when the flow ends first. `isFinished` and `failure` report how the flow ended. The recorder has no assertions, no timeout and no clock, and it keeps every value in memory, so it is for tests and fixtures only. In a test target, `probing` is still the better tool.
 
 ### Agent skill
 

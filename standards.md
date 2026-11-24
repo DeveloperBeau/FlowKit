@@ -36,7 +36,7 @@ The API catalogue is the DocC site, [Flow](https://developerbeau.github.io/FlowK
 
 ## Architecture
 
-The products are `Flow`, `FlowTesting`, and `FlowUI`. `Flow` is the core. `FlowTesting` and `FlowUI` depend on it. `Flow` does not depend on either of them. `FlowTesting` and `FlowUI` do not depend on each other.
+The products are `Flow`, `FlowTesting`, `FlowRecording`, and `FlowUI`. `Flow` is the core. `FlowTesting`, `FlowRecording`, and `FlowUI` depend on it. `Flow` does not depend on any of them. `FlowTesting`, `FlowRecording`, and `FlowUI` do not depend on each other. `FlowRecording` does not import `Testing` or `XCTest`, directly or through a dependency.
 
 The targets inside those products, as `Package.swift` declares them:
 
@@ -50,6 +50,7 @@ The targets inside those products, as `Package.swift` declares them:
 | 3 | `Flow` | `FlowSharedModels`, `FlowCore`, `FlowOperators`, `FlowHotStreams` |
 | 4 | `FlowTestingCore` | `Flow`, `FlowTestClock` |
 | 4 | `FlowTesting` | `FlowTestClock`, `FlowTestingCore` |
+| 4 | `FlowRecording` | `Flow` |
 | 4 | `FlowSwiftUI` | `FlowSharedModels`, `FlowCore`, `FlowHotStreams`, `Flow` |
 | 4 | `FlowUIKitBridge` | `FlowCore`, `FlowHotStreams` |
 | 5 | `FlowUI` | `FlowSwiftUI`, `FlowUIKitBridge`, `Flow` |
@@ -126,7 +127,7 @@ Every import of a package target that `Package.swift` does not declare is listed
 Test targets. `FlowSharedModelsTests`, `FlowSimulationTests`, and `FlowPublicAPITests` import only modules `Package.swift` lists for them.
 
 - `FlowCoreTests` declares `FlowCore`, `FlowTesting`, and `FlowTestSupport`. It imports `FlowSharedModels` from every `Flow` and `ThrowingFlow` test file except `Flow/RingBufferTests.swift`. It imports `FlowTestingCore` from `Flow/FlowLaunchTests.swift`, `Flow/FlowScopeTests.swift`, and `Flow/MemoryLeakTests.swift`.
-- `FlowOperatorsTests` declares `FlowOperators`, `FlowHotStreams`, `FlowTesting`, `FlowTestClock`, and `FlowTestSupport`. Every test file imports `FlowCore`. Twenty-three of the thirty-seven test files also import `FlowSharedModels`.
+- `FlowOperatorsTests` declares `FlowOperators`, `FlowHotStreams`, `FlowTesting`, `FlowTestClock`, and `FlowTestSupport`. Every test file imports `FlowCore`. Twenty-three of the thirty-eight test files also import `FlowSharedModels`.
 - `FlowHotStreamsTests` declares `FlowHotStreams`, `FlowTesting`, and `FlowTestSupport`. It imports `FlowCore` from every test file except `SharedFlow/MulticastSubscriptionTests.swift`. It imports `FlowSharedModels` from every test file except that file, `HotStreamCloseTests.swift`, and `StateFlow/StateFlowAtomicsTests.swift`. `SharedFlow/ReplayExpirationTests.swift`, `SharedFlow/SharingCoordinatorTests.swift`, and `WhileSubscribedDefaultTests.swift` also import `FlowTestClock` and `FlowTestingCore`.
 - `FlowTestClockTests` declares `FlowTestClock`, `FlowTestingCore`, and `FlowTestSupport`. `TestClockSleeperWaiterTests.swift` imports `FlowSharedModels`.
 - `FlowTestingCoreTests` declares `FlowTestingCore` and `FlowTestSupport`. It imports `FlowCore` from `TestScopeTests.swift`, `Testers/FlowProbeTests.swift`, `Testers/FlowReaderTests.swift`, `Testers/FlowTestExtensionsTests.swift`, `Testers/FlowTesterTests.swift`, and `Testers/ThrowingFlowTesterTests.swift`. It imports `FlowSharedModels` from those files except `Testers/FlowProbeTests.swift`, and also from `TimeoutHelpersTests.swift` and `WaitUntilTests.swift`. `Testers/FlowReaderTests.swift` imports `FlowHotStreams`. `TestScopeTests.swift`, `Testers/FlowTestExtensionsTests.swift`, `TimeoutHelpersTests.swift`, and `WaitUntilTests.swift` import `FlowTestClock`.

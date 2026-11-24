@@ -7,7 +7,9 @@ public actor MutableSharedFlow<Element: Sendable>: SharedFlow, SubscriberCountWa
     private let bufferCapacity: Int
     private let overflow: BufferOverflow
 
-    private var replayBuffer: RingBufferAdapter<Element>
+    /// The replay values. They sit behind a lock, not behind the actor, so
+    /// that `tryEmit(_:)` can store a value from synchronous code.
+    private let replayBuffer: Mutex<RingBufferAdapter<Element>>
     private let subscription: MulticastSubscription<Element>
 
     public init(
@@ -20,7 +22,7 @@ public actor MutableSharedFlow<Element: Sendable>: SharedFlow, SubscriberCountWa
         self.replayCount = replay
         self.bufferCapacity = replay + extraBufferCapacity
         self.overflow = onBufferOverflow
-        self.replayBuffer = RingBufferAdapter(capacity: replay)
+        self.replayBuffer = Mutex(RingBufferAdapter(capacity: replay))
         self.subscription = MulticastSubscription<Element>(
             bufferingPolicy: Self.subscriberBufferingPolicy(
                 capacity: replay + extraBufferCapacity,
@@ -91,18 +93,49 @@ public actor MutableSharedFlow<Element: Sendable>: SharedFlow, SubscriberCountWa
     }
 
     public func emit(_ value: Element) async {
-        // A closed flow drops the value, and its replay cache stays as it was.
-        guard await subscription.deliver(value) else { return }
-        if replayCount > 0 {
+        tryEmit(value)
+    }
+
+    /// Publishes `value` to the current subscribers and the replay cache without suspending.
+    ///
+    /// Use it where the caller cannot `await`: a delegate method, a
+    /// notification block, a C callback. It is safe from any thread. Calls
+    /// made one after another from one thread reach each subscriber in that
+    /// order. Calls that race each other reach every subscriber, and the
+    /// replay cache, in one common order.
+    ///
+    /// ```swift
+    /// func didTap(_ tap: Tap) {
+    ///     taps.tryEmit(tap)
+    /// }
+    /// ```
+    ///
+    /// It never waits for a subscriber. A slow subscriber is handled by the
+    /// `onBufferOverflow` policy of the flow, the same as for `emit(_:)`.
+    ///
+    /// - Parameter value: The value to publish.
+    /// - Returns: `true` when the flow accepted the value, and `false` after
+    ///   ``close()``. Every policy this flow has today accepts: `.suspend`
+    ///   buffers without a bound for each subscriber, and the drop policies
+    ///   shed a value for a slow subscriber and do not refuse it.
+    @discardableResult
+    public nonisolated func tryEmit(_ value: Element) -> Bool {
+        // The replay lock is held across the fan-out, so the replay cache
+        // keeps the same order the subscribers see when callers race. A
+        // closed flow refuses the value, and its replay cache stays as it was.
+        replayBuffer.withLock { replayBuffer in
+            guard subscription.deliverWithoutSuspending(value) else { return false }
             replayBuffer.append(value)
+            return true
         }
     }
 
     /// Ends the flow: every attached collector receives the values already
     /// emitted to it, then its `collect` returns.
     ///
-    /// Close is final and safe to call more than once. After it, `emit` does
-    /// nothing and leaves ``replayCache`` as it was, and a new collector
+    /// Close is final and safe to call more than once. After it, `emit` and
+    /// `tryEmit` publish nothing and leave ``replayCache`` as it was,
+    /// `tryEmit` returns `false`, and a new collector
     /// returns at once without the replay. ``subscriptionCount`` is zero, so
     /// `waitForSubscribers(atMost: 0)` returns, and `waitForSubscribers(_:)`
     /// for one or more collectors stays suspended until its task is cancelled.
@@ -120,7 +153,7 @@ public actor MutableSharedFlow<Element: Sendable>: SharedFlow, SubscriberCountWa
     }
 
     public func resetReplayCache() {
-        replayBuffer = RingBufferAdapter(capacity: replayCount)
+        replayBuffer.withLock { $0 = RingBufferAdapter(capacity: replayCount) }
     }
 
     public nonisolated func asFlow() -> Flow<Element> {
@@ -143,7 +176,7 @@ public actor MutableSharedFlow<Element: Sendable>: SharedFlow, SubscriberCountWa
     }
 
     private func currentReplayElements() -> [Element] {
-        replayBuffer.elements
+        replayBuffer.withLock { $0.elements }
     }
 }
 
@@ -185,5 +218,5 @@ internal struct RingBufferAdapter<Element: Sendable>: Sendable {
 extension MutableSharedFlow {
     /// The values a new subscriber would receive on subscription, oldest
     /// first. Empty when `replay` is zero.
-    public var replayCache: [Element] { replayBuffer.elements }
+    public var replayCache: [Element] { replayBuffer.withLock { $0.elements } }
 }
