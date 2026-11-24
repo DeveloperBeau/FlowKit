@@ -57,7 +57,7 @@ jobs:
       - name: Show Swift version
         run: swift --version
       - name: Build non-UI targets (release config)
-        run: swift build -j 2 -c release --target Flow --target FlowTesting
+        run: swift build -j 2 -c release --target Flow --target FlowTesting --target FlowRecording
       - name: Test non-UI targets (release config)
         run: |
           swift test -j 2 -c release \
@@ -67,6 +67,7 @@ jobs:
             --filter FlowHotStreamsTests \
             --filter FlowTestClockTests \
             --filter FlowTestingCoreTests \
+            --filter FlowRecordingTests \
             --filter FlowPublicAPITests \
             --filter FlowTestingPublicAPITests
 
@@ -153,11 +154,11 @@ jobs:
             triple="$1"; expected="$2"
             echo "::group::$triple"
             swift build -j 2 -c release --swift-sdk "$triple" \
-              --swift-sdks-path "$SWIFT_SDKS_PATH" --target Flow --target FlowTesting
+              --swift-sdks-path "$SWIFT_SDKS_PATH" --target Flow --target FlowTesting --target FlowRecording
             # 6.4 writes products under the path --show-bin-path reports, not
             # .build/<triple>/release. Same flags as the build above.
             bin="$(swift build -j 2 -c release --swift-sdk "$triple" \
-              --swift-sdks-path "$SWIFT_SDKS_PATH" --target Flow --target FlowTesting \
+              --swift-sdks-path "$SWIFT_SDKS_PATH" --target Flow --target FlowTesting --target FlowRecording \
               --show-bin-path)"
             obj="$(find "$bin" -name '*.o' -print -quit || true)"
             [ -n "$obj" ] || { echo "::error::no objects under $bin; did --swift-sdk apply?"; exit 1; }

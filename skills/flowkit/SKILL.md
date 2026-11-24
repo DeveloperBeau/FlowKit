@@ -1,6 +1,6 @@
 ---
 name: flowkit
-description: How FlowKit flows behave in code that uses them. Use when you write, change, review or test Swift code that uses Flow, ThrowingFlow, callbackFlow, channelFlow, MutableStateFlow, MutableSharedFlow, asStateFlow, asSharedFlow or the FlowTesting module.
+description: How FlowKit flows behave in code that uses them. Use when you write, change, review or test Swift code that uses Flow, ThrowingFlow, callbackFlow, channelFlow, MutableStateFlow, MutableSharedFlow, asStateFlow, asSharedFlow, FlowRecorder or the FlowTesting module.
 ---
 
 # FlowKit
@@ -8,7 +8,8 @@ description: How FlowKit flows behave in code that uses them. Use when you write
 FlowKit gives Swift a cold stream type (`Flow`, `ThrowingFlow`) and two hot types
 (`MutableStateFlow`, `MutableSharedFlow`). The facts below come from the source and the tests
 of the package. Products: `Flow` (core and operators), `FlowTesting` (test helpers),
-`FlowUI` (SwiftUI, UIKit and AppKit bindings).
+`FlowRecording` (a flow recorder that does not link `Testing`), `FlowUI` (SwiftUI, UIKit and
+AppKit bindings).
 
 ## Flow is not AsyncStream
 
@@ -196,6 +197,36 @@ final class SessionViewController: UIViewController {
 
 - A `FlowReader` read on a producer that stays open and never emits again parks until the
   test is cancelled. Make each emission depend on an action of the test.
+
+## Recording outside a test bundle (`FlowRecording`)
+
+`FlowTesting` links the `Testing` framework, so a module that imports it cannot be linked into
+a UI-test host app, a preview target or a fixture executable. `FlowRecording` depends on
+`Flow` only. Use it in shared test-support code that those targets link.
+
+```swift
+import Flow
+import FlowRecording
+
+let recorder = FlowRecorder(source.changes())   // collection starts here
+source.set(.on)
+let values = await recorder.values(atLeast: 2)  // [.off, .on]
+recorder.cancel()
+```
+
+- `FlowRecorder(_:)` takes a `Flow` or a `ThrowingFlow` and collects it in a task from `init`.
+  With a hot flow, wait for `waitForSubscribers(1)` before you emit.
+- `values` is every value so far, in emission order. `isFinished` is `true` after the flow
+  completed or failed, or after `cancel()`. `failure` is the error of a `ThrowingFlow`.
+- `values(atLeast:)` returns the whole record when it holds that many values. It returns what
+  it has when the flow ends first, after `cancel()`, or when the waiting task is cancelled.
+  It does not throw.
+- It has no assertion, no timeout and no clock. A wait on a flow that stays open and never
+  emits again does not end by itself. The caller bounds it.
+- `cancel()` and release of the recorder both cancel the collection. A value or an error
+  that arrives after `cancel()` is dropped.
+- The record is unbounded. Do not use it in production code.
+- In a test target that can link `FlowTesting`, `probing` is still the tool.
 
 ## Traps (wrong, then right)
 

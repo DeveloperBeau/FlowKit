@@ -43,6 +43,13 @@
     {
       "target" : {
         "containerPath" : "container:",
+        "identifier" : "FlowRecordingTests",
+        "name" : "FlowRecordingTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:",
         "identifier" : "FlowSharedModelsTests",
         "name" : "FlowSharedModelsTests"
       }

@@ -58,6 +58,11 @@ struct ModulePlacement: Equatable, Sendable {
             "Umbrella that re-exports the testing targets and FlowTestError."
         ),
         library(
+            "FlowRecording",
+            .infrastructure,
+            "A recorder that collects a flow from outside the domain. It imports only Flow, so a host app can link it."
+        ),
+        library(
             "FlowTestSupport",
             .infrastructure,
             "Helpers shared by test targets. Not a product, and no product imports it."
@@ -124,6 +129,12 @@ struct ModulePlacement: Equatable, Sendable {
             "FlowTestingCore",
             .infrastructure,
             "Exercises FlowTestingCore, so it sits in Infrastructure with that module."
+        ),
+        tests(
+            "FlowRecordingTests",
+            "FlowRecording",
+            .infrastructure,
+            "Exercises FlowRecording, so it sits in Infrastructure with that module."
         ),
         tests(
             "FlowTestingPublicAPITests",

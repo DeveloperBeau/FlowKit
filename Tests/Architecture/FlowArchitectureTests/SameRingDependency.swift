@@ -51,7 +51,7 @@ struct SameRingDependency: Sendable {
         ),
         SameRingDependency(
             ring: .infrastructure,
-            reason: "The clock stands alone. Testing core drives flows and may use the clock. The umbrella re-exports those two. Test support calls into that stack, and no product target imports test support.",
+            reason: "The clock stands alone. Testing core drives flows and may use the clock. The umbrella re-exports those two. Test support calls into that stack, and no product target imports test support. The recorder imports none of them, so it stays free of the Testing framework.",
             allowedProductionEdges: [
                 ModuleEdge(importer: "FlowTestingCore", imported: "FlowTestClock"),
                 ModuleEdge(importer: "FlowTesting", imported: "FlowTestClock"),

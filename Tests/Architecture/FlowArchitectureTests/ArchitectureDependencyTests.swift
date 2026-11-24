@@ -20,7 +20,7 @@ struct ArchitectureDependencyTests {
         let core = graph.targets.first { $0.name == "FlowCore" }
         let sharedModels = core?.dependencies.first { $0.name == "FlowSharedModels" }
         #expect(sharedModels != nil)
-        #expect(sharedModels?.line == 56)
+        #expect(sharedModels?.line == 57)
         #expect(dependencyNames("FlowOperators", in: graph.targets) == ["FlowCore"])
         #expect(
             dependencyNames("FlowSimulationTests", in: graph.targets)

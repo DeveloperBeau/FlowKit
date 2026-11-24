@@ -11,15 +11,18 @@ The rules these modules follow are in [standards.md](../../standards.md).
 | [Operators](Operators.md) | The operator library and cancellation |
 | [Async bridge](AsyncBridge.md) | `AsyncSequence` and `AsyncStream` |
 | [FlowTesting](FlowTesting.md) | `probing`, `TestClock`, virtual time |
+| [FlowRecording](FlowRecording.md) | `FlowRecorder`, a recorder with no `Testing` import |
 | [FlowUI](FlowUI.md) | SwiftUI, UIKit, and AppKit |
 
 ## Rings
 
-Dependencies point inward. `Flow` is the core product. `FlowTesting` and `FlowUI` depend on it, and neither depends on the other. `Flow` does not depend on them.
+Dependencies point inward. `Flow` is the core product. `FlowTesting`, `FlowRecording`, and `FlowUI` depend on it, and none of them depends on another. `Flow` does not depend on them.
 
 `FlowSharedModels` is the innermost target (`Mutex`, `BufferOverflow`, `SharingStrategy`, `FlowTestError`). `FlowCore` and `FlowTestClock` sit on it. `FlowOperators` sits on `FlowCore` and on AsyncAlgorithms. `FlowHotStreams` sits on the core, the operators, and the shared models. The `Flow` umbrella re-exports those four.
 
 `FlowTestingCore` depends on the `Flow` product and on `FlowTestClock`. The `FlowTesting` umbrella re-exports `FlowSharedModels`, `FlowTestClock`, and `FlowTestingCore`.
+
+`FlowRecording` depends on the `Flow` product only.
 
 `FlowSwiftUI` depends on `Flow` and on the hot-stream and core targets it uses directly. `FlowUIKitBridge` depends on `FlowCore` and `FlowHotStreams`. The `FlowUI` umbrella re-exports both bridges and `Flow`. The bridge files also import `FlowOperators`. That edge is recorded in [standards.md](../../standards.md).
 

@@ -36,7 +36,7 @@ The API catalogue is the DocC site, [Flow](https://developerbeau.github.io/FlowK
 
 ## Architecture
 
-The products are `Flow`, `FlowTesting`, and `FlowUI`. `Flow` is the core. `FlowTesting` and `FlowUI` depend on it. `Flow` does not depend on either of them. `FlowTesting` and `FlowUI` do not depend on each other.
+The products are `Flow`, `FlowTesting`, `FlowRecording`, and `FlowUI`. `Flow` is the core. `FlowTesting`, `FlowRecording`, and `FlowUI` depend on it. `Flow` does not depend on any of them. `FlowTesting`, `FlowRecording`, and `FlowUI` do not depend on each other. `FlowRecording` does not import `Testing` or `XCTest`, directly or through a dependency.
 
 The targets inside those products, as `Package.swift` declares them:
 
@@ -50,6 +50,7 @@ The targets inside those products, as `Package.swift` declares them:
 | 3 | `Flow` | `FlowSharedModels`, `FlowCore`, `FlowOperators`, `FlowHotStreams` |
 | 4 | `FlowTestingCore` | `Flow`, `FlowTestClock` |
 | 4 | `FlowTesting` | `FlowTestClock`, `FlowTestingCore` |
+| 4 | `FlowRecording` | `Flow` |
 | 4 | `FlowSwiftUI` | `FlowSharedModels`, `FlowCore`, `FlowHotStreams`, `Flow` |
 | 4 | `FlowUIKitBridge` | `FlowCore`, `FlowHotStreams` |
 | 5 | `FlowUI` | `FlowSwiftUI`, `FlowUIKitBridge`, `Flow` |
