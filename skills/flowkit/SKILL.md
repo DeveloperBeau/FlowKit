@@ -128,8 +128,8 @@ let chunks = ThrowingFlow<Data>.callbackFlow(bufferCapacity: 0) { scope in
 
 | Type | Holds | New collector receives | Completes |
 |---|---|---|---|
-| `MutableStateFlow(initial)` | One current value, read and written synchronously through `value` | The current value, then each distinct change | Never |
-| `MutableSharedFlow(replay: n)` | The last `n` values | The replay, then new values | Never |
+| `MutableStateFlow(initial)` | One current value, read and written synchronously through `value` | The current value, then each distinct change | Only after `close()` |
+| `MutableSharedFlow(replay: n)` | The last `n` values | The replay, then new values | Only after `close()` |
 
 - `MutableStateFlow` needs `Element: Equatable`. Setting an equal value does nothing.
   Collectors do not see it. Use `update`, `getAndUpdate`, `updateAndGet` or `compareAndSet`
@@ -139,14 +139,26 @@ let chunks = ThrowingFlow<Data>.callbackFlow(bufferCapacity: 0) { scope in
 - `MutableSharedFlow.tryEmit(_:)` does the same work as `emit` with no `await`. Call it from a
   delegate method, a notification block or a C callback, from any thread. Calls made in order
   from one thread arrive in that order. It never waits for a collector. It returns `true`
-  for every overflow policy the flow has today. Do not start a `Task` for each event to call
+  for every overflow policy the flow has today, and `false` only after `close()`. Do not start a `Task` for each event to call
   `emit`, because two such tasks are not ordered.
 - `MutableSharedFlow` with `onBufferOverflow: .suspend` (the default) does not backpressure.
   The buffer of each subscriber is unbounded. `.dropOldest` and `.dropLatest` bound it to
   `replay + extraBufferCapacity` when that sum is greater than zero. A sum of zero stays
   unbounded.
-- Read a hot flow with `.asFlow()`. Because hot flows never complete, use `first()`,
-  `prefix(_:)` or a cancelled task to stop. `toArray()` on a hot flow never returns.
+- Read a hot flow with `.asFlow()`. A hot flow does not complete until its owner closes it,
+  so use `first()`, `prefix(_:)` or a cancelled task to stop. `toArray()` on an open hot flow
+  never returns.
+- `close()` on `MutableStateFlow` (synchronous) or `MutableSharedFlow` (`await`) ends the
+  flow. Each collector receives the values already sent to it, then `collect` returns. Close
+  is final and safe to repeat. There is no reopen.
+- After `close()`, `emit`, `tryEmit`, `send`, a write to `value` and the update family do
+  nothing, and `tryEmit` returns `false`.
+  `value` still reads the last value. A new collector of a closed `MutableSharedFlow` returns
+  at once and gets no replay. A new collector of a closed `MutableStateFlow` receives the last
+  value and then returns.
+- The flows returned by `asStateFlow(initialValue:strategy:clock:)` and
+  `asSharedFlow(replay:strategy:clock:)` have no `close()`. The sharing strategy owns their
+  lifetime.
 - `asStateFlow(initialValue:strategy:clock:)` and `asSharedFlow(replay:strategy:clock:)` are
   on `Flow` only. `asStateFlow` needs `Element: Equatable`. A `ThrowingFlow` must `catch`
   first. They share one upstream collection between collectors.

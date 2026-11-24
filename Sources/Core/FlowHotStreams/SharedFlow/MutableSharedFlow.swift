@@ -114,19 +114,42 @@ public actor MutableSharedFlow<Element: Sendable>: SharedFlow, SubscriberCountWa
     /// `onBufferOverflow` policy of the flow, the same as for `emit(_:)`.
     ///
     /// - Parameter value: The value to publish.
-    /// - Returns: `true` when the flow accepted the value. Every policy this
-    ///   flow has today accepts: `.suspend` buffers without a bound for each
-    ///   subscriber, and the drop policies shed a value for a slow subscriber
-    ///   and do not refuse it.
+    /// - Returns: `true` when the flow accepted the value, and `false` after
+    ///   ``close()``. Every policy this flow has today accepts: `.suspend`
+    ///   buffers without a bound for each subscriber, and the drop policies
+    ///   shed a value for a slow subscriber and do not refuse it.
     @discardableResult
     public nonisolated func tryEmit(_ value: Element) -> Bool {
         // The replay lock is held across the fan-out, so the replay cache
-        // keeps the same order the subscribers see when callers race.
+        // keeps the same order the subscribers see when callers race. A
+        // closed flow refuses the value, and its replay cache stays as it was.
         replayBuffer.withLock { replayBuffer in
-            subscription.deliverWithoutSuspending(value)
+            guard subscription.deliverWithoutSuspending(value) else { return false }
             replayBuffer.append(value)
+            return true
         }
-        return true
+    }
+
+    /// Ends the flow: every attached collector receives the values already
+    /// emitted to it, then its `collect` returns.
+    ///
+    /// Close is final and safe to call more than once. After it, `emit` and
+    /// `tryEmit` publish nothing and leave ``replayCache`` as it was,
+    /// `tryEmit` returns `false`, and a new collector
+    /// returns at once without the replay. ``subscriptionCount`` is zero, so
+    /// `waitForSubscribers(atMost: 0)` returns, and `waitForSubscribers(_:)`
+    /// for one or more collectors stays suspended until its task is cancelled.
+    ///
+    /// ```swift
+    /// let events = MutableSharedFlow<Event>()
+    /// let observer = Task {
+    ///     await events.asFlow().collect { handle($0) }
+    ///     cleanUp() // runs after close
+    /// }
+    /// await events.close()
+    /// ```
+    public func close() async {
+        await subscription.finishAll()
     }
 
     public func resetReplayCache() {

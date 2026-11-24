@@ -109,6 +109,22 @@ struct FlowReachabilityTests {
         #expect(await asProtocol.subscriptionCount == 0)
     }
 
+    @Test("close is reachable on both mutable hot flows and ends a collection")
+    func closeReachable() async {
+        let state = MutableStateFlow(1)
+        state.close()
+        let stateValues = Mutex<[Int]>([])
+        await state.asFlow().collect { value in stateValues.withLock { $0.append(value) } }
+        #expect(stateValues.withLock { $0 } == [1])
+
+        let shared = MutableSharedFlow<Int>(replay: 1)
+        await shared.emit(1)
+        await shared.close()
+        let sharedValues = Mutex<[Int]>([])
+        await shared.asFlow().collect { value in sharedValues.withLock { $0.append(value) } }
+        #expect(sharedValues.withLock { $0 } == [])
+    }
+
     @Test("MutableSharedFlow.tryEmit is callable from a function that is not async")
     func tryEmitReachableFromSynchronousCode() async {
         // A plain closure type has no `async`, so this compiles only while

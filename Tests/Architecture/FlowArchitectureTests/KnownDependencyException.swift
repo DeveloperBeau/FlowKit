@@ -72,6 +72,7 @@ struct KnownDependencyException: Equatable, Sendable {
         entry("FlowCoreTests", "FlowTestingCore", "Tests/Core/FlowCoreTests/Flow/FlowLaunchTests.swift", 4, flowCoreTestsUsesFlowTestingCore),
         entry("FlowCoreTests", "FlowTestingCore", "Tests/Core/FlowCoreTests/Flow/FlowScopeTests.swift", 5, flowCoreTestsUsesFlowTestingCore),
         entry("FlowCoreTests", "FlowTestingCore", "Tests/Core/FlowCoreTests/Flow/MemoryLeakTests.swift", 5, flowCoreTestsUsesFlowTestingCore),
+        entry("FlowHotStreamsTests", "FlowCore", "Tests/Core/FlowHotStreamsTests/HotStreamCloseTests.swift", 2, flowHotStreamsTestsUsesFlowCore),
         entry("FlowHotStreamsTests", "FlowCore", "Tests/Core/FlowHotStreamsTests/HotStreamHardeningTests.swift", 2, flowHotStreamsTestsUsesFlowCore),
         entry("FlowHotStreamsTests", "FlowCore", "Tests/Core/FlowHotStreamsTests/PerformanceTests.swift", 2, flowHotStreamsTestsUsesFlowCore),
         entry("FlowHotStreamsTests", "FlowCore", "Tests/Core/FlowHotStreamsTests/ReadOnlyViewTests.swift", 2, flowHotStreamsTestsUsesFlowCore),

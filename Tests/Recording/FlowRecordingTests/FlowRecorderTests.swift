@@ -320,6 +320,40 @@ struct FlowRecorderTests {
         }
     }
 
+    @Test("A recorder of a hot flow finishes with the values sent before the flow is closed")
+    func hotFlowCloseFinishesTheRecorder() async throws {
+        let source = MutableSharedFlow<String>()
+        let recorder = FlowRecorder(source.asFlow())
+        try await bounded("wait for the recorder to subscribe") {
+            try await source.waitForSubscribers(1)
+        }
+        source.tryEmit("off")
+        source.tryEmit("on")
+        await source.close()
+        #expect(!source.tryEmit("late"))
+
+        let recorded = try await bounded("wait for the closed hot flow to complete") {
+            await recorder.values(atLeast: .max)
+        }
+        #expect(recorded == ["off", "on"])
+        #expect(recorder.isFinished)
+        #expect(recorder.failure == nil)
+    }
+
+    @Test("A recorder of an already closed state flow records the last value and finishes")
+    func closedStateFlowFinishesTheRecorder() async throws {
+        let source = MutableStateFlow(1)
+        source.value = 2
+        source.close()
+
+        let recorder = FlowRecorder(source.asFlow())
+        let recorded = try await bounded("wait for the closed state flow to complete") {
+            await recorder.values(atLeast: .max)
+        }
+        #expect(recorded == [2])
+        #expect(recorder.isFinished)
+    }
+
     @Test("A recorder is read from a non-test isolation without a hop")
     @MainActor
     func readsFromTheMainActor() async throws {

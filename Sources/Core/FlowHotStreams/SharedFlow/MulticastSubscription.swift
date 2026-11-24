@@ -10,10 +10,18 @@ internal actor MulticastSubscription<Element: Sendable> {
     /// bounded by this, so a fast emitter conflates or drops for it rather than
     /// letting its buffer grow without bound.
     private let bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy
-    /// The attached subscribers. They sit behind a lock, not behind the actor,
-    /// so that `deliverWithoutSuspending(_:)` can reach them from synchronous
-    /// code. Only actor-isolated methods add or remove an entry.
-    private let subscribers = Mutex<[UUID: Subscriber]>([:])
+    /// The attached subscribers and the closed flag. They sit behind a lock,
+    /// not behind the actor, so that `deliverWithoutSuspending(_:)` can reach
+    /// them from synchronous code. Only actor-isolated methods add or remove
+    /// an entry.
+    private struct State: Sendable {
+        var subscribers: [UUID: Subscriber] = [:]
+        /// Set by `finishAll()` and never cleared. A closed subscription
+        /// holds no subscribers and delivers nothing.
+        var isClosed = false
+    }
+
+    private let state = Mutex(State())
 
     private struct CountWaiter {
         let isSatisfied: @Sendable (Int) -> Bool
@@ -27,46 +35,67 @@ internal actor MulticastSubscription<Element: Sendable> {
         self.bufferingPolicy = bufferingPolicy
     }
 
-    var subscriberCount: Int { subscribers.withLock { $0.count } }
+    var subscriberCount: Int { state.withLock { $0.subscribers.count } }
 
+    /// Registers a subscriber and returns its stream. After `finishAll()` the
+    /// stream is already finished and nothing is registered.
     func makeSubscription() -> (UUID, AsyncStream<Element>) {
         let id = UUID()
         let (stream, continuation) = AsyncStream<Element>.makeStream(bufferingPolicy: bufferingPolicy)
-        subscribers.withLock { $0[id] = Subscriber(continuation: continuation) }
+        let isRegistered = state.withLock { state in
+            guard !state.isClosed else { return false }
+            state.subscribers[id] = Subscriber(continuation: continuation)
+            return true
+        }
+        guard isRegistered else {
+            continuation.finish()
+            return (id, stream)
+        }
         resumeSatisfiedWaiters()
         return (id, stream)
     }
 
-    func deliver(_ value: Element) {
+    /// Sends `value` to every subscriber. Returns `false`, and sends nothing,
+    /// after `finishAll()`.
+    @discardableResult
+    func deliver(_ value: Element) -> Bool {
         deliverWithoutSuspending(value)
     }
 
     /// Yields `value` to every attached subscriber from any thread, without a
     /// hop to this actor. The lock is held for the whole fan-out, so two
-    /// concurrent callers reach every subscriber in the same order.
-    nonisolated func deliverWithoutSuspending(_ value: Element) {
-        subscribers.withLock { subscribers in
-            for subscriber in subscribers.values {
+    /// concurrent callers reach every subscriber in the same order, and a
+    /// value is either sent to all of them before `finishAll()` or to none.
+    /// Returns `false`, and sends nothing, after `finishAll()`.
+    @discardableResult
+    nonisolated func deliverWithoutSuspending(_ value: Element) -> Bool {
+        state.withLock { state in
+            guard !state.isClosed else { return false }
+            for subscriber in state.subscribers.values {
                 subscriber.continuation.yield(value)
             }
+            return true
         }
     }
 
     func deliver(_ value: Element, to id: UUID) {
-        subscribers.withLock { $0[id] }?.continuation.yield(value)
+        state.withLock { $0.subscribers[id] }?.continuation.yield(value)
     }
 
     func unsubscribe(id: UUID) {
-        if let subscriber = subscribers.withLock({ $0.removeValue(forKey: id) }) {
+        if let subscriber = state.withLock({ $0.subscribers.removeValue(forKey: id) }) {
             subscriber.continuation.finish()
             resumeSatisfiedWaiters()
         }
     }
 
+    /// Finishes every subscriber and closes the subscription for good. Each
+    /// stream still hands out the values it had buffered before it ends.
     func finishAll() {
-        let removed = subscribers.withLock { subscribers in
-            defer { subscribers.removeAll() }
-            return Array(subscribers.values)
+        let removed = state.withLock { state in
+            state.isClosed = true
+            defer { state.subscribers.removeAll() }
+            return Array(state.subscribers.values)
         }
         for subscriber in removed {
             subscriber.continuation.finish()
