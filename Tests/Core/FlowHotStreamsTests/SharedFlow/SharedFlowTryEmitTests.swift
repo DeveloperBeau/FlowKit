@@ -248,6 +248,27 @@ struct SharedFlowTryEmitTests {
         await collecting.value
     }
 
+    @Test("A tryEmit right after a collector attaches arrives once, after the replay")
+    func valueSentWhileCollectorReadsReplayArrivesOnce() async throws {
+        for round in 0..<500 {
+            let shared = MutableSharedFlow<Int>(replay: 2)
+            shared.tryEmit(1)
+            shared.tryEmit(2)
+            let received = Recorder<Int>()
+            let collecting = Task { await shared.asFlow().collect { received.record($0) } }
+            try await shared.waitForSubscribers(1)
+
+            shared.tryEmit(3)
+            shared.tryEmit(-1)
+
+            await received.wait { $0.last == -1 }
+            #expect(received.elements == [1, 2, 3, -1], "round \(round)")
+
+            collecting.cancel()
+            await collecting.value
+        }
+    }
+
     @Test("Seeded fuzz: emit and tryEmit mixed from one task keep order and fill the replay")
     func seededFuzzMixedEmitAndTryEmit() async throws {
         print("MutableSharedFlow tryEmit fuzz seed: \(Self.fuzzSeed)")

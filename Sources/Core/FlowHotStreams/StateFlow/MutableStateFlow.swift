@@ -180,6 +180,55 @@ public final class MutableStateFlow<Element: Sendable & Equatable>: StateFlow, S
 }
 
 extension MutableStateFlow {
+    /// Registers a subscriber before it returns, and gives the flow that
+    /// reads it.
+    ///
+    /// ``asFlow()`` registers its subscriber when a task starts to collect it,
+    /// so it starts from the value at that later time. This method registers
+    /// at the call. The returned flow emits the value that was current at the
+    /// call, then every later distinct update, even when the collection starts
+    /// later.
+    ///
+    /// ```swift
+    /// let changes = state.subscribed()        // registered here
+    /// let consumer = Task {
+    ///     await changes.collect { render($0) }
+    /// }
+    /// ```
+    ///
+    /// The subscriber counts in ``subscriptionCount`` from the call. It is
+    /// removed when the collecting task is cancelled, and when the returned
+    /// flow is released without a collection.
+    ///
+    /// The returned flow can be collected once. A second collection completes
+    /// at once and emits nothing. If this state flow is released first, the
+    /// collection emits the buffered values and then completes.
+    ///
+    /// - Returns: A flow of the value at this call and the updates after it.
+    public func subscribed() -> Flow<Element> {
+        let registration = RegisteredSubscription(in: subscription)
+        // Snapshot after registering, for the same reason as `asFlow()`: an
+        // update the snapshot misses reaches the stream, and its ordinal
+        // filters anything at or before the snapshot.
+        let snapshot = storage.withLock { Stamped(seq: $0.seq, value: $0.value) }
+        return Flow<Element> { collector in
+            guard registration.claimCollection() else { return }
+            var lastSeq = snapshot.seq
+            await collector.emit(snapshot.value)
+
+            for await stamped in registration.stream {
+                guard stamped.seq > lastSeq else { continue }
+                lastSeq = stamped.seq
+                await collector.emit(stamped.value)
+                if Task.isCancelled { break }
+            }
+
+            registration.cancel()
+        }
+    }
+}
+
+extension MutableStateFlow {
     /// Atomically applies `transform` and returns the value that was current
     /// before the update. May re-run `transform` when writers race.
     @discardableResult
