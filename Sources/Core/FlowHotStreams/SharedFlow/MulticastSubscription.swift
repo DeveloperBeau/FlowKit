@@ -10,6 +10,9 @@ internal actor MulticastSubscription<Element: Sendable> {
     /// letting its buffer grow without bound.
     private let bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy
     private var subscribers: [UUID: Subscriber] = [:]
+    /// Set by `finishAll()` and never cleared. A closed subscription holds no
+    /// subscribers and delivers nothing.
+    private var isClosed = false
 
     private struct CountWaiter {
         let isSatisfied: @Sendable (Int) -> Bool
@@ -25,18 +28,29 @@ internal actor MulticastSubscription<Element: Sendable> {
 
     var subscriberCount: Int { subscribers.count }
 
+    /// Registers a subscriber and returns its stream. After `finishAll()` the
+    /// stream is already finished and nothing is registered.
     func makeSubscription() -> (UUID, AsyncStream<Element>) {
         let id = UUID()
         let (stream, continuation) = AsyncStream<Element>.makeStream(bufferingPolicy: bufferingPolicy)
+        guard !isClosed else {
+            continuation.finish()
+            return (id, stream)
+        }
         subscribers[id] = Subscriber(continuation: continuation)
         resumeSatisfiedWaiters()
         return (id, stream)
     }
 
-    func deliver(_ value: Element) {
+    /// Sends `value` to every subscriber. Returns `false`, and sends nothing,
+    /// after `finishAll()`.
+    @discardableResult
+    func deliver(_ value: Element) -> Bool {
+        guard !isClosed else { return false }
         for subscriber in subscribers.values {
             subscriber.continuation.yield(value)
         }
+        return true
     }
 
     func deliver(_ value: Element, to id: UUID) {
@@ -50,7 +64,10 @@ internal actor MulticastSubscription<Element: Sendable> {
         }
     }
 
+    /// Finishes every subscriber and closes the subscription for good. Each
+    /// stream still hands out the values it had buffered before it ends.
     func finishAll() {
+        isClosed = true
         for subscriber in subscribers.values {
             subscriber.continuation.finish()
         }

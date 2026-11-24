@@ -238,7 +238,7 @@ To check that nothing else arrived, trigger a known emission and read for it wit
 
 ### Hot streams
 
-`StateFlow` / `MutableStateFlow` give you a current value with built-in deduplication. `SharedFlow` / `MutableSharedFlow` broadcast to multiple subscribers with concurrent delivery and a configurable replay buffer. Convert cold to hot with `asStateFlow(initialValue:strategy:)` or `asSharedFlow(replay:strategy:)` using `.eager`, `.lazy`, or `.whileSubscribed`.
+`StateFlow` / `MutableStateFlow` give you a current value with built-in deduplication. `SharedFlow` / `MutableSharedFlow` broadcast to multiple subscribers with concurrent delivery and a configurable replay buffer. A hot flow stays open until its owner calls `close()` on the mutable flow. Each collector then receives what was already sent to it, and its `collect` returns. Convert cold to hot with `asStateFlow(initialValue:strategy:)` or `asSharedFlow(replay:strategy:)` using `.eager`, `.lazy`, or `.whileSubscribed`.
 
 ### Operators
 

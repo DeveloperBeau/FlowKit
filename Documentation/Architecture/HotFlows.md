@@ -4,7 +4,7 @@ A hot flow runs one shared execution and delivers each value to the collectors a
 
 [Hot vs cold streams](https://developerbeau.github.io/FlowKit/documentation/flow/hotvscoldstreams) is the catalogue article. This page is the layout of the types.
 
-Hot flows do not complete. `toArray()`, `last()`, and a `collect` to the end stay suspended. Stop a collector by cancelling its task, or by an operator that has its answer (`first()`, `prefix(_:)`).
+A hot flow does not complete by itself. `toArray()`, `last()`, and a `collect` to the end stay suspended while the flow is open. Stop one collector by cancelling its task, or by an operator that has its answer (`first()`, `prefix(_:)`). The owner of a `MutableStateFlow` or a `MutableSharedFlow` ends it for every collector with `close()`. See [Closing a hot flow](#closing-a-hot-flow).
 
 ## StateFlow
 
@@ -25,6 +25,20 @@ A single pipeline task delivers updates in the order they were applied. `asFlow(
 `.suspend` does not backpressure this type. The per-subscriber buffer is unbounded for `.suspend` and for a capacity of zero, because the `AsyncStream` continuation cannot suspend the emitter. `.dropOldest` and `.dropLatest` bound each subscriber to `replay + extraBufferCapacity`. `BufferOverflow` in `FlowSharedModels` describes the three policies. The channel path in [Cold flows](ColdFlows.md) is where `.suspend` really suspends, and only on `send`.
 
 The same subscriber waiters as `MutableStateFlow` live here, and they are not part of the `SharedFlow` protocol.
+
+## Closing a hot flow
+
+`MutableStateFlow.close()` and `MutableSharedFlow.close()` end the flow. Each attached collector receives the values already sent to it, then its `collect` returns. A slow collector still drains its buffer first. Close is final. A second call does nothing, and there is no reopen.
+
+After close, publishing does nothing. `MutableSharedFlow.emit` delivers no value and leaves the replay cache as it was. On `MutableStateFlow`, a write to `value`, `send`, and `compareAndSet` with a different value leave the last value in place, and `compareAndSet` returns `false`. `update`, `getAndUpdate`, and `updateAndGet` return the last value and do not run the transform. `value` still reads the last value.
+
+A collector that attaches after close returns without waiting. On a `MutableSharedFlow` it receives nothing, not even the replay. On a `MutableStateFlow` it receives the last value first.
+
+`MutableStateFlow.close()` is synchronous. It ends the pipeline, and the pipeline task finishes the subscribers after the updates that were applied before the close. `MutableSharedFlow.close()` is isolated to the actor, so the caller awaits it. Both are safe to call at the same time as publishers and as other calls to `close()`.
+
+A closed flow has no subscribers. `subscriptionCount` is zero and `waitForSubscribers(atMost: 0)` returns. Do not wait for collectors on a closed flow. `waitForSubscribers(_:)` for one or more collectors can stay suspended until the caller is cancelled.
+
+The read-only views from `MutableStateFlow.asStateFlow()` and `MutableSharedFlow.asSharedFlow()` forward to the mutable flow, so their collectors return too. The views do not expose `close()`. The flows from `Flow.asStateFlow(initialValue:strategy:clock:)` and `Flow.asSharedFlow(replay:strategy:clock:)` also have no `close()`. The sharing strategy owns their lifetime.
 
 ## Sharing a cold upstream
 

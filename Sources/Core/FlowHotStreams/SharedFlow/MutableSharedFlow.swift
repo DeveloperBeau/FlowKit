@@ -91,10 +91,32 @@ public actor MutableSharedFlow<Element: Sendable>: SharedFlow, SubscriberCountWa
     }
 
     public func emit(_ value: Element) async {
-        await subscription.deliver(value)
+        // A closed flow drops the value, and its replay cache stays as it was.
+        guard await subscription.deliver(value) else { return }
         if replayCount > 0 {
             replayBuffer.append(value)
         }
+    }
+
+    /// Ends the flow: every attached collector receives the values already
+    /// emitted to it, then its `collect` returns.
+    ///
+    /// Close is final and safe to call more than once. After it, `emit` does
+    /// nothing and leaves ``replayCache`` as it was, and a new collector
+    /// returns at once without the replay. ``subscriptionCount`` is zero, so
+    /// `waitForSubscribers(atMost: 0)` returns, and `waitForSubscribers(_:)`
+    /// for one or more collectors stays suspended until its task is cancelled.
+    ///
+    /// ```swift
+    /// let events = MutableSharedFlow<Event>()
+    /// let observer = Task {
+    ///     await events.asFlow().collect { handle($0) }
+    ///     cleanUp() // runs after close
+    /// }
+    /// await events.close()
+    /// ```
+    public func close() async {
+        await subscription.finishAll()
     }
 
     public func resetReplayCache() {
