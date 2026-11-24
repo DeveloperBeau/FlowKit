@@ -100,6 +100,11 @@ let locations = Flow<CLLocation>.callbackFlow { scope in
   for read-modify-write.
 - `MutableSharedFlow.emit` sends only to the collectors attached at that time. With
   `replay: 0`, a value emitted before a collector attaches is lost.
+- `MutableSharedFlow.tryEmit(_:)` does the same work as `emit` with no `await`. Call it from a
+  delegate method, a notification block or a C callback, from any thread. Calls made in order
+  from one thread arrive in that order. It never waits for a collector. It returns `true`
+  for every overflow policy the flow has today. Do not start a `Task` for each event to call
+  `emit`, because two such tasks are not ordered.
 - `MutableSharedFlow` with `onBufferOverflow: .suspend` (the default) does not backpressure.
   The buffer of each subscriber is unbounded. `.dropOldest` and `.dropLatest` bound it to
   `replay + extraBufferCapacity` when that sum is greater than zero. A sum of zero stays
