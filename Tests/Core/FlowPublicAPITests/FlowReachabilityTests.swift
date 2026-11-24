@@ -89,6 +89,16 @@ struct FlowReachabilityTests {
         #expect(await asProtocol.subscriptionCount == 0)
     }
 
+    @Test("MutableSharedFlow.tryEmit is callable from a function that is not async")
+    func tryEmitReachableFromSynchronousCode() async {
+        // A plain closure type has no `async`, so this compiles only while
+        // `tryEmit` needs no `await`.
+        let shared = MutableSharedFlow<String>(replay: 1)
+        let publish: @Sendable (String) -> Bool = { shared.tryEmit($0) }
+        #expect(publish("event"))
+        #expect(await shared.replayCache == ["event"])
+    }
+
     @Test("SharingStrategy and BufferOverflow are reachable")
     func sharedModelsReachable() {
         let strategy: SharingStrategy = .whileSubscribed(stopTimeout: .seconds(5))

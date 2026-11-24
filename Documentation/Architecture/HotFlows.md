@@ -22,6 +22,8 @@ A single pipeline task delivers updates in the order they were applied. `asFlow(
 
 `emit` sends to the collectors attached now. With `replay: 0`, a value emitted before a collector attaches is gone. A new collector then receives the replay buffer, then later values. `resetReplayCache()` clears that buffer. `MutableSharedFlow.asSharedFlow()` is the read-only view.
 
+`tryEmit(_:)` is the same publish with no `await`. It is `nonisolated`, so a delegate method, a notification block, or a C callback can call it from any thread. The subscriber list and the replay buffer each sit behind a `Mutex` and not behind the actor, and `emit` goes through the same path. `tryEmit` holds the replay lock across the fan-out. Calls that race each other then reach every subscriber and the replay buffer in one common order, and calls made in order from one thread keep that order. It returns `true` for every policy the flow has today, because no policy makes the flow refuse a value.
+
 `.suspend` does not backpressure this type. The per-subscriber buffer is unbounded for `.suspend` and for a capacity of zero, because the `AsyncStream` continuation cannot suspend the emitter. `.dropOldest` and `.dropLatest` bound each subscriber to `replay + extraBufferCapacity`. `BufferOverflow` in `FlowSharedModels` describes the three policies. The channel path in [Cold flows](ColdFlows.md) is where `.suspend` really suspends, and only on `send`.
 
 The same subscriber waiters as `MutableStateFlow` live here, and they are not part of the `SharedFlow` protocol.
