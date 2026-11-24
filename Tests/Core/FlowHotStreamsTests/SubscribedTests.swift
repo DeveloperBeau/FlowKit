@@ -449,6 +449,127 @@ struct SharedFlowSubscribedTests {
             #expect(await shared.subscriptionCount == live.count, "seed \(seed), step \(step)")
         }
     }
+
+    @Test("tryEmit from synchronous code reaches a subscribed() collection in call order")
+    func tryEmitArrivesInCallOrder() async {
+        let shared = MutableSharedFlow<Int>()
+        let incoming = shared.subscribed()
+
+        for value in 1...1000 { shared.tryEmit(value) }
+
+        #expect(await values(1000, from: incoming) == Array(1...1000))
+    }
+
+    @Test("the replay at registration arrives before later tryEmit values, with no repeat")
+    func tryEmitDeliversReplayThenLaterValues() async {
+        let shared = MutableSharedFlow<Int>(replay: 2)
+        shared.tryEmit(1)
+        shared.tryEmit(2)
+        let incoming = shared.subscribed()
+
+        shared.tryEmit(3)
+        shared.tryEmit(4)
+
+        #expect(await values(4, from: incoming) == [1, 2, 3, 4])
+    }
+
+    @Test("close ends a subscribed() collection after the values sent before it")
+    func closeEndsCollectionAfterItsValues() async {
+        let shared = MutableSharedFlow<Int>()
+        let incoming = shared.subscribed()
+        await shared.emit(1)
+        shared.tryEmit(2)
+
+        await shared.close()
+        await shared.emit(3)
+        #expect(!shared.tryEmit(4))
+
+        #expect(await valuesToCompletion(of: incoming) == [1, 2])
+    }
+
+    @Test("close ends a subscribed() collection that is already running")
+    func closeEndsRunningCollection() async throws {
+        let shared = MutableSharedFlow<Int>()
+        let incoming = shared.subscribed()
+        let received = Recorder<Int>()
+        let hasReturned = Signal()
+        let collecting = Task {
+            await incoming.collect { received.record($0) }
+            hasReturned.fire()
+        }
+        shared.tryEmit(1)
+        // The collector has taken the value, so it is suspended in its stream.
+        _ = try await withThrowingTimeout(safetyNet, clock: ContinuousClock()) {
+            await received.wait(atLeast: 1)
+        }
+
+        await shared.close()
+
+        #expect(await hasReturned.fires(), "the collection did not end after close")
+        #expect(received.elements == [1])
+        collecting.cancel()
+    }
+
+    @Test("subscribed() on a closed flow gives a flow that completes at once, without the replay")
+    func subscribedOnClosedFlowCompletesAtOnce() async {
+        let shared = MutableSharedFlow<Int>(replay: 1)
+        shared.tryEmit(1)
+        await shared.close()
+
+        let incoming = shared.subscribed()
+
+        #expect(await shared.subscriptionCount == 0)
+        #expect(await valuesToCompletion(of: incoming) == [])
+    }
+
+    @Test("the subscriber count is zero after close, and stays zero when the flows are dropped")
+    func countStaysRightAcrossClose() async throws {
+        let shared = MutableSharedFlow<Int>()
+        var first: Flow<Int>? = shared.subscribed()
+        var second: Flow<Int>? = shared.subscribed()
+        let lazy = Task { await shared.asFlow().collect { _ in } }
+        _ = try await withThrowingTimeout(safetyNet, clock: ContinuousClock()) {
+            try await shared.waitForSubscribers(3)
+        }
+        #expect(await shared.subscriptionCount == 3)
+
+        await shared.close()
+        #expect(await shared.subscriptionCount == 0)
+
+        withExtendedLifetime((first, second)) {}
+        first = nil
+        second = nil
+        await lazy.value
+        #expect(await shared.subscriptionCount == 0)
+
+        let late = shared.subscribed()
+        #expect(await shared.subscriptionCount == 0)
+        withExtendedLifetime(late) {}
+        // Returns only while the count is zero.
+        _ = try await withThrowingTimeout(safetyNet, clock: ContinuousClock()) {
+            try await shared.waitForSubscribers(atMost: 0)
+        }
+    }
+
+    @Test("tryEmit racing close gives a subscribed() collection every accepted value and no other")
+    func tryEmitRacingCloseDeliversAcceptedValues() async {
+        for _ in 0..<20 {
+            let shared = MutableSharedFlow<Int>()
+            let incoming = shared.subscribed()
+
+            let accepted = await withTaskGroup(of: Int.self) { group in
+                // One publisher, so the order of its values is fixed.
+                group.addTask { (0..<2000).filter { shared.tryEmit($0) }.count }
+                group.addTask {
+                    await shared.close()
+                    return 0
+                }
+                return await group.reduce(0, +)
+            }
+
+            #expect(await valuesToCompletion(of: incoming) == Array(0..<accepted))
+        }
+    }
 }
 
 @Suite("MutableStateFlow.subscribed")
@@ -572,5 +693,74 @@ struct StateFlowSubscribedTests {
         }
 
         #expect(await values(from: incoming) { $0.last == 800 } == Array(0...800))
+    }
+
+    @Test("close ends a subscribed() collection after the updates applied before it")
+    func closeEndsCollectionAfterItsUpdates() async {
+        let state = MutableStateFlow(0)
+        let incoming = state.subscribed()
+        state.send(1)
+        state.send(2)
+
+        state.close()
+        state.send(3)
+
+        #expect(await valuesToCompletion(of: incoming) == [0, 1, 2])
+    }
+
+    @Test("close ends a subscribed() collection that is already running")
+    func closeEndsRunningCollection() async throws {
+        let state = MutableStateFlow(0)
+        let incoming = state.subscribed()
+        let received = Recorder<Int>()
+        let hasReturned = Signal()
+        let collecting = Task {
+            await incoming.collect { received.record($0) }
+            hasReturned.fire()
+        }
+        state.send(1)
+        // The collector has taken the update, so it is suspended in its stream.
+        _ = try await withThrowingTimeout(safetyNet, clock: ContinuousClock()) {
+            await received.wait(atLeast: 2)
+        }
+
+        state.close()
+
+        #expect(await hasReturned.fires(), "the collection did not end after close")
+        #expect(received.elements == [0, 1])
+        collecting.cancel()
+    }
+
+    @Test("subscribed() on a closed flow gives the last value, then completes")
+    func subscribedOnClosedFlowCompletesAfterLastValue() async throws {
+        let state = MutableStateFlow(0)
+        state.send(5)
+        state.close()
+        // Close finishes the subscribers on the pipeline task. A collection
+        // of a closed flow ends when that task has run.
+        let closed = state.asFlow()
+        #expect(await valuesToCompletion(of: closed) == [5])
+
+        let incoming = state.subscribed()
+
+        #expect(await state.subscriptionCount == 0)
+        #expect(await valuesToCompletion(of: incoming) == [5])
+    }
+
+    @Test("the subscriber count falls to zero after close, and stays zero when the flow is dropped")
+    func countStaysRightAcrossClose() async throws {
+        let state = MutableStateFlow(0)
+        var incoming: Flow<Int>? = state.subscribed()
+        #expect(await state.subscriptionCount == 1)
+
+        state.close()
+        _ = try await withThrowingTimeout(safetyNet, clock: ContinuousClock()) {
+            try await state.waitForSubscribers(atMost: 0)
+        }
+        #expect(await state.subscriptionCount == 0)
+
+        withExtendedLifetime(incoming) {}
+        incoming = nil
+        #expect(await state.subscriptionCount == 0)
     }
 }

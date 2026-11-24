@@ -73,7 +73,7 @@ struct ReplayExpirationCoordinatorTests {
 
         await clock.advance(by: .seconds(2))
         await coordinator.subscriberDidAppear() // cancels the pending reset
-        try await clock.waitForNoSleepers()
+        try #require(await clock.registersNoSleepers(), "the cancelled reset's sleep teardown")
         await clock.advance(by: .seconds(10))
         await settle()
         #expect(resets.count == 0, "a returning subscriber must cancel the reset")
@@ -127,7 +127,7 @@ struct ReplayExpirationCoordinatorTests {
         await coordinator.activate()
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidDisappear()
-        try await clock.waitForSleepers(2)
+        try #require(await clock.registersSleepers(2), "the two expiration sleeps")
 
         await clock.advance(by: .seconds(2))
         await resets.wait(atLeast: 1)
@@ -153,7 +153,7 @@ struct ReplayExpirationCoordinatorTests {
         await coordinator.activate()
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidDisappear()
-        try await clock.waitForSleepers(2)
+        try #require(await clock.registersSleepers(2), "the two expiration sleeps")
 
         await clock.advance(by: .seconds(2))
         await stopped.wait()
@@ -181,12 +181,12 @@ struct ReplayExpirationCoordinatorTests {
         for cycle in 1...3 {
             await coordinator.subscriberDidAppear()
             await coordinator.subscriberDidDisappear()
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "cycle \(cycle) expiration sleep")
             await clock.advance(by: .seconds(2))
             await coordinator.subscriberDidAppear() // a quick return keeps the replay
-            try await clock.waitForNoSleepers()
+            try #require(await clock.registersNoSleepers(), "cycle \(cycle) sleep teardown after the quick return")
             await coordinator.subscriberDidDisappear()
-            try await clock.waitForSleepers(1)
+            try #require(await clock.registersSleepers(1), "cycle \(cycle) fresh expiration sleep")
             // The fresh expiration counts from this leave, so 2 s is not enough.
             await clock.advance(by: .seconds(2))
             await settle()
@@ -210,10 +210,10 @@ struct ReplayExpirationCoordinatorTests {
         await coordinator.activate()
         await coordinator.subscriberDidAppear()
         await coordinator.subscriberDidDisappear()
-        try await clock.waitForSleepers(1)
+        try #require(await clock.registersSleepers(1), "the pending expiration sleep")
 
         await coordinator.deactivate()
-        try await clock.waitForNoSleepers()
+        try #require(await clock.registersNoSleepers(), "the sleep teardown after deactivate")
         await clock.advance(by: .seconds(10))
         await settle()
         #expect(resets.count == 0, "a deactivated coordinator must not reset the replay")
@@ -300,7 +300,7 @@ struct ReplayExpirationSharedFlowTests {
         await upstream.emitted.wait(atLeast: 1)
         first.cancel()
         await first.value
-        try await clock.waitForSleepers(1)
+        try #require(await clock.registersSleepers(1), "the expiration sleep after the first subscriber left")
 
         // The upstream is still running, so nothing re-emits: the replay must be empty.
         let leftover = Recorder<Int>()
@@ -321,7 +321,7 @@ struct ReplayExpirationSharedFlowTests {
             clock: clock
         )
         #expect(await firstValue(of: shared.asFlow()) == 1)
-        try await clock.waitForSleepers(1)
+        try #require(await clock.registersSleepers(1), "the replay expiration sleep")
         await clock.advance(by: .seconds(4))
         #expect(await firstValue(of: shared.asFlow()) == 1, "the replay must survive inside the expiration")
     }
@@ -335,9 +335,9 @@ struct ReplayExpirationSharedFlowTests {
             clock: clock
         )
         #expect(await firstValue(of: shared.asFlow()) == 1)
-        try await clock.waitForSleepers(1)
+        try #require(await clock.registersSleepers(1), "the replay expiration sleep")
         await clock.advance(by: .seconds(5))
-        try await clock.waitForNoSleepers()
+        try #require(await clock.registersNoSleepers(), "the sleep teardown after the expiration elapsed")
         await settle()
         #expect(await firstValue(of: shared.asFlow()) == 2, "the expired replay was delivered")
     }

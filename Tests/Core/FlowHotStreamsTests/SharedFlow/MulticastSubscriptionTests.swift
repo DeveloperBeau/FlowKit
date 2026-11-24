@@ -67,4 +67,42 @@ struct MulticastSubscriptionTests {
         await subscription.finishAll()
         #expect(await subscription.subscriberCount == 0)
     }
+
+    @Test("finishAll ends each stream after the values it had buffered")
+    func finishAllKeepsBufferedValues() async {
+        let subscription = MulticastSubscription<Int>()
+        let (_, stream) = await subscription.makeSubscription()
+        await subscription.deliver(1)
+        await subscription.deliver(2)
+
+        await subscription.finishAll()
+
+        var iterator = stream.makeAsyncIterator()
+        #expect(await iterator.next() == 1)
+        #expect(await iterator.next() == 2)
+        #expect(await iterator.next() == nil)
+    }
+
+    @Test("deliver reports whether the subscription is still open")
+    func deliverReportsClosed() async {
+        let subscription = MulticastSubscription<Int>()
+        #expect(await subscription.deliver(1))
+
+        await subscription.finishAll()
+
+        #expect(!(await subscription.deliver(2)))
+    }
+
+    @Test("a subscription made after finishAll is finished and not counted")
+    func subscriptionAfterFinishAll() async {
+        let subscription = MulticastSubscription<Int>()
+        await subscription.finishAll()
+
+        let (id, stream) = await subscription.makeSubscription()
+        await subscription.deliver(1, to: id)
+
+        #expect(await subscription.subscriberCount == 0)
+        var iterator = stream.makeAsyncIterator()
+        #expect(await iterator.next() == nil)
+    }
 }

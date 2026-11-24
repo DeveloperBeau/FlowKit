@@ -263,7 +263,7 @@ extension Flow {
 /// `.suspend` maps to unbounded storage: the `SendGate` is what enforces the
 /// capacity, by suspending `send` — a bounded stream policy here would
 /// silently drop values instead of backpressuring.
-private func channelBufferingPolicy<Element>(
+internal func channelBufferingPolicy<Element>(
     capacity: Int,
     overflow: BufferOverflow
 ) -> AsyncStream<Element>.Continuation.BufferingPolicy {

@@ -1,6 +1,6 @@
 ---
 name: flowkit
-description: How FlowKit flows behave in code that uses them. Use when you write, change, review or test Swift code that uses Flow, ThrowingFlow, callbackFlow, channelFlow, MutableStateFlow, MutableSharedFlow, asStateFlow, asSharedFlow or the FlowTesting module.
+description: How FlowKit flows behave in code that uses them. Use when you write, change, review or test Swift code that uses Flow, ThrowingFlow, callbackFlow, channelFlow, MutableStateFlow, MutableSharedFlow, asStateFlow, asSharedFlow, FlowRecorder or the FlowTesting module.
 ---
 
 # FlowKit
@@ -8,7 +8,8 @@ description: How FlowKit flows behave in code that uses them. Use when you write
 FlowKit gives Swift a cold stream type (`Flow`, `ThrowingFlow`) and two hot types
 (`MutableStateFlow`, `MutableSharedFlow`). The facts below come from the source and the tests
 of the package. Products: `Flow` (core and operators), `FlowTesting` (test helpers),
-`FlowUI` (SwiftUI, UIKit and AppKit bindings).
+`FlowRecording` (a flow recorder that does not link `Testing`), `FlowUI` (SwiftUI, UIKit and
+AppKit bindings).
 
 ## Flow is not AsyncStream
 
@@ -51,7 +52,17 @@ of the package. Products: `Flow` (core and operators), `FlowTesting` (test helpe
 | `flatMapLatest`, `mapLatest`, `transformLatest` | Cancel the previous inner work when a new value comes | Inner only |
 | `timeout(for:clock:)` | Throws `FlowTimeoutError` when the gap between values (and before the first) is too long. On `Flow` it returns a `ThrowingFlow` | Yes, on timeout |
 
-`first()`, `first(where:)`, `contains(where:)`, `allSatisfy(_:)`, `toArray()`, `last()`, `count()`, `reduce`, `exactlyOne()` and `collectLatest` are on `Flow` only, not `ThrowingFlow`. `prefix(_:)` and `prefix(while:)` are on both. `collect` is on both.
+`contains(where:)`, `allSatisfy(_:)`, `toArray()`, `last()`, `count()`, `reduce`, `exactlyOne()` and `collectLatest` are on `Flow` only, not `ThrowingFlow`. `first()`, `first(where:)`, `prefix(_:)` and `prefix(while:)` are on both. `collect` is on both.
+
+On a `ThrowingFlow`, `first()` and `first(where:)` are `async throws`, and the predicate can be `async` and can throw:
+
+```swift
+let items = try await store.observeItems().first() ?? []
+```
+
+- An error from the flow or from the predicate before the value is taken is rethrown.
+- An error that the upstream throws after the value is taken is dropped. That includes the `CancellationError` of its own teardown.
+- If the caller is cancelled before a value is taken, the call throws `CancellationError`. It does not return `nil`. `Flow.first()` returns `nil` in that case.
 
 > **Note.** In 2.4.1 and earlier, `first()`, `first(where:)`, `contains(where:)`,
 > `allSatisfy(_:)`, `prefix(_:)` and `prefix(while:)` do not cancel the upstream.
@@ -88,24 +99,63 @@ let locations = Flow<CLLocation>.callbackFlow { scope in
   `last()` and a `collect` to the end never return on it. `first()` returns after one value
   (since 2.4.2).
 
+### A source that can fail
+
+```swift
+let chunks = ThrowingFlow<Data>.callbackFlow(bufferCapacity: 0) { scope in
+    let relay = Relay(
+        onChunk: { scope.trySend($0) },
+        onComplete: { error in
+            if let error { scope.close(throwing: error) } else { scope.close() }
+        }
+    )
+    let task = session.start(request, delegate: relay)
+    await scope.awaitClose { task.cancel() }
+}
+```
+
+- `ThrowingFlow.channelFlow` and `ThrowingFlow.callbackFlow` take the same parameters and
+  defaults as the `Flow` builders. The block can throw and receives a `ThrowingProducerScope`.
+- `close(throwing:)` ends the flow with an error. The collector receives every value sent
+  before it, then `collect` throws the error. An error thrown from the block does the same.
+- The first close wins. A later `close()` or `close(throwing:)` is ignored. `trySend` and
+  `send` return `.closed` after it.
+- A cancelled collector is not a failure. `onClose` runs one time, `collect` returns without
+  an error, and an error the block throws while it tears down is dropped.
+- `Flow.callbackFlow` and `ProducerScope` have no `close(throwing:)`. A `Flow` cannot fail.
+
 ## Hot flows
 
 | Type | Holds | New collector receives | Completes |
 |---|---|---|---|
-| `MutableStateFlow(initial)` | One current value, read and written synchronously through `value` | The current value, then each distinct change | Never |
-| `MutableSharedFlow(replay: n)` | The last `n` values | The replay, then new values | Never |
+| `MutableStateFlow(initial)` | One current value, read and written synchronously through `value` | The current value, then each distinct change | Only after `close()` |
+| `MutableSharedFlow(replay: n)` | The last `n` values | The replay, then new values | Only after `close()` |
 
 - `MutableStateFlow` needs `Element: Equatable`. Setting an equal value does nothing.
   Collectors do not see it. Use `update`, `getAndUpdate`, `updateAndGet` or `compareAndSet`
   for read-modify-write.
 - `MutableSharedFlow.emit` sends only to the collectors attached at that time. With
   `replay: 0`, a value emitted before a collector attaches is lost.
+- `MutableSharedFlow.tryEmit(_:)` does the same work as `emit` with no `await`. Call it from a
+  delegate method, a notification block or a C callback, from any thread. Calls made in order
+  from one thread arrive in that order. It never waits for a collector. It returns `true`
+  for every overflow policy the flow has today, and `false` only after `close()`. Do not start a `Task` for each event to call
+  `emit`, because two such tasks are not ordered.
 - `MutableSharedFlow` with `onBufferOverflow: .suspend` (the default) does not backpressure.
   The buffer of each subscriber is unbounded. `.dropOldest` and `.dropLatest` bound it to
   `replay + extraBufferCapacity` when that sum is greater than zero. A sum of zero stays
   unbounded.
-- Read a hot flow with `.asFlow()`. Because hot flows never complete, use `first()`,
-  `prefix(_:)` or a cancelled task to stop. `toArray()` on a hot flow never returns.
+- Read a hot flow with `.asFlow()`. A hot flow does not complete until its owner closes it,
+  so use `first()`, `prefix(_:)` or a cancelled task to stop. `toArray()` on an open hot flow
+  never returns.
+- `close()` on `MutableStateFlow` (synchronous) or `MutableSharedFlow` (`await`) ends the
+  flow. Each collector receives the values already sent to it, then `collect` returns. Close
+  is final and safe to repeat. There is no reopen.
+- After `close()`, `emit`, `tryEmit`, `send`, a write to `value` and the update family do
+  nothing, and `tryEmit` returns `false`.
+  `value` still reads the last value. A new collector of a closed `MutableSharedFlow` returns
+  at once and gets no replay. A new collector of a closed `MutableStateFlow` receives the last
+  value and then returns.
 - `.asFlow()` registers its subscriber when a task starts to collect it. `subscribed()` on
   `MutableSharedFlow` and `MutableStateFlow` registers before it returns. It is synchronous.
   Values emitted after the call wait in the buffer of the subscriber until a task collects
@@ -113,6 +163,12 @@ let locations = Flow<CLLocation>.callbackFlow { scope in
   once with no values. Release the flow without a collection, or cancel the collecting
   task, to remove the subscriber. A state flow gives the value from the time of
   registration first. A shared flow with a replay gives the replay first.
+- `close()` also ends a collection of a `subscribed()` flow, after the values already sent to
+  it. `subscribed()` on a closed `MutableSharedFlow` gives a flow that completes at once with
+  no values. On a closed `MutableStateFlow` it gives the last value and then completes.
+- The flows returned by `asStateFlow(initialValue:strategy:clock:)` and
+  `asSharedFlow(replay:strategy:clock:)` have no `close()`. The sharing strategy owns their
+  lifetime.
 - `asStateFlow(initialValue:strategy:clock:)` and `asSharedFlow(replay:strategy:clock:)` are
   on `Flow` only. `asStateFlow` needs `Element: Equatable`. A `ThrowingFlow` must `catch`
   first. They share one upstream collection between collectors.
@@ -204,6 +260,36 @@ final class SessionViewController: UIViewController {
 - A `FlowReader` read on a producer that stays open and never emits again parks until the
   test is cancelled. Make each emission depend on an action of the test.
 
+## Recording outside a test bundle (`FlowRecording`)
+
+`FlowTesting` links the `Testing` framework, so a module that imports it cannot be linked into
+a UI-test host app, a preview target or a fixture executable. `FlowRecording` depends on
+`Flow` only. Use it in shared test-support code that those targets link.
+
+```swift
+import Flow
+import FlowRecording
+
+let recorder = FlowRecorder(source.changes())   // collection starts here
+source.set(.on)
+let values = await recorder.values(atLeast: 2)  // [.off, .on]
+recorder.cancel()
+```
+
+- `FlowRecorder(_:)` takes a `Flow` or a `ThrowingFlow` and collects it in a task from `init`.
+  With a hot flow, wait for `waitForSubscribers(1)` before you emit.
+- `values` is every value so far, in emission order. `isFinished` is `true` after the flow
+  completed or failed, or after `cancel()`. `failure` is the error of a `ThrowingFlow`.
+- `values(atLeast:)` returns the whole record when it holds that many values. It returns what
+  it has when the flow ends first, after `cancel()`, or when the waiting task is cancelled.
+  It does not throw.
+- It has no assertion, no timeout and no clock. A wait on a flow that stays open and never
+  emits again does not end by itself. The caller bounds it.
+- `cancel()` and release of the recorder both cancel the collection. A value or an error
+  that arrives after `cancel()` is dropped.
+- The record is unbounded. Do not use it in production code.
+- In a test target that can link `FlowTesting`, `probing` is still the tool.
+
 ## Traps (wrong, then right)
 
 All of these come from the source code above.
@@ -218,6 +304,7 @@ All of these come from the source code above.
 | Expect `.suspend` to slow a shared emitter | `MutableSharedFlow(onBufferOverflow: .suspend)` | Use `buffer(size:policy: .suspend)` on a cold flow, or `channelFlow(onBufferOverflow: .suspend)` with `send`. |
 | Real time in a test | `try await Task.sleep(for: .milliseconds(300))` | `await clock.advance(by: .milliseconds(300))` with a `TestClock` |
 | Callback bridge with no teardown | `callbackFlow { scope in register { scope.trySend($0) } }` | End the block with `await scope.awaitClose { unregister() }` |
+| Failure from a callback bridge | `Flow<Result<Data, any Error>>.callbackFlow { ... }` and unwrap downstream | `ThrowingFlow<Data>.callbackFlow` and `scope.close(throwing: error)` |
 | Share by collecting twice | Two `collect` calls on one cold `Flow` | Two runs of the body. `asSharedFlow` and `asStateFlow` are on `Flow` only. A `ThrowingFlow` must `catch` first. |
 
 A silent source. `silent` is the flow that never emits. `clock` is a `TestClock`.

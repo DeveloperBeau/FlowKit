@@ -59,6 +59,26 @@ struct FlowReachabilityTests {
         #expect(received.withLock { $0 } == ["ok"])
     }
 
+    @Test("Throwing channelFlow and callbackFlow are reachable")
+    func throwingChannelBuildersReachable() async {
+        struct Failed: Error {}
+        let channel = ThrowingFlow<Int>.channelFlow { scope in
+            scope.trySend(1)
+            scope.close()
+        }
+        let callback = ThrowingFlow<Int>.callbackFlow { (scope: ThrowingProducerScope<Int>) in
+            await scope.send(2)
+            scope.close(throwing: Failed())
+            await scope.awaitClose()
+        }
+        let received = Mutex<[Int]>([])
+        await #expect(throws: Failed.self) {
+            try await channel.collect { value in received.withLock { $0.append(value) } }
+            try await callback.collect { value in received.withLock { $0.append(value) } }
+        }
+        #expect(received.withLock { $0 } == [1, 2])
+    }
+
     @Test("Transform operators are reachable")
     func operatorsReachable() async {
         let flow = Flow(of: 1, 2, 3, 4, 5)
@@ -100,6 +120,32 @@ struct FlowReachabilityTests {
         let changes = state.subscribed()
         state.send(42)
         #expect(await changes.prefix(2).toArray() == [0, 42])
+    }
+
+    @Test("close is reachable on both mutable hot flows and ends a collection")
+    func closeReachable() async {
+        let state = MutableStateFlow(1)
+        state.close()
+        let stateValues = Mutex<[Int]>([])
+        await state.asFlow().collect { value in stateValues.withLock { $0.append(value) } }
+        #expect(stateValues.withLock { $0 } == [1])
+
+        let shared = MutableSharedFlow<Int>(replay: 1)
+        await shared.emit(1)
+        await shared.close()
+        let sharedValues = Mutex<[Int]>([])
+        await shared.asFlow().collect { value in sharedValues.withLock { $0.append(value) } }
+        #expect(sharedValues.withLock { $0 } == [])
+    }
+
+    @Test("MutableSharedFlow.tryEmit is callable from a function that is not async")
+    func tryEmitReachableFromSynchronousCode() async {
+        // A plain closure type has no `async`, so this compiles only while
+        // `tryEmit` needs no `await`.
+        let shared = MutableSharedFlow<String>(replay: 1)
+        let publish: @Sendable (String) -> Bool = { shared.tryEmit($0) }
+        #expect(publish("event"))
+        #expect(await shared.replayCache == ["event"])
     }
 
     @Test("SharingStrategy and BufferOverflow are reachable")

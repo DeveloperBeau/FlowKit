@@ -21,6 +21,8 @@ public final class MutableStateFlow<Element: Sendable & Equatable>: StateFlow, S
         /// Global update ordinal. Bumped under the lock on every distinct
         /// set, so a stamped delivery can be ordered against a snapshot.
         var seq: UInt64 = 0
+        /// Set by `close()` and never cleared. A closed flow keeps its value.
+        var isClosed = false
     }
 
     /// A value paired with the update ordinal it was produced by, so a
@@ -111,10 +113,38 @@ public final class MutableStateFlow<Element: Sendable & Equatable>: StateFlow, S
     /// a no-op when `newValue` equals the current value.
     public func send(_ newValue: Element) {
         storage.withLock { state in
-            guard newValue != state.value else { return }
+            guard !state.isClosed, newValue != state.value else { return }
             state.value = newValue
             state.seq += 1
             pipeline.yield(Stamped(seq: state.seq, value: newValue))
+        }
+    }
+
+    /// Ends the flow: every attached collector receives the updates applied
+    /// before the close, then its `collect` returns.
+    ///
+    /// Close is final and safe to call more than once, from any thread. After
+    /// it, ``value`` still reads the last value and every write is ignored:
+    /// setting ``value``, ``send(_:)`` and ``compareAndSet(expected:newValue:)``
+    /// change nothing, and the update family returns the last value without
+    /// running its transform. A collector that attaches after the close
+    /// receives the last value, then returns.
+    ///
+    /// ```swift
+    /// let states = MutableStateFlow(State.idle)
+    /// let observer = Task {
+    ///     await states.asFlow().collect { render($0) }
+    ///     cleanUp() // runs after close
+    /// }
+    /// states.close()
+    /// ```
+    public func close() {
+        storage.withLock { state in
+            guard !state.isClosed else { return }
+            state.isClosed = true
+            // Under the lock, so every applied update is already in the
+            // pipeline. The drainer delivers them, then finishes the subscribers.
+            pipeline.finish()
         }
     }
 
@@ -214,12 +244,14 @@ extension MutableStateFlow {
     }
 
     /// Sets `newValue` only if the current value equals `expected`. Returns
-    /// whether the swap happened.
+    /// whether the swap happened. A closed flow accepts no new value, so the
+    /// result is then `false` unless `newValue` is already the current value.
     @discardableResult
     public func compareAndSet(expected: Element, newValue: Element) -> Bool {
         storage.withLock { state in
             guard state.value == expected else { return false }
             guard newValue != state.value else { return true }
+            guard !state.isClosed else { return false }
             state.value = newValue
             state.seq += 1
             pipeline.yield(Stamped(seq: state.seq, value: newValue))
@@ -231,7 +263,9 @@ extension MutableStateFlow {
     /// lock and is retried until the swap applies against an unchanged value.
     private func mutate(_ transform: (Element) -> Element) -> (previous: Element, next: Element) {
         while true {
-            let current = value
+            let (current, isClosed) = storage.withLock { ($0.value, $0.isClosed) }
+            // A closed flow can never apply the swap, so do not retry.
+            guard !isClosed else { return (current, current) }
             let next = transform(current)
             if compareAndSet(expected: current, newValue: next) {
                 return (current, next)

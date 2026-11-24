@@ -2,7 +2,7 @@
 
 Operators live in `Sources/Core/FlowOperators`. The target depends on `FlowCore` and on AsyncAlgorithms. An operator returns a new `Flow` or `ThrowingFlow`. Its body collects the upstream and emits downstream. Nothing in the chain runs until some outer `collect`.
 
-Most operators exist on both `Flow` and `ThrowingFlow`. The terminal operations `first`, `first(where:)`, `contains(where:)`, `allSatisfy`, `toArray`, `reduce`, `exactlyOne`, `collectLatest`, `last`, and `count` are on `Flow`. So are `mapThrowing`, `flatMap(maxConcurrent:)`, `buffer(size:policy:)`, `bufferUnbounded()`, and `keepingLatest()`. `catch`, `retry`, and `retryWhen` are on `ThrowingFlow`. `prefix` is on both.
+Most operators exist on both `Flow` and `ThrowingFlow`. The terminal operations `contains(where:)`, `allSatisfy`, `toArray`, `reduce`, `exactlyOne`, `collectLatest`, `last`, and `count` are on `Flow`. So are `mapThrowing`, `flatMap(maxConcurrent:)`, `buffer(size:policy:)`, `bufferUnbounded()`, and `keepingLatest()`. `catch`, `retry`, and `retryWhen` are on `ThrowingFlow`. `prefix`, `first`, and `first(where:)` are on both.
 
 The name-by-name map from Kotlin Flow is the catalogue article [Kotlin Flow migration](https://developerbeau.github.io/FlowKit/documentation/flow/kotlinflowmigration). The groups below are the files.
 
@@ -16,7 +16,7 @@ The name-by-name map from Kotlin Flow is the catalogue article [Kotlin Flow migr
 | `RateLimiting.swift` | `debounce`, `throttle`, `removeDuplicates`, `sample` |
 | `Buffering.swift` | `buffer(size:policy:)`, `bufferUnbounded()`, `keepingLatest()`, all on `Flow` only |
 | `Timeout.swift` | `timeout(for:clock:)` |
-| `Terminal.swift` | the `Flow` terminals listed above, plus `ExactlyOneError` |
+| `Terminal.swift` | the `Flow` terminals listed above, `first` and `first(where:)` on both, plus `ExactlyOneError` |
 | `MigrationShims.swift` | unavailable RxSwift and Combine names |
 
 `debounce`, `throttle`, `sample`, and `timeout` take a `Clock` and default it to `ContinuousClock()`. `retry` and `retryWhen` do not take a clock. A backoff delay is whatever the `retryWhen` predicate does.
@@ -36,6 +36,8 @@ The name-by-name map from Kotlin Flow is the catalogue article [Kotlin Flow migr
 An operator that has its answer cancels the upstream and waits until that upstream ends.
 
 `first()`, `first(where:)`, `contains(where:)`, and `allSatisfy(_:)` do this through `collectUntilStopped`. So do `prefix(_:)` and `prefix(while:)` on `Flow` and on `ThrowingFlow`. A producer can emit once more before it sees the cancellation, and the stop action ignores that late value. A flow that never emits and never completes leaves `first()` suspended. A flow that completes without a match returns `nil` from `first()` and `false` from `contains(where:)`. An empty flow makes `allSatisfy` return `true`.
+
+On `ThrowingFlow`, `first()` and `first(where:)` rethrow an error that arrives before the value is taken. They drop an error that the upstream throws after the stop, which includes the `CancellationError` of its teardown. When the caller is cancelled before a value is taken they throw `CancellationError`, where `Flow.first()` returns `nil`.
 
 `flatMapLatest`, `mapLatest`, and `transformLatest` cancel the previous inner flow when a new upstream value arrives. `collectLatest` cancels the previous action the same way. `timeout` cancels the collection when it fails with `FlowTimeoutError`.
 
