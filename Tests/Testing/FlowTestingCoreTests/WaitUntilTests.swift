@@ -1,14 +1,8 @@
 import Testing
-import Foundation
 import FlowSharedModels
 import FlowTestClock
 import FlowTestSupport
 @testable import FlowTestingCore
-
-/// Blocks the calling thread, as a stalled process would.
-private func stall(seconds: TimeInterval) {
-    Thread.sleep(forTimeInterval: seconds)
-}
 
 /// Runs a `waitUntil` whose condition never holds and reports, through
 /// `finished`, when it returns. `started` fires on the first poll, which is
@@ -76,8 +70,8 @@ struct WaitUntilTests {
         #expect(calls.withLock { $0 } == 80, "the wait returned before the condition held")
     }
 
-    // The real-clock overload, kept as a deliberate real-time path: the stall
-    // injector proves the stall allowance, which only exists on the real clock.
+    // The real-clock overload, kept as a deliberate real-time path so the
+    // deprecated public entry point stays covered.
     @available(*, deprecated)
     private func legacyWaitUntil(
         timeout: Duration,
@@ -94,15 +88,29 @@ struct WaitUntilTests {
         #expect(calls.withLock { $0 } >= 1)
     }
 
-    @available(*, deprecated)
-    @Test("A stall inside the real-clock wait does not use up the timeout")
-    func legacyStallDoesNotExpireTheTimeout() async {
+    // The stall allowance, driven on a TestClock: advancing the clock inside
+    // the condition stands in for a pass that came back late.
+    @Test("A stall inside the wait does not use up the timeout")
+    func stallDoesNotExpireTheTimeout() async {
+        let clock = TestClock()
         let calls = Mutex(0)
-        await legacyWaitUntil(timeout: .milliseconds(100)) {
+        await waitUntil(.milliseconds(100), clock: clock, compensatingStalls: true) {
             let call = calls.withLock { $0 += 1; return $0 }
-            if call == 1 { stall(seconds: 1.5) }
+            if call == 1 { await clock.advance(by: .milliseconds(1500)) }
             return call >= 3
         }
         #expect(calls.withLock { $0 } == 3, "the wait gave up after the stall instead of polling on")
+    }
+
+    @Test("A pass of a second or less is not credited as a stall")
+    func shortStallExpiresTheTimeout() async {
+        let clock = TestClock()
+        let calls = Mutex(0)
+        await waitUntil(.milliseconds(100), clock: clock, compensatingStalls: true) {
+            let call = calls.withLock { $0 += 1; return $0 }
+            if call == 1 { await clock.advance(by: .milliseconds(500)) }
+            return call >= 2
+        }
+        #expect(calls.withLock { $0 } == 1, "a pass under a second extended the deadline like a stall")
     }
 }

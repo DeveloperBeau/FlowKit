@@ -41,7 +41,8 @@ public func waitUntil<C: Clock>(
     await waitUntil(timeout, clock: clock, compensatingStalls: false, condition)
 }
 
-private func waitUntil<C: Clock>(
+/// Shared polling loop; with `compensatingStalls`, passes longer than a second on `clock` extend the deadline.
+func waitUntil<C: Clock>(
     _ timeout: Duration,
     clock: C,
     compensatingStalls: Bool,
