@@ -29,6 +29,10 @@ internal func scaledTimeout(_ duration: Duration) -> Duration {
 /// Runs `body` with a real-time wall-clock timeout. Throws
 /// `FlowTestError.timeout` if `body` does not complete within `duration`
 /// (scaled by ``flowTestTimeoutScale``).
+///
+/// `body` must respond to cancellation. When the timeout fires, `body` is
+/// cancelled and the call waits for it to return before it throws, so a `body`
+/// that ignores cancellation keeps the call waiting past the timeout.
 public func withThrowingTimeout<R: Sendable>(
     _ duration: Duration,
     _ body: @escaping @Sendable () async throws -> R
@@ -44,6 +48,10 @@ public func withThrowingTimeout<R: Sendable>(
 /// test advances the clock past `duration`, never because real time passed.
 /// `duration` is used as given, without ``flowTestTimeoutScale``, because a
 /// virtual clock cannot be stretched by a loaded machine.
+///
+/// `body` must respond to cancellation. When the timeout fires, `body` is
+/// cancelled and the call waits for it to return before it throws, so a `body`
+/// that ignores cancellation keeps the call waiting past the timeout.
 public func withThrowingTimeout<R: Sendable, C: Clock>(
     _ duration: Duration,
     clock: C,

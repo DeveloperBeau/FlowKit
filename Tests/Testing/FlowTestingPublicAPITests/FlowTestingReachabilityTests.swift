@@ -71,24 +71,33 @@ struct FlowTestingReachabilityTests {
         guard try await finishes(observed, "probe.waitForValue") else { return }
     }
 
-    /// Awaits `task` under a wall-clock safety net. A task that never returns is
-    /// cancelled and recorded as a named failure, and `false` tells the caller to
-    /// stop rather than run later steps against a broken setup.
+    /// Awaits `task` under a wall-clock safety net and rethrows its error. A task
+    /// that never returns is cancelled and recorded as a named failure, and
+    /// `false` tells the caller to stop rather than run later steps against a
+    /// broken setup.
+    ///
+    /// The safety net never joins `task`, so a task that ignores cancellation
+    /// still fails by name. A watcher task awaits the result and signals through
+    /// a stream, and only the stream is read under the timeout. Reading a stream
+    /// ends on cancellation, so the timeout always returns.
     private func finishes(_ task: Task<Void, any Error>, _ name: String) async throws -> Bool {
+        let (returned, signal) = AsyncStream<Void>.makeStream()
+        Task<Void, Never> {
+            _ = await task.result
+            signal.finish()
+        }
         do {
             try await withThrowingTimeout(.seconds(30)) {
-                try await withTaskCancellationHandler {
-                    try await task.value
-                } onCancel: {
-                    task.cancel()
-                }
+                for await _ in returned {}
+                try Task.checkCancellation()
             }
-            return true
         } catch FlowTestError.timeout {
             task.cancel()
             Issue.record("\(name) never returned")
             return false
         }
+        try await task.value
+        return true
     }
 
     @Test("withThrowingTimeout and waitUntil accept a clock")

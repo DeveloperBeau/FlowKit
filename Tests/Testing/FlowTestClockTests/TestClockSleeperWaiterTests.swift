@@ -7,21 +7,26 @@ import FlowTestingCore
 
 @Suite("TestClock waitForSleepers")
 struct TestClockSleeperWaiterTests {
-    /// Awaits a waiter task under a wall-clock safety net. A waiter that never returns is
-    /// cancelled and recorded as a named failure instead of parking the run.
-    private func finishes(_ task: Task<Void, any Error>, _ name: String) async throws {
-        do {
-            try await withThrowingTimeout(.seconds(30)) {
-                try await withTaskCancellationHandler {
-                    try await task.value
-                } onCancel: {
-                    task.cancel()
-                }
-            }
-        } catch FlowTestError.timeout {
-            task.cancel()
+    /// The result of a waiter task, read under a wall-clock safety net, or `nil` if the
+    /// waiter never returned. The safety net never joins the waiter: a watcher task awaits
+    /// it and fires a signal, and only the signal is awaited. So a waiter that ignores
+    /// cancellation still fails by name. It is cancelled, recorded as "<name> never
+    /// returned", and the run moves on.
+    private func outcome(of task: Task<Void, any Error>, _ name: String) async -> Result<Void, any Error>? {
+        guard await task.returns() else {
             Issue.record("\(name) never returned")
+            return nil
         }
+        return await task.result
+    }
+
+    /// Awaits a waiter task under a wall-clock safety net and rethrows its error. Returns
+    /// `false` when the waiter never returned, after recording it by name, so the caller
+    /// stops rather than run later steps against a broken setup.
+    private func finishes(_ task: Task<Void, any Error>, _ name: String) async throws -> Bool {
+        guard let result = await outcome(of: task, name) else { return false }
+        try result.get()
+        return true
     }
 
     private func sleeper(on clock: TestClock, seconds: Int) -> Task<Void, any Error> {
@@ -80,7 +85,7 @@ struct TestClockSleeperWaiterTests {
         #expect(!resumed.hasFired, "resumed with only one of two sleepers")
 
         let second = sleeper(on: clock, seconds: 2)
-        try await finishes(waiter, "the waiter for two sleepers")
+        guard try await finishes(waiter, "the waiter for two sleepers") else { return }
         #expect(resumed.hasFired)
 
         await clock.run()
@@ -97,12 +102,12 @@ struct TestClockSleeperWaiterTests {
         let waiterTwo = Task { try await clock.waitForSleepers(2); two.fire() }
 
         let first = sleeper(on: clock, seconds: 1)
-        try await finishes(waiterOne, "the waiter for one sleeper")
+        guard try await finishes(waiterOne, "the waiter for one sleeper") else { return }
         await clock.advance(by: .zero)
         #expect(!two.hasFired, "the waiter for two resumed with one sleeper")
 
         let second = sleeper(on: clock, seconds: 2)
-        try await finishes(waiterTwo, "the waiter for two sleepers")
+        guard try await finishes(waiterTwo, "the waiter for two sleepers") else { return }
 
         await clock.run()
         try await first.value
@@ -119,7 +124,8 @@ struct TestClockSleeperWaiterTests {
         }
         await started.wait()
         waiter.cancel()
-        await #expect(throws: CancellationError.self) { try await finishes(waiter, "the cancelled waiter") }
+        guard let result = await outcome(of: waiter, "the cancelled waiter") else { return }
+        #expect(throws: CancellationError.self) { try result.get() }
 
         // The cancelled waiter must not be resumed a second time by a later sleeper.
         let later = sleeper(on: clock, seconds: 1)
@@ -135,7 +141,8 @@ struct TestClockSleeperWaiterTests {
             withUnsafeCurrentTask { $0?.cancel() }
             try await clock.waitForSleepers(1)
         }
-        await #expect(throws: CancellationError.self) { try await finishes(task, "the already-cancelled waiter") }
+        guard let result = await outcome(of: task, "the already-cancelled waiter") else { return }
+        #expect(throws: CancellationError.self) { try result.get() }
     }
 
     @Test("A sleeper that is removed again does not satisfy a later wait")
@@ -153,7 +160,7 @@ struct TestClockSleeperWaiterTests {
         #expect(!resumed.hasFired, "counted a sleeper that had already been cancelled")
 
         let live = sleeper(on: clock, seconds: 2)
-        try await finishes(waiter, "the waiter for the live sleeper")
+        guard try await finishes(waiter, "the waiter for the live sleeper") else { return }
         await clock.run()
         try await live.value
     }
