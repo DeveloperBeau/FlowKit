@@ -52,6 +52,21 @@ public actor SharingCoordinator {
     /// Records a new subscriber. Returns only after any replay reset already
     /// under way has finished, so the subscriber cannot read a stale replay.
     public func subscriberDidAppear() async {
+        await subscriberWillAttach()
+        subscriberDidAttach()
+    }
+
+    /// Records a new subscriber without starting the upstream. Cancels any
+    /// pending stop or replay reset, then returns only after any replay reset
+    /// already under way has finished, so the subscriber cannot read a stale
+    /// replay.
+    ///
+    /// Register the subscriber with the shared flow after this returns, then
+    /// call ``subscriberDidAttach()``. A restarted upstream then emits into a
+    /// subscriber that already holds the replay, so its first value cannot
+    /// evict the kept replay first. Every call must be balanced by
+    /// ``subscriberDidDisappear()``.
+    func subscriberWillAttach() async {
         pendingStopTask?.cancel()
         pendingStopTask = nil
         pendingResetTask?.cancel()
@@ -59,7 +74,12 @@ public actor SharingCoordinator {
         subscriberCount += 1
 
         if let runningReset { await runningReset.value }
+    }
 
+    /// Starts the upstream for a subscriber recorded by
+    /// ``subscriberWillAttach()``, if it is not already running and the
+    /// coordinator is active.
+    func subscriberDidAttach() {
         if !isUpstreamRunning && isActive {
             switch strategy {
             case .eager, .lazy, .whileSubscribed:

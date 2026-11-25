@@ -326,6 +326,23 @@ struct ReplayExpirationSharedFlowTests {
         #expect(await firstValue(of: shared.asFlow()) == 1, "the replay must survive inside the expiration")
     }
 
+    @Test("a subscriber returning inside replayExpiration receives the kept replay before the restarted upstream's value")
+    func keptReplayPrecedesRestartedUpstream() async throws {
+        for iteration in 1...200 {
+            let clock = TestClock()
+            let upstream = NumberedUpstream()
+            let shared = upstream.flow().asSharedFlow(
+                replay: 1, strategy: .whileSubscribed(stopTimeout: .zero, replayExpiration: .seconds(5)),
+                clock: clock
+            )
+            #expect(await firstValue(of: shared.asFlow()) == 1)
+            try #require(await clock.registersSleepers(1), "iteration \(iteration) replay expiration sleep")
+            await clock.advance(by: .seconds(4))
+            let first = await firstValue(of: shared.asFlow())
+            try #require(first == 1, "iteration \(iteration): the restarted upstream overwrote the kept replay")
+        }
+    }
+
     @Test("non-zero replayExpiration clears the replay once it elapses")
     func replayClearedAfterExpiration() async throws {
         let clock = TestClock()
