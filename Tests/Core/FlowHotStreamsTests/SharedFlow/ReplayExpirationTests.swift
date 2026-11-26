@@ -326,6 +326,70 @@ struct ReplayExpirationSharedFlowTests {
         #expect(await firstValue(of: shared.asFlow()) == 1, "the replay must survive inside the expiration")
     }
 
+    @Test("a returning subscriber gets the replay before the restarted upstream's first value")
+    func returningSubscriberGetsReplayBeforeRestart() async throws {
+        let clock = TestClock()
+        let upstream = NumberedUpstream()
+        let shared = upstream.flow().asSharedFlow(
+            replay: 1, strategy: .whileSubscribed(stopTimeout: .zero, replayExpiration: .seconds(5)),
+            clock: clock
+        )
+
+        // Contention inside the test: one spinner per core keeps the scheduler
+        // busy, which widens the window between a subscriber attaching and the
+        // restarted upstream's first emit.
+        let stopSpinning = Signal()
+        let spinners = (0..<ProcessInfo.processInfo.activeProcessorCount).map { _ in
+            Task<Void, Never> {
+                while !stopSpinning.hasFired { await Task.yield() }
+            }
+        }
+
+        var failure: (any Error)?
+        do {
+            for cycle in 1...200 {
+                try await returnWithinExpiration(cycle: cycle, to: shared, of: upstream, on: clock)
+            }
+        } catch {
+            failure = error
+        }
+
+        stopSpinning.fire()
+        for (index, spinner) in spinners.enumerated() {
+            #expect(await spinner.returns(), "spinner \(index) never stopped")
+        }
+        if let failure { throw failure }
+    }
+
+    /// One cycle of the returning-subscriber test: a fresh subscriber reads its
+    /// first value, leaves once the upstream's `cycle`th start has emitted, and
+    /// the clock moves to 1 s short of the replay expiration.
+    private func returnWithinExpiration(
+        cycle: Int,
+        to shared: any SharedFlow<Int>,
+        of upstream: NumberedUpstream,
+        on clock: TestClock
+    ) async throws {
+        let values = Recorder<Int>()
+        let subscriber = Task { await shared.asFlow().collect { values.record($0) } }
+        defer { subscriber.cancel() }
+
+        // Cycle 1 has no replay, so the first start's 1 arrives. Every later
+        // cycle must read the previous start's number from the kept replay.
+        try #require(await values.records(atLeast: 1), "cycle \(cycle) first value")
+        let expected = cycle == 1 ? 1 : cycle - 1
+        try #require(
+            values.elements.first == expected,
+            "cycle \(cycle): the restarted upstream's value replaced the replay before the subscriber read it"
+        )
+
+        try #require(await upstream.emitted.records(atLeast: cycle), "cycle \(cycle) upstream start \(cycle) emit")
+        subscriber.cancel()
+        try #require(await subscriber.returns(), "cycle \(cycle) subscriber exit")
+        try #require(await clock.registersSleepers(1), "cycle \(cycle) expiration sleep")
+        await clock.advance(by: .seconds(4))
+    }
+
     @Test("non-zero replayExpiration clears the replay once it elapses")
     func replayClearedAfterExpiration() async throws {
         let clock = TestClock()

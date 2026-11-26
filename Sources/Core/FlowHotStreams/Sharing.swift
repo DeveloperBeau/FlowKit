@@ -184,8 +184,15 @@ private actor CoordinatedSharedFlow<Element: Sendable>: SharedFlow, SubscriberCo
         Flow<Element> { [weak self] collector in
             guard let self else { return }
             await self.ensureActivated()
-            await self.coordinator.subscriberDidAppear()
-            await self.inner.asFlow().collect { value in
+            // Count the subscriber and wait out a running reset, register it
+            // with the replay pending, and only then start the upstream. The
+            // upstream's first emit hands the kept replay to the registered
+            // subscriber before its own value, so it cannot evict the replay
+            // first.
+            await self.coordinator.subscriberWillAttach()
+            let values = self.inner.subscribed()
+            await self.coordinator.subscriberDidAttach()
+            await values.collect { value in
                 await collector.emit(value)
             }
             // Awaited, not deferred to a task, so a zero replayExpiration has
