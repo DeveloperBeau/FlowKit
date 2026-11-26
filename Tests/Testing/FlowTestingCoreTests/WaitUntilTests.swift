@@ -102,15 +102,40 @@ struct WaitUntilTests {
         #expect(calls.withLock { $0 } == 3, "the wait gave up after the stall instead of polling on")
     }
 
-    @Test("A pass of a second or less is not credited as a stall")
-    func shortStallExpiresTheTimeout() async {
+    @Test(
+        "A pass of a second or less is not credited as a stall",
+        arguments: [Duration.milliseconds(500), .seconds(1)]
+    )
+    func shortStallExpiresTheTimeout(pass: Duration) async {
         let clock = TestClock()
         let calls = Mutex(0)
         await waitUntil(.milliseconds(100), clock: clock, compensatingStalls: true) {
             let call = calls.withLock { $0 += 1; return $0 }
-            if call == 1 { await clock.advance(by: .milliseconds(500)) }
+            if call == 1 { await clock.advance(by: pass) }
             return call >= 2
         }
-        #expect(calls.withLock { $0 } == 1, "a pass under a second extended the deadline like a stall")
+        let message: Comment = pass == .seconds(1)
+            ? "a pass of exactly a second was credited as a stall"
+            : "a pass under a second extended the deadline like a stall"
+        #expect(calls.withLock { $0 } == 1, message)
+    }
+
+    @Test("The deadline stops extending once the stall is over, so the wait expires")
+    func waitExpiresAfterAStall() async {
+        let clock = TestClock()
+        let calls = Mutex(0)
+        let hitCap = Mutex(false)
+        await waitUntil(.milliseconds(100), clock: clock, compensatingStalls: true) {
+            let call = calls.withLock { $0 += 1; return $0 }
+            // Cap: if the deadline keeps extending, end the wait here instead of hanging.
+            if call > 50 { hitCap.withLock { $0 = true }; return true }
+            await clock.advance(by: call == 1 ? .milliseconds(1500) : .milliseconds(50))
+            return false
+        }
+        #expect(!hitCap.withLock { $0 }, "the wait never timed out after the stall")
+        #expect(
+            calls.withLock { $0 } == 3,
+            "expected 3 polls: if more, the deadline kept extending after the stall, so the wait never expired"
+        )
     }
 }
