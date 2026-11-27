@@ -150,18 +150,53 @@ func locations(service: LocationService) -> Flow<Double> {
 - Other builders: `Flow(of: 1, 2, 3)` emits the values and completes. `Flow(sequence)` does the
   same for a `Sendable` sequence. `Flow.empty` completes at once. `Flow.never` never emits and never
   completes until the task is cancelled.
-- `trySend` does not suspend and returns `.enqueued`, `.dropped` or `.closed`.
-- `send` suspends only with `onBufferOverflow: .suspend` and a positive `bufferCapacity`.
-  Otherwise it is the same as `trySend`. Under `.suspend`, `trySend` buffers without a bound.
+- Both builders are cold. Every collector runs the block again with its own scope. For one
+  shared registration, add `asSharedFlow` after the builder.
+- `trySend` does not suspend and returns `.enqueued`, `.dropped` or `.closed`. It is the call
+  to use inside a synchronous callback, on any thread.
+- `send` is `async`. It suspends only with `onBufferOverflow: .suspend` and a positive
+  `bufferCapacity`. Otherwise it is the same as `trySend`. Under `.suspend`, `trySend` buffers
+  without a bound and does not use a slot, so a callback bridge cannot get backpressure.
 - Defaults: `bufferCapacity: 64`, `onBufferOverflow: .dropOldest`. A capacity of zero or less
   is unbounded.
+- `.dropOldest` keeps the newest values. Capacity 1 conflates a signal such as a location.
+  `.dropLatest` keeps the buffered values and discards the new one, and `trySend` returns
+  `.dropped`. `.suspend` backs up a producer that calls `send`.
+- `isClosedForSend` is `true` once the flow has ended. `trySend` and `send` then return `.closed`
+  and do not deliver the value.
 - `awaitClose(onClose)` suspends until the collector cancels, the collection ends or the
-  block calls `close()`. Then it runs `onClose` one time.
+  block calls `close()`. Then it runs `onClose` one time. `onClose` is synchronous and `@Sendable`.
 - A `callbackFlow` block must end on `awaitClose` (or call `close()`). In debug builds an
-  assertion fails if it returns without one of them.
+  assertion fails if it returns without one of them. In release builds there is no check. The
+  block returns, the flow completes at once, and the callback fires into a closed channel.
+- A `channelFlow` block does not need `awaitClose`. The flow completes when the block
+  returns. Use it for a producer that is `async` and not a callback bridge.
 - A `callbackFlow` that emits and then parks on `awaitClose` never completes. `toArray()`,
   `last()` and a `collect` to the end never return on it. `first()` returns after one value
   (since 2.4.2).
+- The block runs on the cooperative pool, not on a run loop or the main thread. Create an API
+  that needs a thread, such as `CLLocationManager`, on the right actor first. For example,
+  `await MainActor.run { ... }`.
+- An API that holds its delegate weakly drops it when nothing else keeps it. Capture the
+  delegate in the `onClose` closure so that it lives while the block is parked.
+
+### Backpressure from an async producer
+
+```swift
+import Flow
+
+func replay(_ values: [Int]) -> Flow<Int> {
+    Flow<Int>.channelFlow(bufferCapacity: 8, onBufferOverflow: .suspend) { scope in
+        for value in values {
+            // .closed means the collector is gone. Stop producing.
+            guard await scope.send(value) == .enqueued else { return }
+        }
+    }
+}
+```
+
+- `send` waits while `bufferCapacity` values are unconsumed. A slow collector slows the
+  producer, and no value is lost.
 
 ### A source that can fail
 
@@ -199,6 +234,9 @@ func chunks() -> ThrowingFlow<Data> {
 - A cancelled collector is not a failure. `onClose` runs one time, `collect` returns without
   an error, and an error the block throws while it tears down is dropped.
 - `Flow.callbackFlow` and `ProducerScope` have no `close(throwing:)`. A `Flow` cannot fail.
+  To end a `Flow` bridge on an error, call `close()`. The error is lost.
+- A `ThrowingFlow` has no `asSharedFlow`. To share a failing bridge, call `catch` first. It
+  returns a `Flow`: `bridge.catch { _, _ in }.asSharedFlow(replay: 1)`.
 
 ## Hot flows
 

@@ -8,7 +8,7 @@ import FlowTesting
 @Suite("LocationTracker")
 struct LocationTrackerTests {
 
-    @Test("emits simulated location")
+    @Test("emits simulated location", .timeLimit(.minutes(1)))
     func emitsSimulatedLocation() async throws {
         let mock = MockLocationManager()
         let tracker = LocationTracker(managerFactory: { mock })

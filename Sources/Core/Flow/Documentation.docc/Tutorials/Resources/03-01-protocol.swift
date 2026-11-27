@@ -1,9 +1,7 @@
 import CoreLocation
-import Flow
 
-/// Protocol abstracting the subset of `CLLocationManager` that `LocationTracker`
-/// uses. Conforming `CLLocationManager` lets production code stay unchanged;
-/// a `MockLocationManager` can be injected in tests.
+/// The part of `CLLocationManager` that `LocationTracker` uses. The real
+/// manager conforms to it, and a test double conforms to it in the last section.
 protocol LocationManaging: AnyObject, Sendable {
     var delegate: (any CLLocationManagerDelegate)? { get set }
     var authorizationStatus: CLAuthorizationStatus { get }
@@ -12,5 +10,4 @@ protocol LocationManaging: AnyObject, Sendable {
     func stopUpdatingLocation()
 }
 
-// Make CLLocationManager conform to the protocol.
 extension CLLocationManager: LocationManaging {}
