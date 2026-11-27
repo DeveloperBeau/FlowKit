@@ -14,16 +14,13 @@ final class MapViewController: UIViewController {
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        // Cancels all tasks launched on the scope.
-        // This triggers withTaskCancellationHandler inside the bridge,
-        // which calls stopUpdatingLocation() and clears the delegate.
+        // Cancels every task launched on the scope. When this was the last
+        // subscriber, the shared flow cancels the callbackFlow block. Its
+        // awaitClose closure then stops the manager and clears the delegate.
         scope.cancel()
     }
 
     private func startObservingLocation() {
-        // tracker.locations is multicast: all subscribers across the app share
-        // a single CLLocationManager. The hardware starts on first subscriber
-        // and stops on last, so opening this view never spawns a duplicate.
         let flow = tracker.locations.asFlow().keepingLatest()
 
         // launch(_:) starts a Task tied to this scope's lifetime.

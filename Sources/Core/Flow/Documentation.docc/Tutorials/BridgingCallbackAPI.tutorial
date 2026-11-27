@@ -1,199 +1,246 @@
-@Tutorial(time: 25) {
+@Tutorial(time: 30) {
     @Intro(title: "Bridging a Callback API") {
         Legacy APIs such as `CLLocationManager`, `AVAudioSession`, and `URLSessionDownloadTask` deliver
         values through delegate methods or completion handlers rather than `async/await`. In this
-        tutorial you will wrap `CLLocationManager`'s delegate callbacks in a `Flow<CLLocation>` so
-        the rest of your app can work with a clean, cancellable stream.
+        tutorial you will wrap the delegate callbacks of `CLLocationManager` in a `Flow<CLLocation>`
+        with `Flow.callbackFlow`, so the rest of your app can work with a clean, cancellable stream.
 
         By the end of the tutorial you will have a `LocationTracker` type that starts and stops the
-        hardware on demand, respects task cancellation, skips values when the user has not granted
-        permission, and pairs with `.keepingLatest()` to protect slow consumers from location bursts.
+        hardware on demand and tears it down with `awaitClose`. It chooses what happens when a
+        collector is slow, ignores values until the user grants permission, and reports failures with
+        `ThrowingFlow.callbackFlow`. It also shares one `CLLocationManager` between many collectors.
     }
 
-    @Section(title: "Design the bridge") {
+    @Section(title: "Open a producer scope") {
         @ContentAndMedia {
-            A `Flow` is created by passing a closure that receives a `Collector`. Your job is to
-            start the callback-based API, forward each callback value into `collector.emit(_:)`, and
-            clean up when the closure returns.
+            `Flow.callbackFlow` takes a block. FlowKit gives the block a `ProducerScope`, and the block
+            runs once for each collector. Inside the block you do three things. You register with the
+            callback API. From each callback you call `scope.trySend(_:)`, which never suspends, so it is
+            safe in a synchronous delegate method on any thread. Then you park the block on
+            `scope.awaitClose(_:)` until the flow ends.
 
-            The standard pattern is a small *delegate bridge class* that holds a reference to the
-            collector and calls `emit` from every delegate callback. The bridge class lives entirely
-            inside the flow body closure. It has no life beyond a single collection.
+            A small *delegate class* keeps the `CLLocationManager` code apart from `Flow`. The class
+            forwards each callback to a closure, and the flow body decides what the closure does.
         }
 
         @Steps {
             @Step {
-                Create a new Swift file `LocationTracker.swift` and import CoreLocation. Declare the
-                `LocationTracker` actor and a stub for the flow factory property.
+                Create `LocationManaging.swift`. The protocol lists the part of `CLLocationManager`
+                that the tracker uses. The real manager conforms to it, and the test double in the
+                last section conforms to it as well.
 
-                @Code(name: "LocationTracker.swift", file: 03-01-stub.swift)
+                @Code(name: "LocationManaging.swift", file: 03-01-protocol.swift)
             }
 
             @Step {
-                Add the inner `DelegateBridge` class. It conforms to
-                `CLLocationManagerDelegate` and stores a `Collector<CLLocation>`. Each
-                `locationManager(_:didUpdateLocations:)` call emits the last location.
+                Create `LocationTracker.swift`. The factory makes the manager on the main actor,
+                because `CLLocationManager` delivers delegate callbacks on the run loop of the thread
+                that made it. `locationUpdates()` returns a cold `Flow<CLLocation>` that you build
+                with `Flow.callbackFlow`. For now the block only closes the scope.
 
-                @Code(name: "LocationTracker.swift", file: 03-02-bridge.swift)
+                @Code(name: "LocationTracker.swift", file: 03-02-stub.swift)
             }
 
             @Step {
-                Implement `locationFlow` as a `Flow<CLLocation>` body closure. Create a
-                `CLLocationManager`, attach the bridge as its delegate, and call
-                `startUpdatingLocation()`. The `await withCheckedContinuation` suspends until
-                cancellation, keeping the manager alive for the life of the collection.
+                Create `LocationDelegate.swift`. It conforms to `CLLocationManagerDelegate`. Each
+                `locationManager(_:didUpdateLocations:)` call passes the last location to a closure.
+                The class is `Sendable`, because the closure it holds is `@Sendable`.
 
-                @Code(name: "LocationTracker.swift", file: 03-03-flow.swift)
-            }
-        }
-    }
-
-    @Section(title: "Handle cleanup with task cancellation") {
-        @ContentAndMedia {
-            A `Flow` body closure runs inside a Swift `Task`. When the task is cancelled the closure
-            needs to stop the hardware and release the delegate. `withTaskCancellationHandler`
-            provides a synchronous hook that fires exactly when cancellation is requested, ideal
-            for stopping the location manager.
-        }
-
-        @Steps {
-            @Step {
-                Replace the plain `withCheckedContinuation` with
-                `withTaskCancellationHandler(operation:onCancel:)`. In the `onCancel` closure, call
-                `manager.stopUpdatingLocation()`, clear the delegate, and resume the continuation.
-                Now the manager stops the moment the caller cancels its task.
-
-                @Code(name: "LocationTracker.swift", file: 03-04-cancellation.swift)
+                @Code(name: "LocationDelegate.swift", file: 03-03-delegate.swift)
             }
 
             @Step {
-                Add a `locationManager(_:didFailWithError:)` delegate method so that errors such as
-                permission denial or hardware failures also resume the continuation and let the flow
-                finish gracefully instead of leaking a suspended closure.
+                Fill in the block. Make the manager, create the delegate with a closure that calls
+                `scope.trySend(_:)`, attach the delegate, and start the updates. The block is
+                still wrong. It returns at the end, and you will see why in the next section.
 
-                @Code(name: "LocationTracker.swift", file: 03-05-error.swift)
+                @Code(name: "LocationTracker.swift", file: 03-04-register.swift)
             }
         }
     }
 
-    @Section(title: "Filter by authorization status") {
+    @Section(title: "Tear down with awaitClose") {
         @ContentAndMedia {
-            `CLLocationManager` may call `didUpdateLocations` even if the user has not yet
-            responded to the permission dialog, so the values simply arrive with degraded accuracy.
-            A cleaner API only emits locations once the app is `authorizedWhenInUse` or
-            `authorizedAlways`, and ignores updates that arrive while authorization is pending or
-            denied.
+            A `callbackFlow` block that returns completes the flow. The listing in the last step
+            returns right after `startUpdatingLocation()`. The collector sees the flow end at once.
+            The `CLLocationManager` keeps its delegate in a weak reference, so the delegate is
+            released and the manager runs with nobody to listen. In debug builds `callbackFlow`
+            catches this mistake with an assertion, because the block returned without a call to
+            `awaitClose` or `close()`. In release builds you get no warning.
+
+            `awaitClose` fixes it. It suspends the block until the flow closes. The flow closes when
+            the collector is cancelled, when the collection ends, or when the block calls `close()`.
+            Then `awaitClose` runs your closure exactly one time. That closure is the place to
+            unregister the callback.
         }
 
         @Steps {
             @Step {
-                Add a helper `isAuthorized(_:)` method that checks the two authorized
-                statuses of the manager that the callback passes in. Update `locationManager(_:didUpdateLocations:)` to skip emission when
-                `!isAuthorized`.
+                End the block with `await scope.awaitClose { ... }`. The closure stops the manager and
+                clears the delegate. It also holds on to the delegate, so the delegate stays alive for as
+                long as the block is parked. Now cancelling the collector task stops the hardware. No
+                `withTaskCancellationHandler` and no hand-written continuation are needed.
 
-                @Code(name: "LocationTracker.swift", file: 03-06-authorization.swift)
-            }
-
-            @Step {
-                Call `manager.requestWhenInUseAuthorization()` before starting updates so that the
-                system prompts the user at collection time. Add
-                `locationManagerDidChangeAuthorization` to the bridge so it re-checks status after
-                the user responds. If the status is `.denied` or `.restricted`, resume the
-                continuation to end the flow.
-
-                @Code(name: "LocationTracker.swift", file: 03-07-request-permission.swift)
-            }
-
-            @Step {
-                Wrap the cold flow with `asSharedFlow` so every consumer subscribes to the same
-                `CLLocationManager`. With `.whileSubscribed(stopTimeout: .zero)`, the hardware
-                spins up on the first subscriber and stops the moment the last one disappears.
-                Subsequent subscribers reactivate it. `replay: 1` hands new subscribers the most
-                recent location immediately, so a freshly opened map view does not stare at a
-                blank screen waiting for the next GPS tick.
-
-                @Code(name: "LocationTracker.swift", file: 03-08-complete.swift)
+                @Code(name: "LocationTracker.swift", file: 03-05-await-close.swift)
             }
         }
     }
 
-    @Section(title: "Pair the shared flow with keepingLatest") {
+    @Section(title: "Choose what a slow collector sees") {
         @ContentAndMedia {
-            GPS receivers can emit many updates per second. If your UI only redraws at 30 fps, or
-            you are writing to a database once per second, intermediate locations are wasted work.
-            `.keepingLatest()` adds a one-element drop-oldest buffer between the hardware and your
-            consumer, transparently discarding superseded values.
+            Every `callbackFlow` and `channelFlow` has a buffer between the producer and the
+            collector. It takes two parameters. `bufferCapacity` is how many unconsumed values the
+            buffer holds, and it is `64` by default. A capacity of zero or less means unbounded.
+            `onBufferOverflow` is what a full buffer does with a new value.
+
+            - `.dropOldest` is the default. It evicts the oldest value and keeps the newest.
+            - `.dropLatest` keeps what is in the buffer and discards the new value.
+            - `.suspend` backs up the producer. Only `send(_:)` can wait. `trySend(_:)` cannot wait, so
+              under `.suspend` it buffers without a bound.
+
+            `trySend(_:)` returns a `ChannelSendResult`: `.enqueued`, `.dropped` for a full
+            `.dropLatest` buffer, or `.closed` after the flow has ended.
         }
 
         @Steps {
             @Step {
-                Create a `MapViewController` that subscribes to the shared `tracker.locations`
-                and chains `.keepingLatest()` before collecting. Multiple view controllers can
-                subscribe at once with no risk of duplicate `CLLocationManager` instances.
+                A location is a signal where only the newest value matters. Set `bufferCapacity: 1`
+                with `.dropOldest`. A slow collector then always receives the latest fix and never
+                reads a backlog of old ones. A delegate callback is synchronous, so it must use
+                `trySend(_:)`.
 
-                @Code(name: "MapViewController.swift", file: 03-09-keepinglatest.swift)
+                @Code(name: "LocationTracker.swift", file: 03-06-buffer.swift)
             }
 
             @Step {
-                Launch the collection in a `FlowScope` tied to the view controller's lifetime.
-                Because the scope's tasks are cancelled when the scope is cancelled, the
-                `withTaskCancellationHandler` in the bridge fires automatically and the
-                `CLLocationManager` stops with no extra teardown code in the view controller.
+                A producer that is `async` can use real backpressure. This replay of a recorded
+                track uses `Flow.channelFlow` with `.suspend`. `send(_:)` waits while eight values are
+                unconsumed, so a slow collector slows the replay and loses nothing. A `channelFlow`
+                block needs no `awaitClose`. It ends when the block returns.
 
-                @Code(name: "MapViewController.swift", file: 03-10-scope.swift)
+                @Code(name: "TrackReplay.swift", file: 03-07-track-replay.swift)
+            }
+        }
+    }
+
+    @Section(title: "Handle permission and failure") {
+        @ContentAndMedia {
+            `CLLocationManager` can call `didUpdateLocations` before the user answers the permission
+            dialog. It can also fail, or lose permission while the app runs. A `Flow` cannot fail, so
+            the first version ends the flow with `close()`. Then `awaitClose` runs the same teardown.
+
+            To tell the collector why the flow ended, use `ThrowingFlow.callbackFlow`. Its block
+            receives a `ThrowingProducerScope`, which adds `close(throwing:)`. The collector receives
+            every value sent before the call, and then its `collect` throws the error.
+        }
+
+        @Steps {
+            @Step {
+                Rewrite the delegate. It reads the authorization status and drops updates until
+                the user grants permission. `didFailWithError` and `locationManagerDidChangeAuthorization`
+                call an `onFailure` closure. The transient `.locationUnknown` error is not a failure,
+                because the manager keeps trying.
+
+                @Code(name: "LocationDelegate.swift", file: 03-08-delegate-failure.swift)
+            }
+
+            @Step {
+                Ask for permission before you start updates. Pass the manager to the delegate, and make
+                `onFailure` call `scope.close()`. The flow ends, `awaitClose` resumes, and the
+                manager stops.
+
+                @Code(name: "LocationTracker.swift", file: 03-09-request-permission.swift)
+            }
+
+            @Step {
+                Switch to `ThrowingFlow.callbackFlow` and call `scope.close(throwing:)`. The signature
+                of the block is the same. The first close wins, so a later `close()` or error is
+                ignored. A cancelled collector is not a failure. Its `collect` returns without an
+                error.
+
+                @Code(name: "LocationTracker.swift", file: 03-10-throwing.swift)
+            }
+        }
+    }
+
+    @Section(title: "Share one manager between collectors") {
+        @ContentAndMedia {
+            A `callbackFlow` is cold. Each collector runs the block, so two collectors create two
+            `CLLocationManager` instances. For hardware you want one. `asSharedFlow` runs the cold flow
+            one time and multicasts it. `ThrowingFlow` has no `asSharedFlow`, so `catch` turns it into
+            a `Flow` first.
+
+            With `.whileSubscribed(stopTimeout: .zero)` the hardware starts for the first subscriber.
+            When the last subscriber leaves, FlowKit cancels the block, and `awaitClose` stops the
+            manager.
+        }
+
+        @Steps {
+            @Step {
+                Expose `locations` as a shared flow with `replay: 1`, so a new subscriber gets the
+                most recent location at once. Keep `locationUpdates()` for a caller that wants to see
+                the error. The shared flow ends quietly when the cold flow fails.
+
+                @Code(name: "LocationTracker.swift", file: 03-11-share.swift)
+            }
+
+            @Step {
+                Create a `MapViewController` that subscribes to `tracker.locations`. The buffer in
+                `callbackFlow` protects the producer. `.keepingLatest()` adds a one-element
+                drop-oldest buffer for this collector, so a slow redraw skips old locations.
+
+                @Code(name: "MapViewController.swift", file: 03-12-keepinglatest.swift)
+            }
+
+            @Step {
+                Launch the collection in a `FlowScope` tied to the view controller. When the scope is
+                cancelled and this was the last subscriber, the block is cancelled and `awaitClose`
+                stops the manager. The view controller needs no teardown code of its own.
+
+                @Code(name: "MapViewController.swift", file: 03-13-scope.swift)
             }
         }
     }
 
     @Section(title: "Test the bridge") {
         @ContentAndMedia {
-            Testing real hardware is flaky. Instead, extract a `LocationManaging` protocol, inject
-            a mock in tests, and drive the bridge by calling the protocol methods directly. Each
-            test instantiates its own `LocationTracker` with a fresh mock, so the shared flow's
-            single `CLLocationManager` is the mock for the duration of the test.
+            Testing real hardware is flaky. The tracker takes a factory, so a test injects a mock and
+            drives the delegate by calling it directly. Each test makes its own `LocationTracker`, so
+            the one manager of the shared flow is the mock. Each test has a time limit, so a wait
+            that never ends fails the test and does not hang it.
         }
 
         @Steps {
             @Step {
-                Define a `LocationManaging` protocol with the subset of `CLLocationManager`
-                properties and methods the bridge uses: `delegate`, `startUpdatingLocation()`,
-                `stopUpdatingLocation()`, and `requestWhenInUseAuthorization()`.
+                Write a `MockLocationManager` that stores the delegate. `simulateLocation(_:)` and
+                `simulateFailure(_:)` call the delegate methods. `waitUntilStarted()` and
+                `waitUntilStopped()` suspend until the tracker starts or stops the manager.
 
-                @Code(name: "LocationManaging.swift", file: 03-11-protocol.swift)
+                @Code(name: "MockLocationManager.swift", file: 03-14-mock.swift)
             }
 
             @Step {
-                Update `LocationTracker` to accept a `LocationManaging` factory closure instead of
-                constructing `CLLocationManager` directly. The production factory returns a real
-                `CLLocationManager`; the test factory returns a mock.
+                Write the first test. Inject the mock, collect the flow in a `probing` closure, wait
+                for the tracker to start the mock, call `simulateLocation`, and assert the emitted
+                coordinate.
 
-                @Code(name: "LocationTracker.swift", file: 03-12-injectable.swift)
+                @Code(name: "LocationTrackerTests.swift", file: 03-15-test.swift)
             }
 
             @Step {
-                Write a `MockLocationManager` that stores the delegate and exposes a
-                `simulateLocation(_:)` method that calls `didUpdateLocations` directly. Add
-                `waitUntilStarted()` and `waitUntilStopped()` so a test can suspend until the
-                tracker starts or stops the manager.
+                Add a cleanup test. When the `probing` closure exits, the collection is cancelled.
+                Wait for the mock to stop, which proves that the `awaitClose` closure ran and the
+                hardware shut down.
 
-                @Code(name: "MockLocationManager.swift", file: 03-13-mock.swift)
+                @Code(name: "LocationTrackerTests.swift", file: 03-16-cleanup-test.swift)
             }
 
             @Step {
-                Write the test. Inject the mock, collect the flow in a `probing` closure, wait
-                for the tracker to start the mock, call `simulateLocation`, and assert the
-                emitted coordinate. Then verify that `stopUpdatingLocation()` is called when
-                the test closes.
+                Add a failure test on `locationUpdates()`. `simulateFailure(_:)` makes the
+                collection throw the delegate error, and the manager still stops, because
+                `close(throwing:)` also resumes `awaitClose`.
 
-                @Code(name: "LocationTrackerTests.swift", file: 03-14-test.swift)
-            }
-
-            @Step {
-                Add a cleanup test. After the `probing` closure exits the collection task is
-                cancelled. Assert that the mock's `stopCalled` flag is `true`, confirming that
-                the `withTaskCancellationHandler` fires and the hardware shuts down.
-
-                @Code(name: "LocationTrackerTests.swift", file: 03-15-cleanup-test.swift)
+                @Code(name: "LocationTrackerTests.swift", file: 03-17-failure-test.swift)
             }
         }
     }

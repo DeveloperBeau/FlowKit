@@ -8,7 +8,7 @@ import FlowTesting
 @Suite("LocationTracker")
 struct LocationTrackerTests {
 
-    @Test("emits simulated location")
+    @Test("emits simulated location", .timeLimit(.minutes(1)))
     func emitsSimulatedLocation() async throws {
         let mock = MockLocationManager()
         let tracker = LocationTracker(managerFactory: { mock })
@@ -21,24 +21,37 @@ struct LocationTrackerTests {
             #expect(received.coordinate.latitude == expected.coordinate.latitude)
             #expect(received.coordinate.longitude == expected.coordinate.longitude)
         }
-        // probing exits → the collection task is cancelled → withTaskCancellationHandler
-        // fires → stop(manager:) is called → stopUpdatingLocation() is invoked.
     }
 
-    @Test("stops location manager on cancellation")
+    @Test("stops the manager when the collector goes away", .timeLimit(.minutes(1)))
     func stopsOnCancellation() async throws {
         let mock = MockLocationManager()
         let tracker = LocationTracker(managerFactory: { mock })
 
-        try await tracker.locations.asFlow().probing { reader in
-            // Don't emit any values. Wait until the manager is running, then
-            // let the probing closure return, which cancels the collection task.
+        try await tracker.locations.asFlow().probing { _ in
             await mock.waitUntilStarted()
-            await reader.cancelAndIgnoreRemaining()
         }
 
-        // The cancellation handler in the bridge must fire and stop the manager.
         await mock.waitUntilStopped()
-        #expect(mock.stopCalled == true)
+        #expect(mock.stopCalled)
+    }
+
+    @Test("fails with the delegate error and stops the manager", .timeLimit(.minutes(1)))
+    func failsWithDelegateError() async throws {
+        let mock = MockLocationManager()
+        let tracker = LocationTracker(managerFactory: { mock })
+
+        try await tracker.locationUpdates().probing { reader in
+            await mock.waitUntilStarted()
+            mock.simulateFailure(CLError(.network))
+
+            try await reader.expectError("a network CLError") {
+                ($0 as? CLError)?.code == .network
+            }
+        }
+
+        // close(throwing:) also resumes awaitClose, so teardown still runs.
+        await mock.waitUntilStopped()
+        #expect(mock.stopCalled)
     }
 }
