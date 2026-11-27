@@ -1,20 +1,7 @@
 import UIKit
-import Flow
+import FlowUI
 
-struct User: Sendable, Equatable {
-    let id: UUID
-    let name: String
-    let email: String
-}
-
-enum SessionState: Sendable, Equatable {
-    case signedOut
-    case signingIn
-    case signedIn(User)
-    case error(String)
-}
-
-// UIKit view controllers use `self.collect(_:action:)` from FlowUIKitBridge.
+// UIKit view controllers use `self.collect(_:action:)` from FlowUI.
 // The helper ties collection to `flowScope`, which is cancelled automatically
 // when the view controller is deallocated, so no manual cleanup is needed.
 final class SignInViewController: UIViewController {

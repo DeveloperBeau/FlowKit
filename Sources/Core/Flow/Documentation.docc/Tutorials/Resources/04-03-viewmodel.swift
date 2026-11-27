@@ -1,31 +1,40 @@
+import Foundation
 import Testing
 import Flow
 import FlowTesting
+// MyApp is the app target that holds SearchViewModel and ProductRepository.
+@testable import MyApp
 
 // A simple fake repository that always succeeds with a canned result.
-struct FakeProductRepository: ProductRepositoryProtocol {
-    let results: [Product]
+struct FakeProductRepository: ProductRepository {
+    let products: [Product]
 
-    func search(_ query: String) -> ThrowingFlow<[Product]> {
-        ThrowingFlow(of: results)
+    func search(query: String) -> ThrowingFlow<[Product]> {
+        ThrowingFlow(of: products)
     }
 }
 
+@MainActor
 @Suite("SearchViewModel")
 struct SearchViewModelTests {
 
     @Test("results flow emits search results")
     func resultsFlowEmitsResults() async throws {
-        let fakeProducts = [Product(id: 1, name: "Widget"), Product(id: 2, name: "Gadget")]
-        let viewModel = SearchViewModel(repository: FakeProductRepository(results: fakeProducts))
+        let products = [
+            Product(id: UUID(), name: "Widget", price: 5),
+            Product(id: UUID(), name: "Gadget", price: 9)
+        ]
+        let viewModel = SearchViewModel(repository: FakeProductRepository(products: products))
 
-        try await viewModel.resultsFlow.probing { reader in
-            // Emit a query to drive the pipeline.
-            await viewModel.queryFlow.emit("widget")
+        try await viewModel.results.asFlow().probing { reader in
+            // A StateFlow replays its current value to each new collector.
+            try await reader.expectValue(.idle)
 
-            let results = try await reader.awaitValue()
-            #expect(results.count == 2)
-            #expect(results.first?.name == "Widget")
+            // Drive the pipeline. This test uses the real clock, so it waits
+            // for the 300 ms debounce. The next section removes that wait.
+            viewModel.update(query: "widget")
+
+            try await reader.expectValue(.loaded(products))
         }
     }
 }

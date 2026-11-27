@@ -1,19 +1,6 @@
 import Foundation
 import Flow
 
-struct User: Sendable, Equatable {
-    let id: UUID
-    let name: String
-    let email: String
-}
-
-enum SessionState: Sendable, Equatable {
-    case signedOut
-    case signingIn
-    case signedIn(User)
-    case error(String)
-}
-
 // A stand-in for your real auth service.
 protocol AuthService: Sendable {
     func signIn(email: String, password: String) async throws -> User
@@ -27,20 +14,21 @@ final class SessionManager {
     private let _state = MutableStateFlow<SessionState>(.signedOut)
     var state: any StateFlow<SessionState> { _state }
 
-    private var authService: any AuthService
+    private let authService: any AuthService
 
-    private init() {
-        // Replace with your real AuthService in production.
-        self.authService = NoOpAuthService()
+    // Replace NoOpAuthService with your real AuthService in production.
+    // Tests pass their own fake, so the initialiser is not private.
+    init(authService: any AuthService = NoOpAuthService()) {
+        self.authService = authService
     }
 
     func signIn(email: String, password: String) async {
-        await _state.send(.signingIn)
+        _state.send(.signingIn)
         do {
             let user = try await authService.signIn(email: email, password: password)
-            await _state.send(.signedIn(user))
+            _state.send(.signedIn(user))
         } catch {
-            await _state.send(.error(error.localizedDescription))
+            _state.send(.error(error.localizedDescription))
         }
     }
 
@@ -50,11 +38,11 @@ final class SessionManager {
         } catch {
             // Best-effort sign-out: clear local state regardless.
         }
-        await _state.send(.signedOut)
+        _state.send(.signedOut)
     }
 }
 
-private struct NoOpAuthService: AuthService {
+struct NoOpAuthService: AuthService {
     func signIn(email: String, password: String) async throws -> User {
         User(id: UUID(), name: "Demo", email: email)
     }

@@ -1,6 +1,9 @@
+import Foundation
 import Testing
 import Flow
 import FlowTesting
+// MyApp is the app target that holds ProductRepository.
+@testable import MyApp
 
 // MARK: - Error type
 
@@ -11,11 +14,11 @@ enum SearchError: Error, Equatable {
 
 // MARK: - Failing fake repository
 
-struct FailingProductRepository: ProductRepositoryProtocol {
+struct FailingProductRepository: ProductRepository {
     let error: SearchError
 
-    func search(_ query: String) -> ThrowingFlow<[Product]> {
-        ThrowingFlow { downstream in
+    func search(query: String) -> ThrowingFlow<[Product]> {
+        ThrowingFlow { _ in
             throw error
         }
     }

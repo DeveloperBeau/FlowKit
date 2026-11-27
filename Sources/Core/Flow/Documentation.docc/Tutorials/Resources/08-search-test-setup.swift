@@ -1,7 +1,7 @@
+import Foundation
 import Testing
 import Flow
 import FlowTesting
-import FlowTestClock
 
 struct Product: Identifiable, Sendable, Equatable {
     let id: UUID

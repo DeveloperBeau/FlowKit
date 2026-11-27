@@ -37,9 +37,11 @@
             }
 
             @Step {
-                Add a test for `SearchViewModel`. Construct the view model with a fake
-                `ProductRepository`, emit a query into the `MutableSharedFlow`, and assert the
-                results flow emits the expected products.
+                Add a test for `SearchViewModel`. Import the app module with
+                `@testable import`, construct the view model with a fake `ProductRepository`,
+                call `update(query:)`, and assert that `results` emits `.loaded` with the
+                expected products. This test uses the real clock, so it waits for the debounce.
+                The next section removes that wait.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-03-viewmodel.swift)
             }
@@ -81,9 +83,9 @@
             }
 
             @Step {
-                Add a test for the full `SearchViewModel` pipeline end-to-end with `TestClock`.
-                Verify that typing quickly produces a single results emission after the debounce
-                window expires.
+                Add a test for the full `SearchViewModel` pipeline end-to-end. Pass a `TestClock`
+                to the initialiser, set the query, and verify that a single results emission
+                arrives after the debounce window expires.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-07-full-pipeline.swift)
             }
@@ -106,15 +108,18 @@
             }
 
             @Step {
-                Use the `probing` extension on `ThrowingFlow` to get a reader. Call
-                `expectError(_:matching:)` with a predicate that compares the exact error value.
+                Use the `probing` extension on the repository's `ThrowingFlow` to get a reader.
+                Call `expectError(_:matching:)` with a predicate that compares the exact error
+                value.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-09-expect-error.swift)
             }
 
             @Step {
                 Pattern-match inside the predicate for richer assertions, for example checking the
-                error's `localizedDescription` or an associated value.
+                error's `localizedDescription` or an associated value. Then test that
+                `SearchViewModel` turns a failure into `.error` state, because its `catch`
+                means `results` never fails.
 
                 @Code(name: "SearchPipelineTests.swift", file: 04-10-predicate-error.swift)
             }
@@ -158,31 +163,31 @@
 
         @Steps {
             @Step {
-                Set up a `SessionManager` with a `MutableStateFlow<SessionState>` and start
-                collecting its `stateFlow` with `probing`.
+                Create a `SessionManager` with a stub `AuthService` and start collecting its
+                `state` flow with `probing`.
 
                 @Code(name: "SessionManagerTests.swift", file: 04-13-hot-setup.swift)
             }
 
             @Step {
-                Assert the initial `.loggedOut` value is emitted immediately on subscription,
-                then call `signIn` and assert the `.loggedIn` transition.
+                Assert the initial `.signedOut` value is emitted immediately on subscription,
+                then call `signIn` and assert the `.signingIn` and `.signedIn` transitions.
 
                 @Code(name: "SessionManagerTests.swift", file: 04-14-state-transitions.swift)
             }
 
             @Step {
                 Drive the full sign-in → sign-out lifecycle and assert each transition in order.
-                Because `MutableStateFlow` drops duplicate values, sending the same state twice
-                should produce only one emission. Verify that with `expectNextValue`, which
+                Because `MutableStateFlow` drops duplicate values, calling `signOut` twice
+                should produce only one `.signedOut` emission. Verify that with `expectNextValue`, which
                 fails if anything arrives before the value you expect.
 
                 @Code(name: "SessionManagerTests.swift", file: 04-15-full-lifecycle.swift)
             }
 
             @Step {
-                Test that `SessionManager.signIn` throws on bad credentials without
-                collecting the flow at all, then check that the state did not change.
+                Test that a failed `SessionManager.signIn` ends in `.error` state, without
+                collecting the flow at all. Read the current state from `state.value`.
 
                 @Code(name: "SessionManagerTests.swift", file: 04-16-error-path.swift)
             }

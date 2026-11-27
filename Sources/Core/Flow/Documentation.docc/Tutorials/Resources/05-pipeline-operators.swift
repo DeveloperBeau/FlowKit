@@ -28,17 +28,15 @@ final class SearchViewModel {
         queryFlow.asFlow()
             .debounce(for: .milliseconds(300))
             .removeDuplicates()
-            .flatMapLatest { [repository] query -> ThrowingFlow<SearchState> in
-                guard !query.isEmpty else {
-                    return ThrowingFlow { collector in
-                        try await collector.emit(.idle)
-                    }
-                }
+            .flatMapLatest { [repository] query -> Flow<SearchState> in
+                guard !query.isEmpty else { return Flow(of: .idle) }
+                // `catch` sits inside flatMapLatest, so one failed search
+                // becomes an .error value and the outer pipeline keeps running.
                 return repository.search(query: query)
-                    .map { .loaded($0) }
-            }
-            .catch { _, collector in
-                await collector.emit(.error("Search failed. Please try again."))
+                    .map { SearchState.loaded($0) }
+                    .catch { _, collector in
+                        await collector.emit(.error("Search failed. Please try again."))
+                    }
             }
     }
 
@@ -46,7 +44,7 @@ final class SearchViewModel {
         self.repository = repository
     }
 
-    func update(query: String) async {
-        await queryFlow.send(query)
+    func update(query: String) {
+        queryFlow.send(query)
     }
 }

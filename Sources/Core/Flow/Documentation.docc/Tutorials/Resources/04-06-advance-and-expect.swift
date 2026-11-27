@@ -1,7 +1,6 @@
 import Testing
 import Flow
 import FlowTesting
-import FlowTestClock
 
 @Suite("Debounce operator")
 struct DebounceOperatorTests {

@@ -27,7 +27,7 @@ final class SearchViewModel {
         self.repository = repository
     }
 
-    func update(query: String) async {
-        await queryFlow.send(query)
+    func update(query: String) {
+        queryFlow.send(query)
     }
 }

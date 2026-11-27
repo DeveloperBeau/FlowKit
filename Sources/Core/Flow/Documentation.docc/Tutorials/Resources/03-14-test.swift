@@ -2,6 +2,8 @@ import CoreLocation
 import Testing
 import Flow
 import FlowTesting
+// MyApp is the app target that holds LocationTracker.
+@testable import MyApp
 
 @Suite("LocationTracker")
 struct LocationTrackerTests {
@@ -13,7 +15,9 @@ struct LocationTrackerTests {
         let expected = CLLocation(latitude: 37.3318, longitude: -122.0312)
 
         try await tracker.locations.asFlow().probing { reader in
-            // Simulate the hardware delivering a GPS fix.
+            // Wait for the tracker to start the manager, then simulate the
+            // hardware delivering a GPS fix.
+            await mock.waitUntilStarted()
             mock.simulateLocation(expected)
 
             let received = try await reader.awaitValue()

@@ -1,44 +1,9 @@
 import SwiftUI
-import Flow
+import FlowUI
 
-struct User: Sendable, Equatable {
-    let id: UUID
-    let name: String
-    let email: String
-}
-
-enum SessionState: Sendable, Equatable {
-    case signedOut
-    case signingIn
-    case signedIn(User)
-    case error(String)
-}
-
-struct HomeView: View {
-    @CollectedState(SessionManager.shared.state) var session: SessionState = .signedOut
-
-    var body: some View {
-        switch session {
-        case .signedOut:
-            Text("You are signed out.")
-        case .signingIn:
-            ProgressView("Signing in…")
-        case .signedIn(let user):
-            VStack(spacing: 12) {
-                Text("Welcome back, \(user.name)!")
-                Button("Sign out") {
-                    Task { await SessionManager.shared.signOut() }
-                }
-            }
-        case .error(let message):
-            Text(message).foregroundStyle(.red)
-        }
-    }
-}
-
-// ProfileView independently observes the same StateFlow.
-// Both HomeView and ProfileView stay in sync automatically, with no
-// environment objects, no NotificationCenter, and no delegates.
+// ProfileView independently observes the same StateFlow as HomeView.
+// Both views stay in sync automatically, with no environment objects,
+// no NotificationCenter, and no delegates.
 struct ProfileView: View {
     @CollectedState(SessionManager.shared.state) var session: SessionState = .signedOut
 

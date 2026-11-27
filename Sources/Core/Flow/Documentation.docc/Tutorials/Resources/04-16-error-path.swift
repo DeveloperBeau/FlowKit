@@ -1,21 +1,34 @@
+import Foundation
 import Testing
 import Flow
 import FlowTesting
+// MyApp is the app target that holds SessionManager and SessionState.
+@testable import MyApp
 
+// A fake auth service that always rejects the credentials.
+struct RejectingAuthService: AuthService {
+    struct BadCredentials: LocalizedError {
+        var errorDescription: String? { "Invalid credentials." }
+    }
+
+    func signIn(email: String, password: String) async throws -> User {
+        throw BadCredentials()
+    }
+    func signOut() async throws {}
+}
+
+@MainActor
 @Suite("SessionManager error paths")
 struct SessionManagerErrorTests {
 
-    @Test("signIn throws on bad credentials")
-    func signInThrowsOnBadCredentials() async throws {
-        let manager = SessionManager()
+    @Test("signIn ends in .error on bad credentials")
+    func signInEndsInErrorOnBadCredentials() async {
+        let manager = SessionManager(authService: RejectingAuthService())
 
-        // signIn throws AuthError.badCredentials when credentials are wrong.
-        // Test the signIn throw directly without collecting stateFlow.
-        await #expect(throws: AuthError.badCredentials) {
-            try await manager.signIn(username: "alice", password: "wrong")
-        }
+        // signIn does not throw. It reports the failure as a state.
+        await manager.signIn(email: "ada@example.com", password: "wrong")
 
-        // Confirm the state remains .loggedOut after the failed sign-in.
-        #expect(await manager.stateFlow.value == .loggedOut)
+        // Read the current state without collecting the flow at all.
+        #expect(manager.state.value == .error("Invalid credentials."))
     }
 }

@@ -29,27 +29,34 @@ final class SearchViewModel {
     // navigations or SwiftUI view rebuilds.
     let results: any StateFlow<SearchState>
 
-    init(repository: ProductRepository) {
+    // The clock drives the debounce and the stop timeout. Production code
+    // uses the default; tests pass a TestClock to control time.
+    init(
+        repository: ProductRepository,
+        clock: any Clock<Duration> = ContinuousClock()
+    ) {
         self.repository = repository
         self.results = queryFlow.asFlow()
-            .debounce(for: .milliseconds(300))
+            .debounce(for: .milliseconds(300), clock: clock)
             .removeDuplicates()
-            .flatMapLatest { [repository] query -> ThrowingFlow<SearchState> in
-                guard !query.isEmpty else {
-                    return ThrowingFlow { collector in try await collector.emit(.idle) }
-                }
-                return repository.search(query: query).map { .loaded($0) }
-            }
-            .catch { _, collector in
-                await collector.emit(.error("Search failed. Please try again."))
+            .flatMapLatest { [repository] query -> Flow<SearchState> in
+                guard !query.isEmpty else { return Flow(of: .idle) }
+                // `catch` sits inside flatMapLatest, so one failed search
+                // becomes an .error value and the outer pipeline keeps running.
+                return repository.search(query: query)
+                    .map { SearchState.loaded($0) }
+                    .catch { _, collector in
+                        await collector.emit(.error("Search failed. Please try again."))
+                    }
             }
             .asStateFlow(
                 initialValue: .idle,
-                strategy: .whileSubscribed(stopTimeout: .seconds(5))
+                strategy: .whileSubscribed(stopTimeout: .seconds(5)),
+                clock: clock
             )
     }
 
-    func update(query: String) async {
-        await queryFlow.send(query)
+    func update(query: String) {
+        queryFlow.send(query)
     }
 }

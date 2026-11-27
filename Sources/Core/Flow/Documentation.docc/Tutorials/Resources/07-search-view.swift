@@ -1,5 +1,5 @@
 import SwiftUI
-import Flow
+import FlowUI
 
 struct Product: Identifiable, Sendable, Equatable {
     let id: UUID
@@ -24,39 +24,49 @@ final class SearchViewModel {
     private let queryFlow = MutableStateFlow("")
     let results: any StateFlow<SearchState>
 
-    init(repository: ProductRepository) {
+    init(
+        repository: ProductRepository,
+        clock: any Clock<Duration> = ContinuousClock()
+    ) {
         self.repository = repository
         self.results = queryFlow.asFlow()
-            .debounce(for: .milliseconds(300))
+            .debounce(for: .milliseconds(300), clock: clock)
             .removeDuplicates()
-            .flatMapLatest { [repository] query -> ThrowingFlow<SearchState> in
-                guard !query.isEmpty else {
-                    return ThrowingFlow { collector in try await collector.emit(.idle) }
-                }
-                return repository.search(query: query).map { .loaded($0) }
-            }
-            .catch { _, collector in
-                await collector.emit(.error("Search failed. Please try again."))
+            .flatMapLatest { [repository] query -> Flow<SearchState> in
+                guard !query.isEmpty else { return Flow(of: .idle) }
+                return repository.search(query: query)
+                    .map { SearchState.loaded($0) }
+                    .catch { _, collector in
+                        await collector.emit(.error("Search failed. Please try again."))
+                    }
             }
             .asStateFlow(
                 initialValue: .idle,
-                strategy: .whileSubscribed(stopTimeout: .seconds(5))
+                strategy: .whileSubscribed(stopTimeout: .seconds(5)),
+                clock: clock
             )
     }
 
-    func update(query: String) async {
-        await queryFlow.send(query)
+    func update(query: String) {
+        queryFlow.send(query)
     }
 }
 
 struct SearchView: View {
-    @Bindable var viewModel: SearchViewModel
+    let viewModel: SearchViewModel
 
     // @CollectedState observes the hot StateFlow and re-renders the view
     // whenever SearchState changes. The initial value matches the flow's
     // initialValue so there's no flash on first render.
-    @CollectedState(viewModel.results) var state: SearchState = .idle
+    @CollectedState var state: SearchState
     @State private var query = ""
+
+    // A property wrapper cannot read another property while it is
+    // initialised, so the wrapper is created here with the view model's flow.
+    init(viewModel: SearchViewModel) {
+        self.viewModel = viewModel
+        _state = CollectedState(wrappedValue: .idle, viewModel.results)
+    }
 
     var body: some View {
         NavigationStack {
@@ -88,7 +98,7 @@ struct SearchView: View {
             .navigationTitle("Products")
             .searchable(text: $query)
             .onChange(of: query) { _, newValue in
-                Task { await viewModel.update(query: newValue) }
+                viewModel.update(query: newValue)
             }
         }
     }
