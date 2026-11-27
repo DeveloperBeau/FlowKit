@@ -107,20 +107,22 @@ struct FlatMapLatestTests {
 
             // Wait until the subscriber count reaches 1 so we know the
             // tester has actually subscribed before we start emitting.
-            try await upstream.waitForSubscribers(1)
+            try await withThrowingTimeout(.seconds(5)) { try await upstream.waitForSubscribers(1) }
 
             // Emit 1, 2, 3 in sequence; after each emit, wait until the
             // previous inner flow has observed its cancellation.
-            func waitForCancellation(of value: Int) async {
-                await cancelled.wait { $0.contains(value) }
+            func waitForCancellation(of value: Int) async throws {
+                try await withThrowingTimeout(.seconds(5)) {
+                    await cancelled.wait { $0.contains(value) }
+                }
             }
 
             await upstream.emit(1)
             await upstream.emit(2)
-            await waitForCancellation(of: 1)
+            try await waitForCancellation(of: 1)
 
             await upstream.emit(3)
-            await waitForCancellation(of: 2)
+            try await waitForCancellation(of: 2)
 
             #expect(cancelled.elements.contains(1))
             #expect(cancelled.elements.contains(2))
@@ -276,6 +278,61 @@ struct FlatMapLatestTests {
         #expect(events.elements == [.value("result-a"), .failure(Boom())])
         #expect(transformed.elements == ["a"])
     }
+
+    @Test("an upstream failure cancels an inner parked on a never-completing source")
+    func upstreamFailureCancelsParkedInner() async throws {
+        let innerSource = MutableStateFlow("x")
+        let failUpstream = Signal()
+        let upstream = ThrowingFlow<Int> { collector in
+            try await collector.emit(1)
+            await failUpstream.wait()
+            throw Boom()
+        }
+        let flow = upstream.flatMapLatest { _ -> ThrowingFlow<String> in
+            innerSource.asFlow().mapThrowing { $0 }
+        }
+
+        let thrown = try await withThrowingTimeout(.seconds(5)) { () async throws -> (any Error)? in
+            async let outcome = failure(of: flow, recording: Recorder<String>())
+            // The inner is attached to its source and will never complete on its own.
+            try await innerSource.waitForSubscribers(1)
+            failUpstream.fire()
+            return await outcome
+        }
+        #expect(thrown is Boom, "expected Boom, got \(String(describing: thrown))")
+
+        let released = (try? await withThrowingTimeout(.seconds(5)) {
+            try await innerSource.waitForSubscribers(atMost: 0)
+            return true
+        }) ?? false
+        #expect(released, "the upstream failure must cancel the parked inner, but it is still subscribed")
+    }
+
+    @Test("cancelling the collection after the upstream completes cancels a parked inner")
+    func downstreamCancellationAfterUpstreamCompletesCancelsParkedInner() async throws {
+        let innerSource = MutableStateFlow("x")
+        // Emits once and completes, so the operator is in its wait for the inner.
+        let upstream = ThrowingFlow<Int> { collector in
+            try await collector.emit(1)
+        }
+        let collector = Task {
+            try? await upstream.flatMapLatest { _ -> ThrowingFlow<String> in
+                innerSource.asFlow().mapThrowing { $0 }
+            }.collect { _ in }
+        }
+        try await withThrowingTimeout(.seconds(5)) {
+            try await innerSource.waitForSubscribers(1)
+        }
+
+        collector.cancel()
+        let released = (try? await withThrowingTimeout(.seconds(5)) {
+            try await innerSource.waitForSubscribers(atMost: 0)
+            return true
+        }) ?? false
+        #expect(released, "cancelling the collection must reach the parked inner, but it is still subscribed")
+        // Awaiting the collector here would hang if the inner leaked.
+        if released { await collector.value }
+    }
 }
 
 private struct Boom: Error, Equatable {}
@@ -320,12 +377,12 @@ struct FlatMapLatestCancellationTests {
                 }
             }.collect { _ in }
         }
-        try await upstream.waitForSubscribers(1)
+        try await withThrowingTimeout(.seconds(5)) { try await upstream.waitForSubscribers(1) }
         await upstream.emit(1)
-        await innerStarted.wait()
+        try #require(await innerStarted.fires(safetyNet: .seconds(5)), "the inner flow never started")
 
         collector.cancel()
-        await innerCancelled.wait()
+        try #require(await innerCancelled.fires(safetyNet: .seconds(5)), "the inner flow was never cancelled")
         #expect(innerCancelled.hasFired, "downstream cancellation must reach the active inner flow")
         // The collection task itself must unwind instead of hanging in the
         // operator's completion wait. Guarded so a regression fails above
@@ -334,7 +391,7 @@ struct FlatMapLatestCancellationTests {
     }
 
     @Test("ThrowingFlow: cancelling the downstream collection cancels the active inner flow")
-    func throwingDownstreamCancellationCancelsInner() async {
+    func throwingDownstreamCancellationCancelsInner() async throws {
         let innerStarted = Signal()
         let innerCancelled = Signal()
         // Emits once, then stays alive until cancelled, so the inner flow is
@@ -353,10 +410,10 @@ struct FlatMapLatestCancellationTests {
                 }
             }.collect { _ in }
         }
-        await innerStarted.wait()
+        try #require(await innerStarted.fires(safetyNet: .seconds(5)), "the inner flow never started")
 
         collector.cancel()
-        await innerCancelled.wait()
+        try #require(await innerCancelled.fires(safetyNet: .seconds(5)), "the inner flow was never cancelled")
         #expect(innerCancelled.hasFired, "downstream cancellation must reach the active inner flow")
         if innerCancelled.hasFired { await collector.value }
     }
