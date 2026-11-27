@@ -80,7 +80,7 @@ struct TestClockSleeperWaiterTests {
 
         let first = sleeper(on: clock, seconds: 1)
         // Let the waiter see exactly one sleeper before the second arrives.
-        await clock.advance(by: .zero)
+        try #require(await clock.registersSleepers(1), "the first sleeper never registered")
         #expect(clock.sleeperCount == 1)
         #expect(!resumed.hasFired, "resumed with only one of two sleepers")
 
@@ -103,7 +103,7 @@ struct TestClockSleeperWaiterTests {
 
         let first = sleeper(on: clock, seconds: 1)
         guard try await finishes(waiterOne, "the waiter for one sleeper") else { return }
-        await clock.advance(by: .zero)
+        try #require(await clock.registersSleepers(1), "the first sleeper never registered")
         #expect(!two.hasFired, "the waiter for two resumed with one sleeper")
 
         let second = sleeper(on: clock, seconds: 2)
