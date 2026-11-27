@@ -1,39 +1,40 @@
+import Foundation
 import Testing
 import Flow
 import FlowTesting
-import FlowTestClock
+// MyApp is the app target that holds SearchViewModel.
+@testable import MyApp
 
+@MainActor
 @Suite("SearchViewModel with TestClock")
 struct SearchViewModelClockTests {
 
     @Test("debounced pipeline emits once after window expires")
     func debouncedPipelineEmitsOnce() async throws {
         let clock = TestClock()
-        let fakeProducts = [Product(id: 1, name: "Swift")]
+        let products = [Product(id: UUID(), name: "Swift", price: 10)]
         let viewModel = SearchViewModel(
-            repository: FakeProductRepository(results: fakeProducts),
+            repository: FakeProductRepository(products: products),
             clock: clock
         )
 
-        try await viewModel.resultsFlow.probing { reader in
-            // Wait until the pipeline is collecting the query flow.
-            try await viewModel.queryFlow.waitForSubscribers(1)
+        // Rapid typing. The query is a StateFlow, so only the latest value
+        // survives. Set it before collecting, so the debounce timer that the
+        // test waits for is the one for this query.
+        viewModel.update(query: "S")
+        viewModel.update(query: "Sw")
+        viewModel.update(query: "Swift")
 
-            // Rapid typing, each keystroke resets the debounce timer.
-            await viewModel.updateQuery("S")
-            await clock.advance(by: .milliseconds(100))
-            await viewModel.updateQuery("Sw")
-            await clock.advance(by: .milliseconds(100))
-            await viewModel.updateQuery("Swift")
+        try await viewModel.results.asFlow().probing { reader in
+            // The first value is the StateFlow's initial state.
+            try await reader.expectValue(.idle)
 
-            // Still inside the window, so the debounce is parked on its timer.
+            // The debounce is parked on its timer. Expire the window, and
+            // the pipeline fires a single search.
             try await clock.waitForSleepers(1)
-
-            // Expire the window. The pipeline fires a single search.
             await clock.advance(by: .milliseconds(300))
-            let results = try await reader.awaitValue()
-            #expect(results.count == 1)
-            #expect(results.first?.name == "Swift")
+
+            try await reader.expectValue(.loaded(products))
         }
     }
 }

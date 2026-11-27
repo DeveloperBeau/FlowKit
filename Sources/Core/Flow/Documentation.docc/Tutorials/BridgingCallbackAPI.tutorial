@@ -87,8 +87,8 @@
 
         @Steps {
             @Step {
-                Add a helper `isAuthorized` computed property that checks the two authorized
-                statuses. Update `locationManager(_:didUpdateLocations:)` to skip emission when
+                Add a helper `isAuthorized(_:)` method that checks the two authorized
+                statuses of the manager that the callback passes in. Update `locationManager(_:didUpdateLocations:)` to skip emission when
                 `!isAuthorized`.
 
                 @Code(name: "LocationTracker.swift", file: 03-06-authorization.swift)
@@ -172,15 +172,18 @@
 
             @Step {
                 Write a `MockLocationManager` that stores the delegate and exposes a
-                `simulateLocation(_:)` method that calls `didUpdateLocations` directly.
+                `simulateLocation(_:)` method that calls `didUpdateLocations` directly. Add
+                `waitUntilStarted()` and `waitUntilStopped()` so a test can suspend until the
+                tracker starts or stops the manager.
 
-                @Code(name: "LocationTrackerTests.swift", file: 03-13-mock.swift)
+                @Code(name: "MockLocationManager.swift", file: 03-13-mock.swift)
             }
 
             @Step {
-                Write the test. Inject the mock, collect the flow in a `probing` closure, call
-                `simulateLocation`, and use `expectValue` to assert the emitted coordinate. Then
-                verify that `stopUpdatingLocation()` is called when the test closes.
+                Write the test. Inject the mock, collect the flow in a `probing` closure, wait
+                for the tracker to start the mock, call `simulateLocation`, and assert the
+                emitted coordinate. Then verify that `stopUpdatingLocation()` is called when
+                the test closes.
 
                 @Code(name: "LocationTrackerTests.swift", file: 03-14-test.swift)
             }

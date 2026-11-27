@@ -1,31 +1,47 @@
+import Foundation
 import Testing
 import Flow
 import FlowTesting
+// MyApp is the app target that holds SessionManager, SessionState and User.
+@testable import MyApp
 
+// A fake auth service that signs in as a fixed user.
+struct StubAuthService: AuthService {
+    let user: User
+
+    func signIn(email: String, password: String) async throws -> User { user }
+    func signOut() async throws {}
+}
+
+@MainActor
 @Suite("SessionManager state transitions")
 struct SessionManagerTests {
 
     @Test("full sign-in / sign-out lifecycle")
     func fullLifecycle() async throws {
-        let manager = SessionManager()
+        let user = User(id: UUID(), name: "Ada", email: "ada@example.com")
+        let manager = SessionManager(authService: StubAuthService(user: user))
 
-        try await manager.stateFlow.asFlow().probing { reader in
+        try await manager.state.asFlow().probing { reader in
             // Initial state.
-            try await reader.expectValue(.loggedOut)
+            try await reader.expectValue(.signedOut)
 
             // Sign in.
-            try await manager.signIn(username: "alice", password: "secret")
-            try await reader.expectValue(.loggedIn(User(username: "alice")))
+            await manager.signIn(email: "ada@example.com", password: "secret")
+            try await reader.expectValue(.signingIn)
+            try await reader.expectValue(.signedIn(user))
 
-            // Sending the same state again must NOT produce a new emission.
-            // MutableStateFlow deduplicates consecutive equal values, so the
-            // next value read is the sign-out below. A duplicate emission
-            // would arrive first and fail the read.
-            await manager.stateFlow.send(.loggedIn(User(username: "alice")))
-
-            // Sign out.
+            // Sign out twice. The second call sets .signedOut again.
+            // MutableStateFlow drops a value equal to the current one, so
+            // the reader sees only one .signedOut.
             await manager.signOut()
-            try await reader.expectNextValue(.loggedOut)
+            await manager.signOut()
+            try await reader.expectValue(.signedOut)
+
+            // The next value is the sign-in below. A duplicate .signedOut
+            // would have arrived first, and this read would fail.
+            await manager.signIn(email: "ada@example.com", password: "secret")
+            try await reader.expectNextValue(.signingIn)
         }
     }
 }

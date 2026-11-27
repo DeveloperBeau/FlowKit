@@ -1,7 +1,7 @@
+import Foundation
 import Testing
 import Flow
 import FlowTesting
-import FlowTestClock
 
 struct Product: Identifiable, Sendable, Equatable {
     let id: UUID
@@ -30,24 +30,23 @@ final class FailingProductRepository: ProductRepository, @unchecked Sendable {
 @Test("catch converts network errors into .error state")
 func catchConvertsNetworkErrors() async throws {
     let clock = TestClock()
-    let queries = MutableStateFlow("")
+    // The query is set before collection starts, so the debounce timer the
+    // test waits for is the one for this query.
+    let queries = MutableStateFlow("swift")
     let repository = FailingProductRepository()
 
     try await queries.asFlow()
         .debounce(for: .milliseconds(300), clock: clock)
         .removeDuplicates()
-        .flatMapLatest { query -> ThrowingFlow<SearchState> in
-            guard !query.isEmpty else {
-                return ThrowingFlow { collector in try await collector.emit(.idle) }
-            }
-            return repository.search(query: query).map { SearchState.loaded($0) }
-        }
-        .catch { _, collector in
-            await collector.emit(.error("Search failed. Please try again."))
+        .flatMapLatest { query -> Flow<SearchState> in
+            guard !query.isEmpty else { return Flow(of: .idle) }
+            return repository.search(query: query)
+                .map { SearchState.loaded($0) }
+                .catch { _, collector in
+                    await collector.emit(.error("Search failed. Please try again."))
+                }
         }
         .probing { reader in
-            try await queries.waitForSubscribers(1)
-            queries.send("swift")
             try await clock.waitForSleepers(1)
             await clock.advance(by: .milliseconds(400))
 

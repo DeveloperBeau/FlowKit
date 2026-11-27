@@ -1,18 +1,5 @@
 import SwiftUI
-import Flow
-
-struct User: Sendable, Equatable {
-    let id: UUID
-    let name: String
-    let email: String
-}
-
-enum SessionState: Sendable, Equatable {
-    case signedOut
-    case signingIn
-    case signedIn(User)
-    case error(String)
-}
+import FlowUI
 
 // HomeView uses @CollectedState to observe SessionManager.shared.state.
 // When the state changes anywhere in the app (after sign-in, sign-out,

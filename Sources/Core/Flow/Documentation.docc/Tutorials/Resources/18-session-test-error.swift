@@ -1,19 +1,9 @@
+import Foundation
 import Testing
 import Flow
 import FlowTesting
-
-struct User: Sendable, Equatable {
-    let id: UUID
-    let name: String
-    let email: String
-}
-
-enum SessionState: Sendable, Equatable {
-    case signedOut
-    case signingIn
-    case signedIn(User)
-    case error(String)
-}
+// MyApp is the app target that holds SessionState and User.
+@testable import MyApp
 
 @Test("signIn transitions: .signedOut → .signingIn → .signedIn")
 func signInTransitions() async throws {
@@ -21,10 +11,10 @@ func signInTransitions() async throws {
 
     try await state.asFlow().probing { reader in
         try await reader.expectValue(.signedOut)
-        await state.send(.signingIn)
+        state.send(.signingIn)
         try await reader.expectValue(.signingIn)
         let user = User(id: UUID(), name: "Ada", email: "ada@example.com")
-        await state.send(.signedIn(user))
+        state.send(.signedIn(user))
         try await reader.expectValue(.signedIn(user))
     }
 }
@@ -38,19 +28,19 @@ func authErrorAndRecovery() async throws {
         try await reader.expectValue(.signedOut)
 
         // Auth attempt begins
-        await state.send(.signingIn)
+        state.send(.signingIn)
         try await reader.expectValue(.signingIn)
 
         // Network error during authentication
-        await state.send(.error("Invalid credentials. Please try again."))
+        state.send(.error("Invalid credentials. Please try again."))
         try await reader.expectValue(.error("Invalid credentials. Please try again."))
 
         // User can retry. State resets to .signedOut first
-        await state.send(.signedOut)
+        state.send(.signedOut)
         try await reader.expectValue(.signedOut)
 
         // Nothing else arrived in between: the next value is the one we send.
-        await state.send(.signingIn)
+        state.send(.signingIn)
         try await reader.expectNextValue(.signingIn)
     }
 }

@@ -53,7 +53,8 @@
                 updates the flow with intermediate states: `.signingIn`
                 before the async call, then `.signedIn` or `.error`
                 afterwards. Every subscriber receives each state change in
-                order.
+                order. The initialiser takes an `AuthService`, so a test can
+                pass a fake.
 
                 @Code(name: "SessionManager.swift", file: 13-session-manager-methods.swift)
             }
@@ -93,7 +94,7 @@
 
     @Section(title: "Observe in UIKit") {
         @ContentAndMedia {
-            FlowUIKitBridge adds `collect(_:action:)` to `UIViewController`.
+            FlowUI adds `collect(_:action:)` to `UIViewController`.
             The helper launches collection on the controller's `flowScope`,
             which is cancelled automatically when the controller is
             deallocated, with no `deinit` cleanup and no dangling tasks.
@@ -202,7 +203,7 @@
                 "The developer must call `flowScope.cancel()` in `deinit`."
 
                 @Justification(reaction: "Not required.") {
-                    That's exactly the boilerplate FlowUIKitBridge eliminates.
+                    That's exactly the boilerplate FlowUI eliminates.
                     The scope is an associated object on the controller; when
                     the controller's reference count drops to zero, the
                     associated object is released, which cancels all tasks.

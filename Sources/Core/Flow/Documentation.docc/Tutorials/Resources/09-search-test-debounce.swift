@@ -1,7 +1,7 @@
+import Foundation
 import Testing
 import Flow
 import FlowTesting
-import FlowTestClock
 
 struct Product: Identifiable, Sendable, Equatable {
     let id: UUID
@@ -36,6 +36,7 @@ func debounceSupressesRapidKeystrokes() async throws {
     try await queries.asFlow()
         .debounce(for: .milliseconds(300), clock: clock)
         .removeDuplicates()
+        .mapThrowing { $0 }
         .flatMapLatest { query -> ThrowingFlow<[Product]> in
             guard !query.isEmpty else { return ThrowingFlow { _ in } }
             return repository.search(query: query)

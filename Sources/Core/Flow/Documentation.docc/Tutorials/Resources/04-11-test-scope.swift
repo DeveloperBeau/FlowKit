@@ -1,7 +1,6 @@
 import Testing
 import Flow
 import FlowTesting
-import FlowTestClock
 
 @Suite("Multiple flows in TestScope")
 struct MultipleFlowsTests {

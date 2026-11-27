@@ -1,20 +1,19 @@
 import Testing
 import Flow
 import FlowTesting
+// MyApp is the app target that holds ProductRepository.
+@testable import MyApp
 
-@Suite("SearchViewModel error paths")
-struct SearchViewModelErrorTests {
+@Suite("Repository error paths")
+struct RepositoryErrorTests {
 
-    @Test("resultsFlow propagates network error")
-    func propagatesNetworkError() async throws {
-        let viewModel = SearchViewModel(
-            repository: FailingProductRepository(error: .networkUnavailable)
-        )
+    @Test("search fails with a network error")
+    func searchFailsWithNetworkError() async throws {
+        let repository = FailingProductRepository(error: .networkUnavailable)
 
-        // A ThrowingFlow read through probing fails with expectError(_:matching:).
-        try await viewModel.resultsFlow.probing { reader in
-            await viewModel.updateQuery("anything")
-
+        // `search(query:)` returns a ThrowingFlow, which probing reads like a
+        // Flow. expectError(_:matching:) reads the failure.
+        try await repository.search(query: "anything").probing { reader in
             // The description names the expected error in a failure message.
             // SearchError is Equatable, so the match is a plain comparison.
             try await reader.expectError("network unavailable") { error in

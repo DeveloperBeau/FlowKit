@@ -66,8 +66,9 @@
                 silence before emitting. `removeDuplicates()` skips
                 repeated queries. `flatMapLatest` cancels any in-flight
                 search when a new query arrives and starts a fresh one.
-                `catch` converts network errors into `.error` state so the
-                flow never terminates.
+                `catch` sits inside `flatMapLatest` and converts network
+                errors into `.error` state, so one failed search never
+                terminates the flow.
 
                 @Code(name: "SearchViewModel.swift", file: 05-pipeline-operators.swift)
             }
@@ -90,7 +91,9 @@
                 `.whileSubscribed(stopTimeout: .seconds(5))` strategy keeps
                 the upstream alive for five seconds after the last subscriber
                 leaves, surviving SwiftUI view rebuilds without restarting
-                the network connection.
+                the network connection. The initialiser also takes a `clock`
+                that defaults to `ContinuousClock()`. Tests pass a
+                `TestClock` to control time.
 
                 @Code(name: "SearchViewModel.swift", file: 06-stateful-viewmodel.swift)
             }
@@ -107,9 +110,11 @@
 
         @Steps {
             @Step {
-                Create `SearchView`. The `@CollectedState(viewModel.results)`
-                wrapper subscribes to the hot ``StateFlow`` and feeds the
-                current `SearchState` into the view's `body`. An
+                Create `SearchView`. Import `FlowUI`, then create the
+                `@CollectedState` wrapper in `init` with `viewModel.results`,
+                because a wrapper cannot read another property when it is
+                initialised. The wrapper subscribes to the hot ``StateFlow``
+                and feeds the current `SearchState` into the view's `body`. An
                 `.onChange(of: query)` handler forwards each keystroke into
                 the view model.
 

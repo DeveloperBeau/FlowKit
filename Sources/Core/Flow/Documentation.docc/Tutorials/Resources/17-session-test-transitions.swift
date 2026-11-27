@@ -1,19 +1,9 @@
+import Foundation
 import Testing
 import Flow
 import FlowTesting
-
-struct User: Sendable, Equatable {
-    let id: UUID
-    let name: String
-    let email: String
-}
-
-enum SessionState: Sendable, Equatable {
-    case signedOut
-    case signingIn
-    case signedIn(User)
-    case error(String)
-}
+// MyApp is the app target that holds SessionState and User.
+@testable import MyApp
 
 // Test that signIn transitions through .signingIn → .signedIn.
 @Test("signIn transitions: .signedOut → .signingIn → .signedIn")
@@ -25,11 +15,11 @@ func signInTransitions() async throws {
         try await reader.expectValue(.signedOut)
 
         // Simulate the sign-in sequence.
-        await state.send(.signingIn)
+        state.send(.signingIn)
         try await reader.expectValue(.signingIn)
 
         let user = User(id: UUID(), name: "Ada", email: "ada@example.com")
-        await state.send(.signedIn(user))
+        state.send(.signedIn(user))
         try await reader.expectValue(.signedIn(user))
     }
 }

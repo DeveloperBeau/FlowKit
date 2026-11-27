@@ -1,28 +1,37 @@
+import Foundation
 import Testing
 import Flow
 import FlowTesting
+// MyApp is the app target that holds SessionManager, SessionState and User.
+@testable import MyApp
 
+// A fake auth service that signs in as a fixed user.
+struct StubAuthService: AuthService {
+    let user: User
+
+    func signIn(email: String, password: String) async throws -> User { user }
+    func signOut() async throws {}
+}
+
+@MainActor
 @Suite("SessionManager state transitions")
 struct SessionManagerTests {
 
-    @Test("sign-in transitions from loggedOut to loggedIn")
+    @Test("sign-in transitions from signedOut to signedIn")
     func signInTransition() async throws {
-        let manager = SessionManager()
+        let user = User(id: UUID(), name: "Ada", email: "ada@example.com")
+        let manager = SessionManager(authService: StubAuthService(user: user))
 
-        try await manager.stateFlow.asFlow().probing { reader in
+        try await manager.state.asFlow().probing { reader in
             // Initial state replayed immediately.
-            try await reader.expectValue(.loggedOut)
+            try await reader.expectValue(.signedOut)
 
             // Drive the state machine.
-            try await manager.signIn(username: "alice", password: "secret")
+            await manager.signIn(email: "ada@example.com", password: "secret")
 
-            // MutableStateFlow emits the new value to all collectors.
-            let state = try await reader.awaitValue()
-            if case .loggedIn(let user) = state {
-                #expect(user.username == "alice")
-            } else {
-                Issue.record("expected loggedIn but got \(state)")
-            }
+            // MutableStateFlow emits each new value to all collectors, in order.
+            try await reader.expectValue(.signingIn)
+            try await reader.expectValue(.signedIn(user))
         }
     }
 }

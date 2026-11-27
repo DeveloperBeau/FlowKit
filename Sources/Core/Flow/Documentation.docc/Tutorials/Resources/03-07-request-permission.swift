@@ -21,8 +21,8 @@ private final class DelegateBridge: NSObject, CLLocationManagerDelegate, @unchec
         cont?.resume()
     }
 
-    private var isAuthorized: Bool {
-        let status = CLLocationManager().authorizationStatus
+    private func isAuthorized(_ manager: CLLocationManager) -> Bool {
+        let status = manager.authorizationStatus
         return status == .authorizedWhenInUse || status == .authorizedAlways
     }
 
@@ -32,7 +32,7 @@ private final class DelegateBridge: NSObject, CLLocationManagerDelegate, @unchec
         _ manager: CLLocationManager,
         didUpdateLocations locations: [CLLocation]
     ) {
-        guard isAuthorized, let latest = locations.last else { return }
+        guard isAuthorized(manager), let latest = locations.last else { return }
         Task { await collector.emit(latest) }
     }
 
