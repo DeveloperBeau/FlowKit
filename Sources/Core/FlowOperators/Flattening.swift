@@ -240,7 +240,11 @@ extension ThrowingFlow {
                         if Task.isCancelled { break }
                     }
                 }
-                try await group.waitForAll()
+                // Not waitForAll(): it waits for every child before rethrowing,
+                // so an inner failure would wait on an upstream that never
+                // completes. Rethrowing on the first failure leaves the body,
+                // which cancels and awaits the upstream child.
+                for try await _ in group {}
             }
         }
     }
@@ -281,8 +285,8 @@ private actor FlatMapLatestState<U: Sendable> {
         stamped == generation
     }
 
-    /// Awaits the active inner task — forwarding cancellation to it, so a
-    /// long-running inner cannot outlive or hang a torn-down collection —
+    /// Awaits the active inner task, forwarding cancellation to it so a
+    /// long-running inner cannot outlive or hang a torn-down collection,
     /// then closes the pipeline so the drain task finishes.
     func finishAfterCurrent() async {
         defer { feed.finish() }
@@ -334,8 +338,8 @@ private actor ThrowingFlatMapLatestState<U: Sendable> {
         feed.finish()
     }
 
-    /// Awaits the active inner task — forwarding cancellation to it, so a
-    /// long-running inner cannot outlive or hang a torn-down collection —
+    /// Awaits the active inner task, forwarding cancellation to it so a
+    /// long-running inner cannot outlive or hang a torn-down collection,
     /// then closes the pipeline so the drain task finishes.
     func finishAfterCurrent() async {
         defer { feed.finish() }

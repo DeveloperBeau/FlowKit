@@ -107,20 +107,22 @@ struct FlatMapLatestTests {
 
             // Wait until the subscriber count reaches 1 so we know the
             // tester has actually subscribed before we start emitting.
-            try await upstream.waitForSubscribers(1)
+            try await withThrowingTimeout(.seconds(5)) { try await upstream.waitForSubscribers(1) }
 
             // Emit 1, 2, 3 in sequence; after each emit, wait until the
             // previous inner flow has observed its cancellation.
-            func waitForCancellation(of value: Int) async {
-                await cancelled.wait { $0.contains(value) }
+            func waitForCancellation(of value: Int) async throws {
+                try await withThrowingTimeout(.seconds(5)) {
+                    await cancelled.wait { $0.contains(value) }
+                }
             }
 
             await upstream.emit(1)
             await upstream.emit(2)
-            await waitForCancellation(of: 1)
+            try await waitForCancellation(of: 1)
 
             await upstream.emit(3)
-            await waitForCancellation(of: 2)
+            try await waitForCancellation(of: 2)
 
             #expect(cancelled.elements.contains(1))
             #expect(cancelled.elements.contains(2))
@@ -145,6 +147,215 @@ struct FlatMapLatestTests {
             try await tester.expectError(SearchError())
         }
     }
+
+    // MARK: - Inner failure with an upstream that never completes (issue 80)
+
+    @Test("an inner failure with an open upstream ends the flow, so catch runs")
+    func innerFailureWithOpenUpstreamRunsCatch() async throws {
+        let state = MutableStateFlow("a")
+        let flow = state.asFlow()
+            .mapThrowing { $0 }
+            .flatMapLatest { _ -> ThrowingFlow<String> in
+                ThrowingFlow<String> { _ in throw Boom() }
+            }
+            .catch { _, collector in await collector.emit("caught") }
+
+        let result = try await withThrowingTimeout(.seconds(5)) {
+            await flow.first()
+        }
+        #expect(result == "caught")
+    }
+
+    @Test("an inner failure with an open upstream throws the error and releases the upstream")
+    func innerFailureWithOpenUpstreamThrowsAndReleasesUpstream() async throws {
+        let state = MutableStateFlow("a")
+        let flow = state.asFlow()
+            .mapThrowing { $0 }
+            .flatMapLatest { _ -> ThrowingFlow<String> in
+                ThrowingFlow<String> { _ in throw Boom() }
+            }
+
+        let thrown = try await withThrowingTimeout(.seconds(5)) {
+            await failure(of: flow, recording: Recorder<String>())
+        }
+        #expect(thrown is Boom, "expected Boom, got \(String(describing: thrown))")
+
+        // The upstream collector must be cancelled, not left attached.
+        try await withThrowingTimeout(.seconds(5)) {
+            try await state.waitForSubscribers(atMost: 0)
+        }
+    }
+
+    @Test("an inner that completes normally does not end the flow while the upstream is open")
+    func innerCompletionWithOpenUpstreamKeepsFlowing() async throws {
+        let state = MutableStateFlow("a")
+        let flow = state.asFlow()
+            .mapThrowing { $0 }
+            .flatMapLatest { value -> ThrowingFlow<String> in
+                ThrowingFlow(of: "result-\(value)")
+            }
+
+        try await withThrowingTimeout(.seconds(5)) {
+            try await flow.probing { tester in
+                try await tester.expectValue("result-a")
+                state.send("b")
+                try await tester.expectValue("result-b")
+            }
+        }
+    }
+
+    @Test("an inner that fails while it is running is torn down along with the upstream")
+    func innerFailureCancelsRunningInner() async throws {
+        // flatMapLatest keeps one inner live at a time: a new upstream value
+        // cancels the previous inner before the next one starts. So the inner
+        // that is running when the failure happens is the one that fails.
+        // Here that inner is genuinely live, subscribed to its own source that
+        // never completes, and it has already emitted. It then fails on a later
+        // value from that source, while the upstream stays open.
+        let upstream = MutableStateFlow("a")
+        let innerSource = MutableStateFlow("x")
+        let flow = upstream.asFlow()
+            .mapThrowing { $0 }
+            .flatMapLatest { outer -> ThrowingFlow<String> in
+                innerSource.asFlow().mapThrowing { inner in
+                    if inner == "boom" { throw Boom() }
+                    return "\(outer)-\(inner)"
+                }
+            }
+        let values = Recorder<String>()
+
+        let thrown = try await withThrowingTimeout(.seconds(5)) { () async throws -> (any Error)? in
+            async let outcome = failure(of: flow, recording: values)
+            // The inner is running: it has emitted and is still attached.
+            await values.wait(atLeast: 1)
+            try await innerSource.waitForSubscribers(1)
+            innerSource.send("boom")
+            return await outcome
+        }
+
+        #expect(thrown is Boom, "expected Boom, got \(String(describing: thrown))")
+        #expect(values.elements == ["a-x"])
+        // Both the failed inner's source and the upstream are released.
+        try await withThrowingTimeout(.seconds(5)) {
+            try await innerSource.waitForSubscribers(atMost: 0)
+            try await upstream.waitForSubscribers(atMost: 0)
+        }
+    }
+
+    @Test("nothing is emitted after an inner failure, even when the upstream emits again")
+    func innerFailureEmitsNothingAfterError() async throws {
+        let upstream = MutableStateFlow("a")
+        let transformed = Recorder<String>()
+        let flow = upstream.asFlow()
+            .mapThrowing { $0 }
+            .flatMapLatest { value -> ThrowingFlow<String> in
+                transformed.record(value)
+                return ThrowingFlow<String> { collector in
+                    try await collector.emit("result-\(value)")
+                    throw Boom()
+                }
+            }
+        let events = Recorder<Event>()
+
+        try await withThrowingTimeout(.seconds(5)) {
+            do {
+                try await flow.collect { events.record(.value($0)) }
+                events.record(.completed)
+            } catch let error as Boom {
+                events.record(.failure(error))
+            } catch {
+                events.record(.otherFailure(String(describing: error)))
+            }
+        }
+
+        // The upstream is released, then emits again. The new value must not
+        // start an inner or reach the collector.
+        try await withThrowingTimeout(.seconds(5)) {
+            try await upstream.waitForSubscribers(atMost: 0)
+        }
+        upstream.send("b")
+
+        #expect(events.elements == [.value("result-a"), .failure(Boom())])
+        #expect(transformed.elements == ["a"])
+    }
+
+    @Test("an upstream failure cancels an inner parked on a never-completing source")
+    func upstreamFailureCancelsParkedInner() async throws {
+        let innerSource = MutableStateFlow("x")
+        let failUpstream = Signal()
+        let upstream = ThrowingFlow<Int> { collector in
+            try await collector.emit(1)
+            await failUpstream.wait()
+            throw Boom()
+        }
+        let flow = upstream.flatMapLatest { _ -> ThrowingFlow<String> in
+            innerSource.asFlow().mapThrowing { $0 }
+        }
+
+        let thrown = try await withThrowingTimeout(.seconds(5)) { () async throws -> (any Error)? in
+            async let outcome = failure(of: flow, recording: Recorder<String>())
+            // The inner is attached to its source and will never complete on its own.
+            try await innerSource.waitForSubscribers(1)
+            failUpstream.fire()
+            return await outcome
+        }
+        #expect(thrown is Boom, "expected Boom, got \(String(describing: thrown))")
+
+        let released = (try? await withThrowingTimeout(.seconds(5)) {
+            try await innerSource.waitForSubscribers(atMost: 0)
+            return true
+        }) ?? false
+        #expect(released, "the upstream failure must cancel the parked inner, but it is still subscribed")
+    }
+
+    @Test("cancelling the collection after the upstream completes cancels a parked inner")
+    func downstreamCancellationAfterUpstreamCompletesCancelsParkedInner() async throws {
+        let innerSource = MutableStateFlow("x")
+        // Emits once and completes, so the operator is in its wait for the inner.
+        let upstream = ThrowingFlow<Int> { collector in
+            try await collector.emit(1)
+        }
+        let collector = Task {
+            try? await upstream.flatMapLatest { _ -> ThrowingFlow<String> in
+                innerSource.asFlow().mapThrowing { $0 }
+            }.collect { _ in }
+        }
+        try await withThrowingTimeout(.seconds(5)) {
+            try await innerSource.waitForSubscribers(1)
+        }
+
+        collector.cancel()
+        let released = (try? await withThrowingTimeout(.seconds(5)) {
+            try await innerSource.waitForSubscribers(atMost: 0)
+            return true
+        }) ?? false
+        #expect(released, "cancelling the collection must reach the parked inner, but it is still subscribed")
+        // Awaiting the collector here would hang if the inner leaked.
+        if released { await collector.value }
+    }
+}
+
+private struct Boom: Error, Equatable {}
+
+private enum Event: Equatable, Sendable {
+    case value(String)
+    case completed
+    case failure(Boom)
+    case otherFailure(String)
+}
+
+/// Collects `flow`, recording every value, and returns the error it ended
+/// with, or nil if it completed normally.
+private func failure(
+    of flow: ThrowingFlow<String>,
+    recording values: Recorder<String>
+) async -> (any Error)? {
+    do {
+        try await flow.collect { values.record($0) }
+        return nil
+    } catch {
+        return error
+    }
 }
 
 @Suite("flatMapLatest cancellation propagation")
@@ -166,12 +377,12 @@ struct FlatMapLatestCancellationTests {
                 }
             }.collect { _ in }
         }
-        try await upstream.waitForSubscribers(1)
+        try await withThrowingTimeout(.seconds(5)) { try await upstream.waitForSubscribers(1) }
         await upstream.emit(1)
-        await innerStarted.wait()
+        try #require(await innerStarted.fires(safetyNet: .seconds(5)), "the inner flow never started")
 
         collector.cancel()
-        await innerCancelled.wait()
+        try #require(await innerCancelled.fires(safetyNet: .seconds(5)), "the inner flow was never cancelled")
         #expect(innerCancelled.hasFired, "downstream cancellation must reach the active inner flow")
         // The collection task itself must unwind instead of hanging in the
         // operator's completion wait. Guarded so a regression fails above
@@ -180,7 +391,7 @@ struct FlatMapLatestCancellationTests {
     }
 
     @Test("ThrowingFlow: cancelling the downstream collection cancels the active inner flow")
-    func throwingDownstreamCancellationCancelsInner() async {
+    func throwingDownstreamCancellationCancelsInner() async throws {
         let innerStarted = Signal()
         let innerCancelled = Signal()
         // Emits once, then stays alive until cancelled, so the inner flow is
@@ -199,10 +410,10 @@ struct FlatMapLatestCancellationTests {
                 }
             }.collect { _ in }
         }
-        await innerStarted.wait()
+        try #require(await innerStarted.fires(safetyNet: .seconds(5)), "the inner flow never started")
 
         collector.cancel()
-        await innerCancelled.wait()
+        try #require(await innerCancelled.fires(safetyNet: .seconds(5)), "the inner flow was never cancelled")
         #expect(innerCancelled.hasFired, "downstream cancellation must reach the active inner flow")
         if innerCancelled.hasFired { await collector.value }
     }
