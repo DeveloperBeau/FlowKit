@@ -178,11 +178,13 @@ extension ThrowingFlow {
                 for flow in flows {
                     group.addTask {
                         try await flow.collect { value in
+                            // A cancelled sibling must not deliver after the first failure.
+                            try Task.checkCancellation()
                             try await downstream.emit(value)
                         }
                     }
                 }
-                try await group.waitForAll()
+                for try await _ in group {}
             }
         }
     }
