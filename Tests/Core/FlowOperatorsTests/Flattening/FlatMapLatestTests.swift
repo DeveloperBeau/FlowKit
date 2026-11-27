@@ -145,6 +145,160 @@ struct FlatMapLatestTests {
             try await tester.expectError(SearchError())
         }
     }
+
+    // MARK: - Inner failure with an upstream that never completes (issue 80)
+
+    @Test("an inner failure with an open upstream ends the flow, so catch runs")
+    func innerFailureWithOpenUpstreamRunsCatch() async throws {
+        let state = MutableStateFlow("a")
+        let flow = state.asFlow()
+            .mapThrowing { $0 }
+            .flatMapLatest { _ -> ThrowingFlow<String> in
+                ThrowingFlow<String> { _ in throw Boom() }
+            }
+            .catch { _, collector in await collector.emit("caught") }
+
+        let result = try await withThrowingTimeout(.seconds(5)) {
+            await flow.first()
+        }
+        #expect(result == "caught")
+    }
+
+    @Test("an inner failure with an open upstream throws the error and releases the upstream")
+    func innerFailureWithOpenUpstreamThrowsAndReleasesUpstream() async throws {
+        let state = MutableStateFlow("a")
+        let flow = state.asFlow()
+            .mapThrowing { $0 }
+            .flatMapLatest { _ -> ThrowingFlow<String> in
+                ThrowingFlow<String> { _ in throw Boom() }
+            }
+
+        let thrown = try await withThrowingTimeout(.seconds(5)) {
+            await failure(of: flow, recording: Recorder<String>())
+        }
+        #expect(thrown is Boom, "expected Boom, got \(String(describing: thrown))")
+
+        // The upstream collector must be cancelled, not left attached.
+        try await withThrowingTimeout(.seconds(5)) {
+            try await state.waitForSubscribers(atMost: 0)
+        }
+    }
+
+    @Test("an inner that completes normally does not end the flow while the upstream is open")
+    func innerCompletionWithOpenUpstreamKeepsFlowing() async throws {
+        let state = MutableStateFlow("a")
+        let flow = state.asFlow()
+            .mapThrowing { $0 }
+            .flatMapLatest { value -> ThrowingFlow<String> in
+                ThrowingFlow(of: "result-\(value)")
+            }
+
+        try await withThrowingTimeout(.seconds(5)) {
+            try await flow.probing { tester in
+                try await tester.expectValue("result-a")
+                state.send("b")
+                try await tester.expectValue("result-b")
+            }
+        }
+    }
+
+    @Test("an inner that fails while it is running is torn down along with the upstream")
+    func innerFailureCancelsRunningInner() async throws {
+        // flatMapLatest keeps one inner live at a time: a new upstream value
+        // cancels the previous inner before the next one starts. So the inner
+        // that is running when the failure happens is the one that fails.
+        // Here that inner is genuinely live, subscribed to its own source that
+        // never completes, and it has already emitted. It then fails on a later
+        // value from that source, while the upstream stays open.
+        let upstream = MutableStateFlow("a")
+        let innerSource = MutableStateFlow("x")
+        let flow = upstream.asFlow()
+            .mapThrowing { $0 }
+            .flatMapLatest { outer -> ThrowingFlow<String> in
+                innerSource.asFlow().mapThrowing { inner in
+                    if inner == "boom" { throw Boom() }
+                    return "\(outer)-\(inner)"
+                }
+            }
+        let values = Recorder<String>()
+
+        let thrown = try await withThrowingTimeout(.seconds(5)) { () async throws -> (any Error)? in
+            async let outcome = failure(of: flow, recording: values)
+            // The inner is running: it has emitted and is still attached.
+            await values.wait(atLeast: 1)
+            try await innerSource.waitForSubscribers(1)
+            innerSource.send("boom")
+            return await outcome
+        }
+
+        #expect(thrown is Boom, "expected Boom, got \(String(describing: thrown))")
+        #expect(values.elements == ["a-x"])
+        // Both the failed inner's source and the upstream are released.
+        try await withThrowingTimeout(.seconds(5)) {
+            try await innerSource.waitForSubscribers(atMost: 0)
+            try await upstream.waitForSubscribers(atMost: 0)
+        }
+    }
+
+    @Test("nothing is emitted after an inner failure, even when the upstream emits again")
+    func innerFailureEmitsNothingAfterError() async throws {
+        let upstream = MutableStateFlow("a")
+        let transformed = Recorder<String>()
+        let flow = upstream.asFlow()
+            .mapThrowing { $0 }
+            .flatMapLatest { value -> ThrowingFlow<String> in
+                transformed.record(value)
+                return ThrowingFlow<String> { collector in
+                    try await collector.emit("result-\(value)")
+                    throw Boom()
+                }
+            }
+        let events = Recorder<Event>()
+
+        try await withThrowingTimeout(.seconds(5)) {
+            do {
+                try await flow.collect { events.record(.value($0)) }
+                events.record(.completed)
+            } catch let error as Boom {
+                events.record(.failure(error))
+            } catch {
+                events.record(.otherFailure(String(describing: error)))
+            }
+        }
+
+        // The upstream is released, then emits again. The new value must not
+        // start an inner or reach the collector.
+        try await withThrowingTimeout(.seconds(5)) {
+            try await upstream.waitForSubscribers(atMost: 0)
+        }
+        upstream.send("b")
+
+        #expect(events.elements == [.value("result-a"), .failure(Boom())])
+        #expect(transformed.elements == ["a"])
+    }
+}
+
+private struct Boom: Error, Equatable {}
+
+private enum Event: Equatable, Sendable {
+    case value(String)
+    case completed
+    case failure(Boom)
+    case otherFailure(String)
+}
+
+/// Collects `flow`, recording every value, and returns the error it ended
+/// with, or nil if it completed normally.
+private func failure(
+    of flow: ThrowingFlow<String>,
+    recording values: Recorder<String>
+) async -> (any Error)? {
+    do {
+        try await flow.collect { values.record($0) }
+        return nil
+    } catch {
+        return error
+    }
 }
 
 @Suite("flatMapLatest cancellation propagation")
